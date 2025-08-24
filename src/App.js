@@ -8,6 +8,7 @@ import Bookings from './pages/Bookings';
 import Academies from './pages/Academies';
 import Courts from './pages/Courts';
 import Events from './pages/Events';
+import Projects from './pages/Projects';
 import Layout from './components/Layout';
 import './App.css';
 
@@ -46,6 +47,7 @@ function App() {
               <Route path="academies" element={<Academies />} />
               <Route path="courts" element={<Courts />} />
               <Route path="events" element={<Events />} />
+              <Route path="projects" element={<Projects />} />
             </Route>
           </Routes>
         </div>
