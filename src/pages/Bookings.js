@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, 
-  Filter, 
   Eye, 
   Edit, 
   Calendar,
@@ -13,10 +12,9 @@ import {
   CheckCircle,
   XCircle,
   Clock as ClockIcon,
-  MoreHorizontal,
   X
 } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const Bookings = () => {
@@ -30,34 +28,7 @@ const Bookings = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  useEffect(() => {
-    filterBookings();
-  }, [bookings, searchTerm, statusFilter, typeFilter]);
- 
-  const fetchBookings = async () => {
-    try {
-      setLoading(true);
-      const bookingsSnapshot = await getDocs(collection(db, 'bookings'));
-      const bookingsData = bookingsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date ? new Date(doc.data().date.seconds * 1000) : new Date()
-      }));
-      
-      setBookings(bookingsData);
-    } catch (err) {
-      console.error('Error fetching bookings:', err);
-      setError('Failed to load bookings');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterBookings = () => {
+  const filterBookings = useCallback(() => {
     let filtered = bookings;
 
     // Apply search filter
@@ -80,6 +51,33 @@ const Bookings = () => {
     }
 
     setFilteredBookings(filtered);
+  }, [bookings, searchTerm, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  useEffect(() => {
+    filterBookings();
+  }, [filterBookings]);
+ 
+  const fetchBookings = async () => {
+    try {
+      setLoading(true);
+      const bookingsSnapshot = await getDocs(collection(db, 'bookings'));
+      const bookingsData = bookingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date ? new Date(doc.data().date.seconds * 1000) : new Date()
+      }));
+      
+      setBookings(bookingsData);
+    } catch (err) {
+      console.error('Error fetching bookings:', err);
+      setError('Failed to load bookings');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleStatusUpdate = async (bookingId, newStatus) => {
