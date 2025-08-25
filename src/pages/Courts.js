@@ -7,35 +7,52 @@ import {
   MapPin, 
   Clock, 
   DollarSign,
-  MoreVertical
+  MoreVertical,
+  Trophy,
+  Users,
+  Calendar,
+  Star
 } from 'lucide-react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const Courts = () => {
   const [courts, setCourts] = useState([]);
+  const [sports, setSports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterSport, setFilterSport] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [editingCourt, setEditingCourt] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    sport: '',
+    sportId: '',
+    sportName: '',
     type: 'indoor',
     surface: '',
     capacity: '',
     hourlyRate: '',
     description: '',
     amenities: '',
-    operatingHours: '',
+    operatingHours: {
+      monday: { open: '09:00', close: '22:00', isOpen: true },
+      tuesday: { open: '09:00', close: '22:00', isOpen: true },
+      wednesday: { open: '09:00', close: '22:00', isOpen: true },
+      thursday: { open: '09:00', close: '22:00', isOpen: true },
+      friday: { open: '09:00', close: '22:00', isOpen: true },
+      saturday: { open: '09:00', close: '22:00', isOpen: true },
+      sunday: { open: '09:00', close: '22:00', isOpen: true }
+    },
     address: '',
     phone: '',
-    email: ''
+    email: '',
+    isActive: true
   });
 
   useEffect(() => {
     fetchCourts();
+    fetchSports();
   }, []);
 
   const fetchCourts = async () => {
@@ -54,13 +71,32 @@ const Courts = () => {
     }
   };
 
+  const fetchSports = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'sports'));
+      const sportsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setSports(sportsData);
+    } catch (error) {
+      console.error('Error fetching sports:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const courtData = {
+        ...formData,
+        updatedAt: new Date()
+      };
+
       if (editingCourt) {
-        await updateDoc(doc(db, 'courts', editingCourt.id), formData);
+        await updateDoc(doc(db, 'courts', editingCourt.id), courtData);
       } else {
-        await addDoc(collection(db, 'courts'), formData);
+        courtData.createdAt = new Date();
+        await addDoc(collection(db, 'courts'), courtData);
       }
       setShowModal(false);
       setEditingCourt(null);
@@ -75,17 +111,27 @@ const Courts = () => {
     setEditingCourt(court);
     setFormData({
       name: court.name || '',
-      sport: court.sport || '',
+      sportId: court.sportId || '',
+      sportName: court.sportName || '',
       type: court.type || 'indoor',
       surface: court.surface || '',
       capacity: court.capacity || '',
       hourlyRate: court.hourlyRate || '',
       description: court.description || '',
       amenities: court.amenities || '',
-      operatingHours: court.operatingHours || '',
+      operatingHours: court.operatingHours || {
+        monday: { open: '09:00', close: '22:00', isOpen: true },
+        tuesday: { open: '09:00', close: '22:00', isOpen: true },
+        wednesday: { open: '09:00', close: '22:00', isOpen: true },
+        thursday: { open: '09:00', close: '22:00', isOpen: true },
+        friday: { open: '09:00', close: '22:00', isOpen: true },
+        saturday: { open: '09:00', close: '22:00', isOpen: true },
+        sunday: { open: '09:00', close: '22:00', isOpen: true }
+      },
       address: court.address || '',
       phone: court.phone || '',
-      email: court.email || ''
+      email: court.email || '',
+      isActive: court.isActive !== undefined ? court.isActive : true
     });
     setShowModal(true);
   };
@@ -104,26 +150,72 @@ const Courts = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      sport: '',
+      sportId: '',
+      sportName: '',
       type: 'indoor',
       surface: '',
       capacity: '',
       hourlyRate: '',
       description: '',
       amenities: '',
-      operatingHours: '',
+      operatingHours: {
+        monday: { open: '09:00', close: '22:00', isOpen: true },
+        tuesday: { open: '09:00', close: '22:00', isOpen: true },
+        wednesday: { open: '09:00', close: '22:00', isOpen: true },
+        thursday: { open: '09:00', close: '22:00', isOpen: true },
+        friday: { open: '09:00', close: '22:00', isOpen: true },
+        saturday: { open: '09:00', close: '22:00', isOpen: true },
+        sunday: { open: '09:00', close: '22:00', isOpen: true }
+      },
       address: '',
       phone: '',
-      email: ''
+      email: '',
+      isActive: true
+    });
+  };
+
+  const handleSportChange = (sportId) => {
+    const selectedSport = sports.find(sport => sport.id === sportId);
+    setFormData({
+      ...formData,
+      sportId: sportId,
+      sportName: selectedSport ? selectedSport.name : ''
+    });
+  };
+
+  const handleOperatingHoursChange = (day, field, value) => {
+    setFormData({
+      ...formData,
+      operatingHours: {
+        ...formData.operatingHours,
+        [day]: {
+          ...formData.operatingHours[day],
+          [field]: value
+        }
+      }
+    });
+  };
+
+  const toggleDayAvailability = (day) => {
+    setFormData({
+      ...formData,
+      operatingHours: {
+        ...formData.operatingHours,
+        [day]: {
+          ...formData.operatingHours[day],
+          isOpen: !formData.operatingHours[day].isOpen
+        }
+      }
     });
   };
 
   const filteredCourts = courts.filter(court => {
     const matchesSearch = court.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         court.sport?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         court.sportName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          court.address?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterType === 'all' || court.type === filterType;
-    return matchesSearch && matchesFilter;
+    const matchesType = filterType === 'all' || court.type === filterType;
+    const matchesSport = filterSport === 'all' || court.sportId === filterSport;
+    return matchesSearch && matchesType && matchesSport;
   });
 
   if (loading) {
@@ -172,6 +264,16 @@ const Courts = () => {
             />
           </div>
           <select
+            value={filterSport}
+            onChange={(e) => setFilterSport(e.target.value)}
+            className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Sports</option>
+            {sports.map(sport => (
+              <option key={sport.id} value={sport.id}>{sport.name}</option>
+            ))}
+          </select>
+          <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -202,7 +304,7 @@ const Courts = () => {
                         {court.type}
                       </span>
                       <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                        {court.sport}
+                        {court.sportName || 'No Sport'}
                       </span>
                     </div>
                   </div>
@@ -217,12 +319,21 @@ const Courts = () => {
                     <span className="truncate">{court.address || 'No address'}</span>
                   </div>
                   <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                    <span>{court.operatingHours || '24/7'}</span>
+                    <Users className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>Capacity: {court.capacity || 'N/A'}</span>
                   </div>
                   <div className="flex items-center text-sm text-gray-600">
                     <DollarSign className="h-4 w-4 mr-2 text-gray-400" />
-                    <span>${court.hourlyRate || '0'}/hour</span>
+                    <span className="font-medium">${court.hourlyRate || '0'}/hour</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>
+                      {court.operatingHours && typeof court.operatingHours === 'object' 
+                        ? Object.values(court.operatingHours).filter(h => h.isOpen).length + ' days open'
+                        : 'Schedule not set'
+                      }
+                    </span>
                   </div>
                 </div>
 
@@ -231,19 +342,30 @@ const Courts = () => {
                 )}
 
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    Capacity: {court.capacity || 'N/A'}
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      court.isActive 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {court.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {court.updatedAt?.toDate?.()?.toLocaleDateString() || 'Recently updated'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleEdit(court)}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit Court"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(court.id)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete Court"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -309,27 +431,33 @@ const Courts = () => {
                   </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Basic Information */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Court Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Court Name *</label>
                       <input
                         type="text"
                         required
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Court A, Tennis Court 1"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Sport</label>
-                      <input
-                        type="text"
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sport *</label>
+                      <select
                         required
-                        value={formData.sport}
-                        onChange={(e) => setFormData({...formData, sport: e.target.value})}
+                        value={formData.sportId}
+                        onChange={(e) => handleSportChange(e.target.value)}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      >
+                        <option value="">Select a sport</option>
+                        {sports.map(sport => (
+                          <option key={sport.id} value={sport.id}>{sport.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
@@ -350,29 +478,41 @@ const Courts = () => {
                         value={formData.surface}
                         onChange={(e) => setFormData({...formData, surface: e.target.value})}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Capacity</label>
-                      <input
-                        type="number"
-                        value={formData.capacity}
-                        onChange={(e) => setFormData({...formData, capacity: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate ($)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.hourlyRate}
-                        onChange={(e) => setFormData({...formData, hourlyRate: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Hard court, Grass, Clay"
                       />
                     </div>
                   </div>
 
+                  {/* Capacity and Pricing */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Capacity *</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={formData.capacity}
+                        onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 4, 22"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Hourly Rate ($) *</label>
+                      <input
+                        type="number"
+                        required
+                        step="0.01"
+                        min="0"
+                        value={formData.hourlyRate}
+                        onChange={(e) => setFormData({...formData, hourlyRate: e.target.value})}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 25.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description and Amenities */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                     <textarea
@@ -380,31 +520,66 @@ const Courts = () => {
                       value={formData.description}
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe the court features and characteristics..."
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
-                      <input
-                        type="text"
-                        value={formData.amenities}
-                        onChange={(e) => setFormData({...formData, amenities: e.target.value})}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Operating Hours</label>
-                      <input
-                        type="text"
-                        value={formData.operatingHours}
-                        onChange={(e) => setFormData({...formData, operatingHours: e.target.value})}
-                        placeholder="e.g., 6:00 AM - 10:00 PM"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
+                    <input
+                      type="text"
+                      value={formData.amenities}
+                      onChange={(e) => setFormData({...formData, amenities: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Lighting, Parking, Changing rooms"
+                    />
+                  </div>
+
+                  {/* Operating Hours Schedule */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Operating Hours Schedule</label>
+                    <div className="space-y-3 p-4 bg-gray-50 rounded-xl">
+                      {Object.entries(formData.operatingHours).map(([day, hours]) => (
+                        <div key={day} className="flex items-center space-x-4">
+                          <div className="w-20">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={hours.isOpen}
+                                onChange={() => toggleDayAvailability(day)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm font-medium text-gray-700 capitalize">
+                                {day}
+                              </span>
+                            </label>
+                          </div>
+                          {hours.isOpen && (
+                            <>
+                              <input
+                                type="time"
+                                value={hours.open}
+                                onChange={(e) => handleOperatingHoursChange(day, 'open', e.target.value)}
+                                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                              <span className="text-gray-500">to</span>
+                              <input
+                                type="time"
+                                value={hours.close}
+                                onChange={(e) => handleOperatingHoursChange(day, 'close', e.target.value)}
+                                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </>
+                          )}
+                          {!hours.isOpen && (
+                            <span className="text-gray-400 text-sm">Closed</span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
 
+                  {/* Contact Information */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
                     <input
@@ -412,6 +587,7 @@ const Courts = () => {
                       value={formData.address}
                       onChange={(e) => setFormData({...formData, address: e.target.value})}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Full address of the court"
                     />
                   </div>
 
@@ -423,6 +599,7 @@ const Courts = () => {
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Contact phone number"
                       />
                     </div>
                     <div>
@@ -432,8 +609,23 @@ const Courts = () => {
                         value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Contact email address"
                       />
                     </div>
+                  </div>
+
+                  {/* Active Status */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+                      Court is active and available for booking
+                    </label>
                   </div>
 
                   <div className="flex items-center justify-end gap-4 pt-6">

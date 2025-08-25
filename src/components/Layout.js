@@ -14,7 +14,8 @@ import {
   Bell,
   BarChart3,
   UserCheck,
-  Target
+  Target,
+  Trophy
 } from 'lucide-react';
 
 const Layout = () => {
@@ -27,6 +28,7 @@ const Layout = () => {
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
     { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
     { name: 'Bookings', href: '/bookings', icon: Calendar, description: 'Court & Academy Bookings' },
+    { name: 'Sports', href: '/sports', icon: Trophy, description: 'Manage Sports & Activities' },
     { name: 'Academies', href: '/academies', icon: School, description: 'Sports Academies' },
     { name: 'Courts', href: '/courts', icon: MapPin, description: 'Sports Courts' },
     { name: 'Events', href: '/events', icon: Target, description: 'Sports Events' },

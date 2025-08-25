@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Bookings from './pages/Bookings';
 import Academies from './pages/Academies';
+import Sports from './pages/Sports';
 import Courts from './pages/Courts';
 import Events from './pages/Events';
 import Projects from './pages/Projects';
@@ -45,6 +46,7 @@ function App() {
               <Route path="users" element={<Users />} />
               <Route path="bookings" element={<Bookings />} />
               <Route path="academies" element={<Academies />} />
+              <Route path="sports" element={<Sports />} />
               <Route path="courts" element={<Courts />} />
               <Route path="events" element={<Events />} />
               <Route path="projects" element={<Projects />} />
