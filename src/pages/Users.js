@@ -39,12 +39,40 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      
+      // Fetch users
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.() || new Date()
-      }));
+      
+      // Fetch projects for project name resolution
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      const projectsMap = {};
+      projectsSnapshot.docs.forEach(doc => {
+        projectsMap[doc.id] = doc.data();
+      });
+      
+      const usersData = usersSnapshot.docs.map(doc => {
+        const userData = doc.data();
+        
+        // Enhance projects data with actual project names
+        let enhancedProjects = [];
+        if (userData.projects && Array.isArray(userData.projects)) {
+          enhancedProjects = userData.projects.map(project => ({
+            ...project,
+            projectName: projectsMap[project.projectId]?.name || 'Unknown Project',
+            projectType: projectsMap[project.projectId]?.type || 'Unknown Type',
+            projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
+          }));
+        }
+        
+        return {
+          id: doc.id,
+          ...userData,
+          enhancedProjects,
+          createdAt: userData.createdAt?.toDate?.() || new Date(),
+          lastLoginAt: userData.lastLoginAt?.toDate?.() || null,
+          updatedAt: userData.updatedAt?.toDate?.() || null
+        };
+      });
       
       setUsers(usersData);
     } catch (err) {
@@ -211,13 +239,7 @@ const Users = () => {
                   Contact
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Joined
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Properties
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -233,13 +255,16 @@ const Users = () => {
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
                             <span className="text-sm font-medium text-primary-700">
-                              {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
+                              {user.firstName?.charAt(0) || user.lastName?.charAt(0) || user.email?.charAt(0) || 'U'}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {user.displayName || 'No Name'}
+                            {user.firstName && user.lastName 
+                              ? `${user.firstName} ${user.lastName}`
+                              : user.fullName || 'No Name'
+                            }
                           </div>
                           <div className="text-sm text-gray-500">
                             ID: {user.id.slice(0, 8)}...
@@ -253,46 +278,38 @@ const Users = () => {
                           <Mail className="h-4 w-4 mr-2 text-gray-400" />
                           {user.email}
                         </div>
-                        {user.phone && (
+                        {user.mobile && (
                           <div className="flex items-center mt-1">
                             <Phone className="h-4 w-4 mr-2 text-gray-400" />
-                            {user.phone}
+                            {user.mobile}
                           </div>
                         )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <select
-                        value={user.role || 'user'}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        className="text-sm border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                      >
-                        <option value="user">User</option>
-                        <option value="moderator">Moderator</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                        {user.createdAt?.toLocaleDateString() || 'N/A'}
+                      <div className="text-sm text-gray-900">
+                        {user.enhancedProjects && user.enhancedProjects.length > 0 ? (
+                          <div className="space-y-1">
+                            {user.enhancedProjects.map((project, index) => (
+                              <div key={index} className="text-xs bg-blue-50 p-2 rounded border">
+                                <div className="font-medium">{project.projectName}</div>
+                                <div className="text-gray-600">
+                                  {project.unit} • {project.role}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">No properties</span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.emailVerified 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {user.emailVerified ? 'Verified' : 'Pending'}
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => openUserModal(user)}
                           className="text-primary-600 hover:text-primary-900 p-1 rounded"
-                          title="View Details"
+                          title="View All Details"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -316,7 +333,7 @@ const Users = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
                     {searchTerm || roleFilter !== 'all' ? 'No users match your filters' : 'No users found'}
                   </td>
                 </tr>
@@ -326,13 +343,13 @@ const Users = () => {
         </div>
       </div>
 
-      {/* User Details Modal */}
+      {/* Enhanced User Details Modal */}
       {showUserModal && selectedUser && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">User Details</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">User Details</h3>
                 <button
                   onClick={() => setShowUserModal(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -342,55 +359,155 @@ const Users = () => {
                 </button>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <p className="mt-1 text-sm text-gray-900">{selectedUser.displayName || 'No Name'}</p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <p className="mt-1 text-sm text-gray-900">{selectedUser.email}</p>
-                </div>
-                
-                {selectedUser.phone && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Information */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Basic Information</h4>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Phone</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.phone}</p>
+                    <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedUser.firstName && selectedUser.lastName 
+                        ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                        : selectedUser.fullName || 'No Name'
+                      }
+                    </p>
                   </div>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <select
-                    value={selectedUser.role || 'user'}
-                    onChange={(e) => handleRoleChange(selectedUser.id, e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="user">User</option>
-                    <option value="moderator">Moderator</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                    <p className="mt-1 text-sm text-gray-900">{selectedUser.email}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Mobile</label>
+                    <p className="mt-1 text-sm text-gray-900">{selectedUser.mobile || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                    <p className="mt-1 text-sm text-gray-900">{selectedUser.dateOfBirth || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Gender</label>
+                    <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.gender || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">National ID</label>
+                    <p className="mt-1 text-sm text-gray-900">{selectedUser.nationalId || 'N/A'}</p>
+                  </div>
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Joined</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {selectedUser.createdAt?.toLocaleDateString() || 'N/A'}
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    selectedUser.emailVerified 
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {selectedUser.emailVerified ? 'Verified' : 'Pending Verification'}
-                  </span>
+                {/* System Information */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">System Information</h4>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">User ID</label>
+                    <p className="mt-1 text-sm text-gray-900 font-mono">{selectedUser.id}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Auth UID</label>
+                    <p className="mt-1 text-sm text-gray-900 font-mono">{selectedUser.authUid || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Registration Status</label>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedUser.registrationStatus === 'completed' 
+                        ? 'bg-green-100 text-green-800'
+                        : selectedUser.registrationStatus === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {selectedUser.registrationStatus || 'pending'}
+                    </span>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Registration Step</label>
+                    <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.registrationStep || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Email Verification</label>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedUser.emailVerified 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedUser.emailVerified ? 'Verified' : 'Pending Verification'}
+                    </span>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Profile Complete</label>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedUser.isProfileComplete 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedUser.isProfileComplete ? 'Yes' : 'No'}
+                    </span>
+                  </div>
                 </div>
               </div>
+              
+              {/* Timestamps */}
+              <div className="mt-6 space-y-4">
+                <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Timestamps</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Created At</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedUser.createdAt?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Last Updated</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedUser.updatedAt?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Last Login</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedUser.lastLoginAt?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Properties/Projects */}
+              {selectedUser.enhancedProjects && selectedUser.enhancedProjects.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Properties & Projects</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedUser.enhancedProjects.map((project, index) => (
+                      <div key={index} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-medium text-blue-900">{project.projectName}</h5>
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            project.role === 'owner' 
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {project.role}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm text-blue-800">
+                          <div><strong>Type:</strong> {project.projectType}</div>
+                          <div><strong>Location:</strong> {project.projectLocation}</div>
+                          <div><strong>Unit:</strong> {project.unit}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="mt-6 flex justify-end space-x-3">
                 <button

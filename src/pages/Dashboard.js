@@ -6,7 +6,13 @@ import {
   TrendingUp, 
   DollarSign,
   UserPlus,
-  AlertCircle
+  AlertCircle,
+  ShoppingCart,
+  Store,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Eye
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -17,9 +23,12 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
 
@@ -29,13 +38,22 @@ const Dashboard = () => {
     totalBookings: 0,
     totalAcademies: 0,
     totalCourts: 0,
-    totalRevenue: 0
+    totalRevenue: 0,
+    pendingUsers: 0,
+    pendingBookings: 0,
+    activeBookings: 0,
+    newUsersToday: 0,
+    totalProjects: 0,
+    totalEvents: 0
   });
   const [recentBookings, setRecentBookings] = useState([]);
+  const [recentUsers, setRecentUsers] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showBookingDialog, setShowBookingDialog] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -48,12 +66,54 @@ const Dashboard = () => {
       let totalAcademies = 0;
       let totalCourts = 0;
       let totalRevenue = 0;
+      let pendingUsers = 0;
+      let pendingBookings = 0;
+      let activeBookings = 0;
+      let newUsersToday = 0;
+      let totalProjects = 0;
+      let totalEvents = 0;
       let recentBookingsData = [];
+      let recentUsersData = [];
       
       try {
         // Fetch users
         const usersSnapshot = await getDocs(collection(db, 'users'));
         totalUsers = usersSnapshot.size;
+        
+        // Get recent users for display
+        usersSnapshot.forEach(doc => {
+          if (recentUsersData.length < 5) {
+            const userData = doc.data();
+            recentUsersData.push({
+              id: doc.id,
+              ...userData,
+              createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
+              name: userData.firstName && userData.lastName ? 
+                `${userData.firstName} ${userData.lastName}` : 
+                userData.email || 'Unknown User',
+              email: userData.email || 'No email',
+              status: userData.registrationStatus || 'pending'
+            });
+          }
+        });
+        
+        // Check for pending users
+        usersSnapshot.forEach(doc => {
+          const userData = doc.data();
+          if (userData.registrationStatus === 'pending') {
+            pendingUsers++;
+          }
+          
+          // Check for new users today
+          if (userData.createdAt) {
+            const userDate = new Date(userData.createdAt.seconds * 1000);
+            const today = new Date();
+            if (userDate.toDateString() === today.toDateString()) {
+              newUsersToday++;
+            }
+          }
+        });
+        
         console.log('Users fetched:', totalUsers);
       } catch (err) {
         console.warn('Could not fetch users:', err.message);
@@ -69,6 +129,13 @@ const Dashboard = () => {
           const booking = doc.data();
           if (booking.price) {
             totalRevenue += parseFloat(booking.price) || 0;
+          }
+          
+          // Check booking status
+          if (booking.status === 'pending') {
+            pendingBookings++;
+          } else if (booking.status === 'active' || booking.status === 'confirmed') {
+            activeBookings++;
           }
           
           // Get recent bookings for display
@@ -101,6 +168,24 @@ const Dashboard = () => {
       }
 
       try {
+        // Fetch projects
+        const projectsSnapshot = await getDocs(collection(db, 'projects'));
+        totalProjects = projectsSnapshot.size;
+        console.log('Projects fetched:', totalProjects);
+      } catch (err) {
+        console.warn('Could not fetch projects:', err.message);
+      }
+
+      try {
+        // Fetch events
+        const eventsSnapshot = await getDocs(collection(db, 'events'));
+        totalEvents = eventsSnapshot.size;
+        console.log('Events fetched:', totalEvents);
+      } catch (err) {
+        console.warn('Could not fetch events:', err.message);
+      }
+
+      try {
         // Fetch courts
         const courtsSnapshot = await getDocs(collection(db, 'courts'));
         totalCourts = courtsSnapshot.size;
@@ -115,10 +200,17 @@ const Dashboard = () => {
         totalBookings,
         totalAcademies,
         totalCourts,
-        totalRevenue
+        totalRevenue,
+        pendingUsers,
+        pendingBookings,
+        activeBookings,
+        newUsersToday,
+        totalProjects,
+        totalEvents
       });
       
       setRecentBookings(recentBookingsData);
+      setRecentUsers(recentUsersData);
       setMonthlyData(generateMonthlyData(totalBookings));
       
     } catch (err) {
@@ -196,6 +288,38 @@ const Dashboard = () => {
         revenue: Math.round(monthRevenue)
       };
     });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+      case 'confirmed':
+      case 'active':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    if (date.toDate) return date.toDate().toLocaleDateString();
+    if (date instanceof Date) return date.toLocaleDateString();
+    return new Date(date).toLocaleDateString();
   };
 
   const StatCard = ({ title, value, icon: Icon, change, changeType = 'up', color = 'blue' }) => {
@@ -303,11 +427,96 @@ const Dashboard = () => {
             >
               Open Firestore Data
             </button>
+                  </div>
+      </div>
+
+      {/* Recent Users */}
+      <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+        <div className="px-8 py-8 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">Recent Users</h3>
+              <p className="text-gray-500 mt-1">Latest platform registrations</p>
+            </div>
+            <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200">
+              {recentUsers.length} recent users
+            </div>
           </div>
         </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  User
+                </th>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Registration Date
+                </th>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-8 py-6 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {recentUsers.length > 0 ? (
+                recentUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                          <span className="text-sm font-medium text-green-600">
+                            {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {user.name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            ID: {user.id.slice(0, 8)}...
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap text-sm text-gray-900">
+                      {user.email}
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(user.createdAt)}
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <span className={`inline-flex px-4 py-2 text-xs font-semibold rounded-full ${getStatusColor(user.status)}`}>
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 whitespace-nowrap">
+                      <button className="text-blue-600 hover:text-blue-800 transition-colors duration-150">
+                        <Eye className="h-5 w-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-8 py-12 text-center text-gray-500">
+                    No recent users found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="space-y-8">
@@ -329,13 +538,14 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      {/* Enhanced Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Primary Stats */}
         <StatCard
           title="Total Users"
           value={stats.totalUsers}
           icon={Users}
-          change="+12%"
+          change={`+${stats.newUsersToday} today`}
           changeType="up"
           color="blue"
         />
@@ -343,26 +553,77 @@ const Dashboard = () => {
           title="Total Bookings"
           value={stats.totalBookings}
           icon={Calendar}
-          change="+8%"
+          change={`${stats.activeBookings} active`}
           changeType="up"
           color="green"
         />
         <StatCard
-          title="Total Academies"
-          value={stats.totalAcademies}
-          icon={School}
-          change="+5%"
-          changeType="up"
-          color="purple"
-        />
-        <StatCard
           title="Total Revenue"
-          value={`$${stats.totalRevenue}`}
+          value={formatCurrency(stats.totalRevenue)}
           icon={DollarSign}
           change="+15%"
           changeType="up"
           color="orange"
         />
+        <StatCard
+          title="Total Projects"
+          value={stats.totalProjects}
+          icon={Store}
+          change="+2"
+          changeType="up"
+          color="purple"
+        />
+      </div>
+
+      {/* Secondary Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-6 border border-yellow-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Pending Users</p>
+              <p className="text-2xl font-bold text-yellow-900">{stats.pendingUsers}</p>
+            </div>
+            <div className="p-3 bg-yellow-100 rounded-xl">
+              <Clock className="h-6 w-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-red-800">Pending Bookings</p>
+              <p className="text-2xl font-bold text-red-900">{stats.pendingBookings}</p>
+            </div>
+            <div className="p-3 bg-red-100 rounded-xl">
+              <AlertCircle className="h-6 w-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-800">Active Bookings</p>
+              <p className="text-2xl font-bold text-green-900">{stats.activeBookings}</p>
+            </div>
+            <div className="p-3 bg-green-100 rounded-xl">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-800">Total Events</p>
+              <p className="text-2xl font-bold text-blue-900">{stats.totalEvents}</p>
+            </div>
+            <div className="p-3 bg-blue-100 rounded-xl">
+              <Calendar className="h-6 w-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Section */}
@@ -451,6 +712,61 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Quick Actions */}
+      <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900">Quick Actions</h3>
+            <p className="text-gray-500 mt-1">Common administrative tasks</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 transform hover:scale-105">
+            <div className="flex items-center justify-between mb-4">
+              <Users className="h-8 w-8" />
+              <span className="text-sm font-medium">View All</span>
+            </div>
+            <div className="text-left">
+              <div className="text-lg font-semibold">Manage Users</div>
+              <div className="text-blue-100 text-sm">Review and manage user accounts</div>
+            </div>
+          </button>
+
+          <button className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl hover:from-green-600 hover:to-green-700 transition-all duration-200 transform hover:scale-105">
+            <div className="flex items-center justify-between mb-4">
+              <Calendar className="h-8 w-8" />
+              <span className="text-sm font-medium">View All</span>
+            </div>
+            <div className="text-left">
+              <div className="text-lg font-semibold">Bookings</div>
+              <div className="text-green-100 text-sm">Monitor and manage reservations</div>
+            </div>
+          </button>
+
+          <button className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-2xl hover:from-purple-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
+            <div className="flex items-center justify-between mb-4">
+              <Store className="h-8 w-8" />
+              <span className="text-sm font-medium">View All</span>
+            </div>
+            <div className="text-left">
+              <div className="text-lg font-semibold">Projects</div>
+              <div className="text-purple-100 text-sm">Manage property projects</div>
+            </div>
+          </button>
+
+          <button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-2xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 transform hover:scale-105">
+            <div className="flex items-center justify-between mb-4">
+              <School className="h-8 w-8" />
+              <span className="text-sm font-medium">View All</span>
+            </div>
+            <div className="text-left">
+              <div className="text-lg font-semibold">Academies</div>
+              <div className="text-orange-100 text-sm">Manage academy programs</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Recent Bookings */}
       <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
         <div className="px-8 py-8 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100">
@@ -515,21 +831,15 @@ const Dashboard = () => {
                       </div>
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap text-sm text-gray-900">
-                      {booking.date?.toLocaleDateString() || 'N/A'}
+                      {formatDate(booking.date)}
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap">
-                      <span className={`inline-flex px-4 py-2 text-xs font-semibold rounded-full ${
-                        booking.status === 'confirmed' 
-                          ? 'bg-green-100 text-green-800'
-                          : booking.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`inline-flex px-4 py-2 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
                         {booking.status}
                       </span>
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      ${booking.price}
+                      {formatCurrency(booking.price)}
                     </td>
                   </tr>
                 ))
