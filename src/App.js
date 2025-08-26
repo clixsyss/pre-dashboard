@@ -47,14 +47,14 @@ function App() {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<Users />} />
               <Route path="projects" element={<Projects />} />
+              <Route path="/project-selection" element={
+                <ProtectedRoute>
+                  <ProjectSelection />
+                </ProtectedRoute>
+              } />
             </Route>
 
             {/* Project-based routes */}
-            <Route path="/project-selection" element={
-              <ProtectedRoute>
-                <ProjectSelection />
-              </ProtectedRoute>
-            } />
             <Route path="/project/:projectId/*" element={
               <ProtectedRoute>
                 <ProjectDashboard />
