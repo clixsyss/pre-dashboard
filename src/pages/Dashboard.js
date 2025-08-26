@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Calendar, 
@@ -7,11 +8,9 @@ import {
   DollarSign,
   UserPlus,
   AlertCircle,
-  ShoppingCart,
   Store,
   Clock,
   CheckCircle,
-  XCircle,
   Eye
 } from 'lucide-react';
 import { 
@@ -23,16 +22,23 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
+  ResponsiveContainer
 } from 'recharts';
-import { collection, getDocs, doc, getDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  
+  // Check if a project is selected, if not redirect to project selection
+  useEffect(() => {
+    const selectedProject = localStorage.getItem('adminSelectedProject');
+    if (!selectedProject) {
+      navigate('/project-selection');
+    }
+  }, [navigate]);
+
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalBookings: 0,
@@ -52,8 +58,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
-  const [selectedBooking, setSelectedBooking] = useState(null);
-  const [showBookingDialog, setShowBookingDialog] = useState(false);
+
 
   const fetchDashboardData = useCallback(async () => {
     try {

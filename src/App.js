@@ -10,13 +10,15 @@ import Sports from './pages/Sports';
 import Courts from './pages/Courts';
 import Events from './pages/Events';
 import Projects from './pages/Projects';
+import ProjectSelection from './pages/ProjectSelection';
+import ProjectDashboard from './pages/ProjectDashboard';
 import Layout from './components/Layout';
 import './App.css';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -24,7 +26,7 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  
+
   return currentUser ? children : <Navigate to="/login" />;
 };
 
@@ -51,6 +53,18 @@ function App() {
               <Route path="events" element={<Events />} />
               <Route path="projects" element={<Projects />} />
             </Route>
+
+            {/* Project-based routes */}
+            <Route path="/project-selection" element={
+              <ProtectedRoute>
+                <ProjectSelection />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/*" element={
+              <ProtectedRoute>
+                <ProjectDashboard />
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
       </Router>

@@ -1,22 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
-  Filter, 
   Eye, 
   Edit, 
   Trash2, 
   UserPlus,
   Mail,
   Phone,
-  Calendar,
-  Shield,
-  MoreHorizontal,
   X
 } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const Users = () => {
+  const navigate = useNavigate();
+  
+  // Check if a project is selected, if not redirect to project selection
+  useEffect(() => {
+    const selectedProject = localStorage.getItem('adminSelectedProject');
+    if (!selectedProject) {
+      navigate('/project-selection');
+      return;
+    }
+  }, [navigate]);
+
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +42,7 @@ const Users = () => {
 
   useEffect(() => {
     filterUsers();
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, filterUsers]);
 
   const fetchUsers = async () => {
     try {
@@ -83,7 +91,7 @@ const Users = () => {
     }
   };
 
-  const filterUsers = () => {
+  const filterUsers = useCallback(() => {
     let filtered = users;
 
     // Apply search filter
@@ -101,7 +109,7 @@ const Users = () => {
     }
 
     setFilteredUsers(filtered);
-  };
+  }, [users, searchTerm, roleFilter]);
 
   const handleRoleChange = async (userId, newRole) => {
     try {
@@ -239,9 +247,6 @@ const Users = () => {
                   Contact
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Properties
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -283,24 +288,6 @@ const Users = () => {
                             <Phone className="h-4 w-4 mr-2 text-gray-400" />
                             {user.mobile}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {user.enhancedProjects && user.enhancedProjects.length > 0 ? (
-                          <div className="space-y-1">
-                            {user.enhancedProjects.map((project, index) => (
-                              <div key={index} className="text-xs bg-blue-50 p-2 rounded border">
-                                <div className="font-medium">{project.projectName}</div>
-                                <div className="text-gray-600">
-                                  {project.unit} • {project.role}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-xs">No properties</span>
                         )}
                       </div>
                     </td>

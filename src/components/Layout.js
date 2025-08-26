@@ -25,14 +25,14 @@ const Layout = () => {
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
+    { name: 'Projects', href: '/projects', icon: Building2, description: 'Manage Projects' },
     { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
+    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
     { name: 'Bookings', href: '/bookings', icon: Calendar, description: 'Court & Academy Bookings' },
     { name: 'Sports', href: '/sports', icon: Trophy, description: 'Manage Sports & Activities' },
     { name: 'Academies', href: '/academies', icon: School, description: 'Sports Academies' },
     { name: 'Courts', href: '/courts', icon: MapPin, description: 'Sports Courts' },
     { name: 'Events', href: '/events', icon: Target, description: 'Sports Events' },
-    { name: 'Projects', href: '/projects', icon: Building2, description: 'Residential & Commercial' },
   ];
 
   const handleLogout = async () => {
@@ -157,6 +157,39 @@ const Layout = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Project Switcher */}
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-gray-600">Project:</span>
+                {(() => {
+                  const selectedProject = localStorage.getItem('adminSelectedProject');
+                  if (selectedProject) {
+                    try {
+                      const project = JSON.parse(selectedProject);
+                      return (
+                        <button
+                          onClick={() => navigate('/project-selection')}
+                          className="px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium flex items-center space-x-2"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          <span>{project.name}</span>
+                        </button>
+                      );
+                    } catch (e) {
+                      // Fallback if JSON parsing fails
+                    }
+                  }
+                  return (
+                    <button
+                      onClick={() => navigate('/project-selection')}
+                      className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center space-x-2"
+                    >
+                      <Building2 className="h-4 w-4" />
+                      <span>Select Project</span>
+                    </button>
+                  );
+                })()}
+              </div>
+              
               <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors relative">
                 <Bell className="h-6 w-6" />
                 <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
