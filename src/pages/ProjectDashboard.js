@@ -8,7 +8,11 @@ import {
   Search,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Calendar,
+  School,
+  Trophy,
+  Target
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -23,15 +27,24 @@ const ProjectDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Get current active tab from URL
+  const getActiveTab = () => {
+    const path = window.location.pathname;
+    if (path.includes('/bookings')) return 'bookings';
+    if (path.includes('/academies')) return 'academies';
+    if (path.includes('/sports')) return 'sports';
+    if (path.includes('/courts')) return 'courts';
+    if (path.includes('/events')) return 'events';
+    return 'dashboard'; // Default to dashboard/users
+  };
+
   useEffect(() => {
     console.log('ProjectDashboard useEffect - projectId:', projectId);
-    
     if (projectId) {
       const loadData = async () => {
         try {
           console.log('Loading data for project:', projectId);
           
-          // Fetch project details
           const projectDoc = await getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId)));
           if (!projectDoc.empty) {
             const projectData = { id: projectId, ...projectDoc.docs[0].data() };
@@ -187,6 +200,80 @@ const ProjectDashboard = () => {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Project Services Navigation */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => navigate(`/project/${projectId}/dashboard`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'dashboard'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Users
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/bookings`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'bookings'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Bookings
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/academies`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'academies'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <School className="h-4 w-4 mr-2" />
+              Academies
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/sports`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'sports'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Trophy className="h-4 w-4 mr-2" />
+              Sports
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/courts`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'courts'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <MapPin className="h-4 w-4 mr-2" />
+              Courts
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/events`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'events'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Target className="h-4 w-4 mr-2" />
+              Events
+            </button>
+          </nav>
         </div>
       </div>
 

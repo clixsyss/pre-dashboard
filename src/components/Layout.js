@@ -5,17 +5,12 @@ import {
   Menu, 
   X, 
   Home, 
-  Calendar, 
-  School, 
-  MapPin, 
   Building2,
   LogOut,
   Settings,
   Bell,
   BarChart3,
-  UserCheck,
-  Target,
-  Trophy
+  UserCheck
 } from 'lucide-react';
 
 const Layout = () => {
@@ -25,14 +20,9 @@ const Layout = () => {
   const location = useLocation();
 
   const navigation = [
+    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
     { name: 'Projects', href: '/projects', icon: Building2, description: 'Manage Projects' },
     { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
-    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
-    { name: 'Bookings', href: '/bookings', icon: Calendar, description: 'Court & Academy Bookings' },
-    { name: 'Sports', href: '/sports', icon: Trophy, description: 'Manage Sports & Activities' },
-    { name: 'Academies', href: '/academies', icon: School, description: 'Sports Academies' },
-    { name: 'Courts', href: '/courts', icon: MapPin, description: 'Sports Courts' },
-    { name: 'Events', href: '/events', icon: Target, description: 'Sports Events' },
   ];
 
   const handleLogout = async () => {

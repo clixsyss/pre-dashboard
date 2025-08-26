@@ -10,7 +10,7 @@ import {
   Phone,
   X
 } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const Users = () => {
@@ -36,12 +36,34 @@ const Users = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
+  const filterUsers = useCallback(() => {
+    let filtered = users;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(user => 
+        user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.phone?.includes(searchTerm)
+      );
+    }
+
+    // Apply role filter
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(user => user.role === roleFilter);
+    }
+
+    setFilteredUsers(filtered);
+  }, [users, searchTerm, roleFilter]);
+
   useEffect(() => {
     fetchUsers();
   }, []);
 
   useEffect(() => {
-    filterUsers();
+    if (users.length > 0) {
+      filterUsers();
+    }
   }, [users, searchTerm, roleFilter, filterUsers]);
 
   const fetchUsers = async () => {
@@ -91,46 +113,7 @@ const Users = () => {
     }
   };
 
-  const filterUsers = useCallback(() => {
-    let filtered = users;
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user => 
-        user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.phone?.includes(searchTerm)
-      );
-    }
-
-    // Apply role filter
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(user => user.role === roleFilter);
-    }
-
-    setFilteredUsers(filtered);
-  }, [users, searchTerm, roleFilter]);
-
-  const handleRoleChange = async (userId, newRole) => {
-    try {
-      await updateDoc(doc(db, 'users', userId), {
-        role: newRole
-      });
-      
-      // Update local state
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, role: newRole } : user
-      ));
-      
-      // Update selected user if it's the same user
-      if (selectedUser && selectedUser.id === userId) {
-        setSelectedUser({ ...selectedUser, role: newRole });
-      }
-    } catch (err) {
-      console.error('Error updating user role:', err);
-      alert('Failed to update user role');
-    }
-  };
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;

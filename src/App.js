@@ -4,12 +4,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import Projects from './pages/Projects';
 import Bookings from './pages/Bookings';
 import Academies from './pages/Academies';
 import Sports from './pages/Sports';
 import Courts from './pages/Courts';
 import Events from './pages/Events';
-import Projects from './pages/Projects';
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
 import Layout from './components/Layout';
@@ -46,11 +46,6 @@ function App() {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<Users />} />
-              <Route path="bookings" element={<Bookings />} />
-              <Route path="academies" element={<Academies />} />
-              <Route path="sports" element={<Sports />} />
-              <Route path="courts" element={<Courts />} />
-              <Route path="events" element={<Events />} />
               <Route path="projects" element={<Projects />} />
             </Route>
 
@@ -63,6 +58,31 @@ function App() {
             <Route path="/project/:projectId/*" element={
               <ProtectedRoute>
                 <ProjectDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/bookings" element={
+              <ProtectedRoute>
+                <Bookings />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/academies" element={
+              <ProtectedRoute>
+                <Academies />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/sports" element={
+              <ProtectedRoute>
+                <Sports />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/courts" element={
+              <ProtectedRoute>
+                <Courts />
+              </ProtectedRoute>
+            } />
+            <Route path="/project/:projectId/events" element={
+              <ProtectedRoute>
+                <Events />
               </ProtectedRoute>
             } />
           </Routes>
