@@ -49,6 +49,7 @@ const CourtsManagement = ({ projectId }) => {
     capacity: '',
     type: 'outdoor',
     sportId: '',
+    surface: 'hard',
     description: ''
   });
 
@@ -87,6 +88,7 @@ const CourtsManagement = ({ projectId }) => {
       capacity: '',
       type: 'outdoor',
       sportId: '',
+      surface: 'hard',
       description: ''
     });
     setEditingCourt(null);
@@ -103,6 +105,7 @@ const CourtsManagement = ({ projectId }) => {
         capacity: parseInt(formData.capacity) || 0,
         type: formData.type,
         sport: formData.sportId,
+        surface: formData.surface,
         description: formData.description.trim(),
         status: 'available',
         active: true
@@ -134,6 +137,7 @@ const CourtsManagement = ({ projectId }) => {
       capacity: court.capacity?.toString() || '',
       type: court.type || 'outdoor',
       sportId: court.sport || '',
+      surface: court.surface || 'hard',
       description: court.description || ''
     });
     setShowModal(true);
@@ -179,6 +183,11 @@ const CourtsManagement = ({ projectId }) => {
 
   const getTypeColor = (type) => {
     return type === 'indoor' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800';
+  };
+
+  const formatSurface = (surface) => {
+    if (!surface) return 'Unknown';
+    return surface.charAt(0).toUpperCase() + surface.slice(1).replace(/([A-Z])/g, ' $1');
   };
 
   if (loading) {
@@ -304,10 +313,15 @@ const CourtsManagement = ({ projectId }) => {
                         <MapPin className="w-4 h-4 mr-1 text-gray-400" />
                         {court.location}
                       </div>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor(court.type)}`}>
-                        <Building className="w-3 h-3 mr-1" />
-                        {court.type}
-                      </span>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeColor(court.type)}`}>
+                          <Building className="w-3 h-3 mr-1" />
+                          {court.type}
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          {formatSurface(court.surface)}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-900">
@@ -492,6 +506,27 @@ const CourtsManagement = ({ projectId }) => {
                           {sport.name}
                         </option>
                       ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Surface *
+                    </label>
+                    <select
+                      required
+                      value={formData.surface}
+                      onChange={(e) => setFormData({...formData, surface: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="hard">Hard Court</option>
+                      <option value="clay">Clay Court</option>
+                      <option value="grass">Grass Court</option>
+                      <option value="artificial">Artificial Turf</option>
+                      <option value="concrete">Concrete</option>
+                      <option value="asphalt">Asphalt</option>
+                      <option value="wood">Wooden Floor</option>
+                      <option value="synthetic">Synthetic Surface</option>
                     </select>
                   </div>
                 </div>
