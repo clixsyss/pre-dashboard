@@ -5,13 +5,9 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Projects from './pages/Projects';
-import Bookings from './pages/Bookings';
-import Academies from './pages/Academies';
-import Sports from './pages/Sports';
-import Courts from './pages/Courts';
-import Events from './pages/Events';
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import Layout from './components/Layout';
 import './App.css';
 
@@ -50,6 +46,11 @@ function App() {
               <Route path="/project-selection" element={
                 <ProtectedRoute>
                   <ProjectSelection />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin" element={
+                <ProtectedRoute>
+                  <AdminDashboard />
                 </ProtectedRoute>
               } />
             </Route>
