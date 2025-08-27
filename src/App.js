@@ -60,31 +60,6 @@ function App() {
                 <ProjectDashboard />
               </ProtectedRoute>
             } />
-            <Route path="/project/:projectId/bookings" element={
-              <ProtectedRoute>
-                <Bookings />
-              </ProtectedRoute>
-            } />
-            <Route path="/project/:projectId/academies" element={
-              <ProtectedRoute>
-                <Academies />
-              </ProtectedRoute>
-            } />
-            <Route path="/project/:projectId/sports" element={
-              <ProtectedRoute>
-                <Sports />
-              </ProtectedRoute>
-            } />
-            <Route path="/project/:projectId/courts" element={
-              <ProtectedRoute>
-                <Courts />
-              </ProtectedRoute>
-            } />
-            <Route path="/project/:projectId/events" element={
-              <ProtectedRoute>
-                <Events />
-              </ProtectedRoute>
-            } />
           </Routes>
         </div>
       </Router>

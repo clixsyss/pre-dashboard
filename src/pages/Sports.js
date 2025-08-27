@@ -9,12 +9,21 @@ import {
   Calendar,
   MoreVertical
 } from 'lucide-react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { useParams } from 'react-router-dom';
+import { useSportsStore } from '../stores';
 
 const Sports = () => {
-  const [sports, setSports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { projectId } = useParams();
+  const { 
+    sports, 
+    loading, 
+    error,
+    fetchSports, 
+    addSport, 
+    updateSport, 
+    deleteSport 
+  } = useSportsStore();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingSport, setEditingSport] = useState(null);
@@ -30,32 +39,18 @@ const Sports = () => {
   });
 
   useEffect(() => {
-    fetchSports();
-  }, []);
-
-  const fetchSports = async () => {
-    try {
-      setLoading(true);
-      const querySnapshot = await getDocs(collection(db, 'sports'));
-      const sportsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setSports(sportsData);
-    } catch (error) {
-      console.error('Error fetching sports:', error);
-    } finally {
-      setLoading(false);
+    if (projectId) {
+      fetchSports(projectId);
     }
-  };
+  }, [projectId, fetchSports]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (editingSport) {
-        await updateDoc(doc(db, 'sports', editingSport.id), formData);
+        await updateSport(projectId, editingSport.id, formData);
       } else {
-        await addDoc(collection(db, 'sports'), {
+        await addSport(projectId, {
           ...formData,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -64,7 +59,6 @@ const Sports = () => {
       setShowModal(false);
       setEditingSport(null);
       resetForm();
-      fetchSports();
     } catch (error) {
       console.error('Error saving sport:', error);
     }
@@ -88,8 +82,7 @@ const Sports = () => {
   const handleDelete = async (sportId) => {
     if (window.confirm('Are you sure you want to delete this sport? This will also affect all courts associated with it.')) {
       try {
-        await deleteDoc(doc(db, 'sports', sportId));
-        fetchSports();
+        await deleteSport(projectId, sportId);
       } catch (error) {
         console.error('Error deleting sport:', error);
       }
@@ -109,16 +102,36 @@ const Sports = () => {
     });
   };
 
-  const filteredSports = sports.filter(sport =>
-    sport.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sport.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sport.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Safe filtering with null checks
+  const filteredSports = sports.filter(sport => {
+    const name = sport.name || '';
+    const description = sport.description || '';
+    const category = sport.category || '';
+    const searchLower = searchTerm.toLowerCase();
+    
+    return name.toLowerCase().includes(searchLower) ||
+           description.toLowerCase().includes(searchLower) ||
+           category.toLowerCase().includes(searchLower);
+  });
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-red-600 mb-4">Error loading sports: {error}</div>
+        <button 
+          onClick={() => fetchSports(projectId)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -139,7 +152,7 @@ const Sports = () => {
             resetForm();
             setShowModal(true);
           }}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Sport
@@ -147,7 +160,7 @@ const Sports = () => {
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-soft p-6">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
@@ -157,7 +170,7 @@ const Sports = () => {
                 placeholder="Search sports by name, description, or category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -170,14 +183,14 @@ const Sports = () => {
       {/* Sports Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredSports.map((sport) => (
-          <div key={sport.id} className="bg-white rounded-lg shadow-soft p-6 hover:shadow-md transition-shadow">
+          <div key={sport.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center">
-                <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                  <Trophy className="h-5 w-5 text-primary-600" />
+                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Trophy className="h-5 w-5 text-blue-600" />
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-lg font-medium text-gray-900">{sport.name}</h3>
+                  <h3 className="text-lg font-medium text-gray-900">{sport.name || 'Unnamed Sport'}</h3>
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full capitalize ${
                     sport.category === 'team' ? 'bg-blue-100 text-blue-800' :
                     sport.category === 'individual' ? 'bg-green-100 text-green-800' :
@@ -185,7 +198,7 @@ const Sports = () => {
                     sport.category === 'indoor' ? 'bg-purple-100 text-purple-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
-                    {sport.category}
+                    {sport.category || 'uncategorized'}
                   </span>
                 </div>
               </div>
@@ -248,6 +261,17 @@ const Sports = () => {
         ))}
       </div>
 
+      {/* Empty State */}
+      {filteredSports.length === 0 && (
+        <div className="text-center py-12">
+          <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No sports found</h3>
+          <p className="text-gray-600">
+            {searchTerm ? 'No sports match your search criteria.' : 'Get started by adding your first sport.'}
+          </p>
+        </div>
+      )}
+
       {/* Add/Edit Sport Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -277,7 +301,7 @@ const Sports = () => {
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., Football, Tennis, Swimming"
                     />
                   </div>
@@ -288,7 +312,7 @@ const Sports = () => {
                       required
                       value={formData.category}
                       onChange={(e) => setFormData({...formData, category: e.target.value})}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="team">Team Sport</option>
                       <option value="individual">Individual Sport</option>
@@ -305,7 +329,7 @@ const Sports = () => {
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     rows={3}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Brief description of the sport..."
                   />
                 </div>
@@ -318,7 +342,7 @@ const Sports = () => {
                       min="1"
                       value={formData.minPlayers}
                       onChange={(e) => setFormData({...formData, minPlayers: e.target.value})}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., 2"
                     />
                   </div>
@@ -330,7 +354,7 @@ const Sports = () => {
                       min="1"
                       value={formData.maxPlayers}
                       onChange={(e) => setFormData({...formData, maxPlayers: e.target.value})}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., 22"
                     />
                   </div>
@@ -342,7 +366,7 @@ const Sports = () => {
                     type="text"
                     value={formData.equipment}
                     onChange={(e) => setFormData({...formData, equipment: e.target.value})}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     placeholder="e.g., Ball, Net, Rackets"
                   />
                 </div>
@@ -353,7 +377,7 @@ const Sports = () => {
                     value={formData.rules}
                     onChange={(e) => setFormData({...formData, rules: e.target.value})}
                     rows={3}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Basic rules and guidelines..."
                   />
                 </div>
@@ -364,7 +388,7 @@ const Sports = () => {
                     id="isActive"
                     checked={formData.isActive}
                     onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
                     Sport is active and available for booking
@@ -381,7 +405,7 @@ const Sports = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     {editingSport ? 'Update Sport' : 'Add Sport'}
                   </button>

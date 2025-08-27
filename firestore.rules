@@ -1,0 +1,308 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admins collection - allow admins to read their own data and check admin status
+    match /admins/{adminId} {
+      allow read, write: if request.auth != null && request.auth.uid == adminId;
+    }
+    
+    // Users collection - users can only access their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow creation during registration (when user might not be fully authenticated yet)
+      allow create: if request.auth != null && 
+        (request.auth.uid == userId || 
+         request.auth.token.email == resource.data.email);
+    }
+    
+    // Allow admins to read all user data (for management purposes)
+    // This rule needs to be separate and more permissive for admin access
+    match /users/{userId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == userId || // User can read their own data
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid))); // Admin can read all user data
+    }
+    
+    // Allow listing users collection (needed for admin dashboard)
+    match /users {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Projects collection - allow public read access for registration
+    match /projects/{projectId} {
+      allow read: if true; // Allow anyone to read projects (needed for registration)
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)); // Only admins can modify
+    }
+    
+    // Allow listing projects collection (needed for admin dashboard)
+    match /projects {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // PROJECT-SPECIFIC COLLECTIONS - New Architecture
+    // These rules allow authenticated users to access data within specific projects
+    
+    // Project Users - users can access user data within their project
+    match /projects/{projectId}/users/{userId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project users
+    match /projects/{projectId}/users {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Sports - allow authenticated users to read/write within project
+    match /projects/{projectId}/sports/{sportId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project sports
+    match /projects/{projectId}/sports {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Courts - allow authenticated users to read/write within project
+    match /projects/{projectId}/courts/{courtId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project courts
+    match /projects/{projectId}/courts {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Academies - allow authenticated users to read/write within project
+    match /projects/{projectId}/academies/{academyId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project academies
+    match /projects/{projectId}/academies {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Bookings - users can read/write their own bookings within project
+    match /projects/{projectId}/bookings/{bookingId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project bookings
+    match /projects/{projectId}/bookings {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Events - allow authenticated users to read/write within project
+    match /projects/{projectId}/events/{eventId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project events
+    match /projects/{projectId}/events {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Store Management - allow authenticated users to read/write within project
+    match /projects/{projectId}/stores/{storeId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project stores
+    match /projects/{projectId}/stores {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Products - allow authenticated users to read/write within project
+    match /projects/{projectId}/products/{productId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project products
+    match /projects/{projectId}/products {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Product Categories - allow authenticated users to read/write within project
+    match /projects/{projectId}/productCategories/{categoryId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project product categories
+    match /projects/{projectId}/productCategories {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Orders - users can read/write their own orders within project
+    match /projects/{projectId}/orders/{orderId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project orders
+    match /projects/{projectId}/orders {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Gate Passes - users can read/write their own gate passes within project
+    match /projects/{projectId}/gatePasses/{gatePassId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project gate passes
+    match /projects/{projectId}/gatePasses {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Notifications - users can read/write their own notifications within project
+    match /projects/{projectId}/notifications/{notificationId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project notifications
+    match /projects/{projectId}/notifications {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Dining/Shops - allow authenticated users to read/write within project
+    match /projects/{projectId}/shops/{shopId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project shops
+    match /projects/{projectId}/shops {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Dining Categories - allow authenticated users to read/write within project
+    match /projects/{projectId}/categories/{categoryId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project dining categories
+    match /projects/{projectId}/categories {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Dining Products - allow authenticated users to read/write within project
+    match /projects/{projectId}/shops/{shopId}/products/{productId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project dining products
+    match /projects/{projectId}/shops/{shopId}/products {
+      allow list: if request.auth != null;
+    }
+    
+    // LEGACY COLLECTIONS - Keep for backward compatibility
+    // These are the old global collections that might still exist
+    
+    // Academies collection - allow authenticated users to read
+    match /academies/{academyId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing academies collection
+    match /academies {
+      allow list: if request.auth != null;
+    }
+    
+    // Bookings collection - users can read/write their own bookings
+    match /bookings/{bookingId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing bookings collection (users can only see their own)
+    match /bookings {
+      allow list: if request.auth != null;
+    }
+    
+    // UserBookings collection - users can read/write their own bookings
+    match /userBookings/{bookingId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing userBookings collection (users can only see their own)
+    match /userBookings {
+      allow list: if request.auth != null;
+    }
+    
+    // Sports collection - allow authenticated users to read
+    match /sports/{sportId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing sports collection
+    match /sports {
+      allow list: if request.auth != null;
+    }
+    
+    // Sample data collections - allow authenticated users to read
+    match /sampleData/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing sample data collection
+    match /sampleData {
+      allow list: if request.auth != null;
+    }
+    
+    // Events collection - allow authenticated users to read
+    match /events/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing events collection
+    match /events {
+      allow list: if request.auth != null;
+    }
+    
+    // Courts collection - allow authenticated users to read
+    match /courts/{courtId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing courts collection
+    match /courts {
+      allow list: if request.auth != null;
+    }
+    
+    // Court bookings collection - users can read/write their own bookings
+    match /courtBookings/{bookingId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing court bookings collection
+    match /courtBookings {
+      allow list: if request.auth != null;
+    }
+  }
+}
