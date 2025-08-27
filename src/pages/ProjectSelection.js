@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Building2, 
-  Users, 
   MapPin, 
-  Calendar,
   ArrowRight,
   Search
 } from 'lucide-react';
