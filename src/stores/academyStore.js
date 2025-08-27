@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, getDocs, updateDoc, doc, setDoc, deleteDoc, getDoc, serverTimestamp, query, where, orderBy, addDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const useAcademyStore = create((set, get) => ({

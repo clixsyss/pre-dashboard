@@ -1,27 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  School, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Users, 
-  X, 
+import { useParams } from 'react-router-dom';
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  School,
+  MapPin,
+  Phone,
+  Mail,
+  Users,
+  X,
   Save,
   Star,
   Clock
 } from 'lucide-react';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { useAcademyStore } from '../stores/academyStore';
 
 const Academies = () => {
-  const [academies, setAcademies] = useState([]);
+  const { projectId } = useParams();
+    const { 
+    academyOptions, 
+    loading, 
+    fetchAcademies, 
+    addAcademy, 
+    updateAcademy, 
+    deleteAcademy
+  } = useAcademyStore();
+
   const [filteredAcademies, setFilteredAcademies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -44,61 +51,40 @@ const Academies = () => {
   });
 
   useEffect(() => {
-    fetchAcademies();
-  }, []);
+    if (projectId) {
+      fetchAcademies(projectId);
+    }
+  }, [projectId, fetchAcademies]);
 
   useEffect(() => {
     filterAcademies();
-  }, [academies, searchTerm]);
-
-  const fetchAcademies = async () => {
-    try {
-      setLoading(true);
-      const querySnapshot = await getDocs(collection(db, 'academies'));
-      const academiesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date()
-      }));
-      setAcademies(academiesData);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching academies:', err);
-      setError('Failed to load academies');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [academyOptions, searchTerm, filterAcademies]);
 
   const filterAcademies = useCallback(() => {
-    const filtered = academies.filter(academy =>
+    const filtered = academyOptions.filter(academy =>
       academy.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       academy.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       academy.address?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredAcademies(filtered);
-  }, [academies, searchTerm]);
+  }, [academyOptions, searchTerm]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (selectedAcademy) {
         // Update existing academy
-        await updateDoc(doc(db, 'academies', selectedAcademy.id), {
+        await updateAcademy(projectId, {
           ...formData,
-          updatedAt: new Date()
+          id: selectedAcademy.id
         });
         setShowEditModal(false);
       } else {
         // Add new academy
-        await addDoc(collection(db, 'academies'), {
-          ...formData,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
+        await addAcademy(projectId, formData);
         setShowAddModal(false);
       }
-      
+
       setFormData({
         name: '',
         description: '',
@@ -114,10 +100,12 @@ const Academies = () => {
         facilities: []
       });
       setSelectedAcademy(null);
-      fetchAcademies();
+      // Refresh the academies list
+      if (projectId) {
+        fetchAcademies(projectId);
+      }
     } catch (err) {
       console.error('Error saving academy:', err);
-      setError('Failed to save academy');
     }
   };
 
@@ -142,13 +130,11 @@ const Academies = () => {
 
   const handleDelete = async () => {
     try {
-      await deleteDoc(doc(db, 'academies', academyToDelete.id));
+      await deleteAcademy(projectId, academyToDelete.id);
       setShowDeleteModal(false);
       setAcademyToDelete(null);
-      fetchAcademies();
     } catch (err) {
       console.error('Error deleting academy:', err);
-      setError('Failed to delete academy');
     }
   };
 
@@ -161,9 +147,8 @@ const Academies = () => {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
-        className={`h-4 w-4 ${
-          i < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-        }`}
+        className={`h-4 w-4 ${i < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+          }`}
       />
     ));
   };
@@ -211,7 +196,7 @@ const Academies = () => {
             </div>
           </div>
           <div className="text-sm text-gray-500">
-            {filteredAcademies.length} of {academies.length} academies
+            {filteredAcademies.length} of {academyOptions.length} academies
           </div>
         </div>
       </div>
@@ -257,14 +242,14 @@ const Academies = () => {
                   <MapPin className="h-4 w-4 mr-2" />
                   <span className="truncate">{academy.address}</span>
                 </div>
-                
+
                 {academy.phone && (
                   <div className="flex items-center text-sm text-gray-500">
                     <Phone className="h-4 w-4 mr-2" />
                     <span>{academy.phone}</span>
                   </div>
                 )}
-                
+
                 {academy.email && (
                   <div className="flex items-center text-sm text-gray-500">
                     <Mail className="h-4 w-4 mr-2" />
@@ -333,7 +318,7 @@ const Academies = () => {
               setShowEditModal(false);
               setSelectedAcademy(null);
             }}></div>
-            
+
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white px-6 py-4">
                 <div className="flex items-center justify-between mb-4">
@@ -360,7 +345,7 @@ const Academies = () => {
                         type="text"
                         required
                         value={formData.name}
-                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -368,7 +353,7 @@ const Academies = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
                       <select
                         value={formData.rating}
-                        onChange={(e) => setFormData({...formData, rating: parseInt(e.target.value)})}
+                        onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         {[1, 2, 3, 4, 5].map(rating => (
@@ -382,7 +367,7 @@ const Academies = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                     <textarea
                       value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -394,7 +379,7 @@ const Academies = () => {
                       <input
                         type="text"
                         value={formData.address}
-                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -403,7 +388,7 @@ const Academies = () => {
                       <input
                         type="number"
                         value={formData.capacity}
-                        onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value)})}
+                        onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -415,7 +400,7 @@ const Academies = () => {
                       <input
                         type="tel"
                         value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -424,7 +409,7 @@ const Academies = () => {
                       <input
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
@@ -435,7 +420,7 @@ const Academies = () => {
                     <input
                       type="url"
                       value={formData.website}
-                      onChange={(e) => setFormData({...formData, website: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -445,7 +430,7 @@ const Academies = () => {
                     <input
                       type="text"
                       value={formData.operatingHours}
-                      onChange={(e) => setFormData({...formData, operatingHours: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, operatingHours: e.target.value })}
                       placeholder="e.g., Mon-Fri 9AM-6PM, Sat 9AM-4PM"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -483,7 +468,7 @@ const Academies = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowDeleteModal(false)}></div>
-            
+
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-6 py-4">
                 <div className="flex items-center mb-4">
@@ -495,7 +480,7 @@ const Academies = () => {
                     <p className="text-sm text-gray-500">This action cannot be undone</p>
                   </div>
                 </div>
-                
+
                 <p className="text-gray-600 mb-6">
                   Are you sure you want to delete <strong>{academyToDelete?.name}</strong>? This will permanently remove the academy and all associated data.
                 </p>

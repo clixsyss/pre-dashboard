@@ -12,7 +12,10 @@ import {
   Calendar,
   School,
   Trophy,
-  Target
+  Target,
+  ShoppingBag,
+  Package,
+  Key
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -35,6 +38,9 @@ const ProjectDashboard = () => {
     if (path.includes('/sports')) return 'sports';
     if (path.includes('/courts')) return 'courts';
     if (path.includes('/events')) return 'events';
+    if (path.includes('/store')) return 'store';
+    if (path.includes('/orders')) return 'orders';
+    if (path.includes('/gatepass')) return 'gatepass';
     return 'dashboard'; // Default to dashboard/users
   };
 
@@ -272,6 +278,39 @@ const ProjectDashboard = () => {
             >
               <Target className="h-4 w-4 mr-2" />
               Events
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/store`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'store'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ShoppingBag className="h-4 w-4 mr-2" />
+              Store
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/orders`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'orders'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Orders
+            </button>
+            <button
+              onClick={() => navigate(`/project/${projectId}/gatepass`)}
+              className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors ${
+                getActiveTab() === 'gatepass'
+                  ? 'text-blue-600 border-blue-500'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Gate Pass
             </button>
           </nav>
         </div>
