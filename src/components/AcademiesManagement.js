@@ -62,7 +62,10 @@ const AcademiesManagement = ({ projectId }) => {
     duration: '',
     price: '',
     maxCapacity: '',
-    description: ''
+    description: '',
+    timeSlots: [],
+    days: [],
+    coaches: []
   });
 
   // Form validation state
@@ -222,6 +225,8 @@ const AcademiesManagement = ({ projectId }) => {
     if (!programFormData.ageGroup) errors.ageGroup = 'Age group is required';
     if (!programFormData.duration) errors.duration = 'Duration is required';
     if (!programFormData.price) errors.price = 'Price is required';
+    if (programFormData.timeSlots.length === 0) errors.timeSlots = 'At least one time slot is required';
+    if (programFormData.days.length === 0) errors.days = 'At least one day is required';
     return errors;
   };
 
@@ -308,7 +313,10 @@ const AcademiesManagement = ({ projectId }) => {
         duration: '',
         price: '',
         maxCapacity: '',
-        description: ''
+        description: '',
+        timeSlots: [],
+        days: [],
+        coaches: []
       });
       setFormErrors({});
       
@@ -540,7 +548,7 @@ const AcademiesManagement = ({ projectId }) => {
                               key={index}
                               className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
                             >
-                              {program}
+                              {program.name || 'Unnamed Program'}
                             </span>
                           ))
                         ) : (
@@ -1182,6 +1190,141 @@ const AcademiesManagement = ({ projectId }) => {
                       placeholder="Describe the program, what students will learn, requirements..."
                     />
                   </div>
+
+                  {/* Time Slots */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Time Slots *
+                    </label>
+                    <div className="space-y-2">
+                      {programFormData.timeSlots.map((slot, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) => {
+                              const newSlots = [...programFormData.timeSlots];
+                              newSlots[index] = { ...slot, startTime: e.target.value };
+                              handleProgramFormChange('timeSlots', newSlots);
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <span className="text-gray-500">to</span>
+                          <input
+                            type="time"
+                            value={slot.endTime}
+                            onChange={(e) => {
+                              const newSlots = [...programFormData.timeSlots];
+                              newSlots[index] = { ...slot, endTime: e.target.value };
+                              handleProgramFormChange('timeSlots', newSlots);
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newSlots = programFormData.timeSlots.filter((_, i) => i !== index);
+                              handleProgramFormChange('timeSlots', newSlots);
+                            }}
+                            className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newSlots = [...programFormData.timeSlots, { startTime: '', endTime: '' }];
+                          handleProgramFormChange('timeSlots', newSlots);
+                        }}
+                        className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      >
+                        + Add Time Slot
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Days */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Days *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                        <label key={day} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={programFormData.days.includes(day)}
+                            onChange={(e) => {
+                              const newDays = e.target.checked
+                                ? [...programFormData.days, day]
+                                : programFormData.days.filter(d => d !== day);
+                              handleProgramFormChange('days', newDays);
+                            }}
+                            className="mr-2 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{day}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coaches */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Coaches
+                    </label>
+                    <div className="space-y-2">
+                      {programFormData.coaches.map((coach, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={coach.name}
+                            onChange={(e) => {
+                              const newCoaches = [...programFormData.coaches];
+                              newCoaches[index] = { ...coach, name: e.target.value };
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            placeholder="Coach name"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={coach.specialty}
+                            onChange={(e) => {
+                              const newCoaches = [...programFormData.coaches];
+                              newCoaches[index] = { ...coach, specialty: e.target.value };
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            placeholder="Specialty"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newCoaches = programFormData.coaches.filter((_, i) => i !== index);
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCoaches = [...programFormData.coaches, { name: '', specialty: '' }];
+                          handleProgramFormChange('coaches', newCoaches);
+                        }}
+                        className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      >
+                        + Add Coach
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end">
                     <button 
                       type="submit"
@@ -1208,8 +1351,13 @@ const AcademiesManagement = ({ projectId }) => {
                 
                 {selectedAcademyForPrograms.programs && selectedAcademyForPrograms.programs.length > 0 ? (
                   <div className="space-y-3">
-                    {selectedAcademyForPrograms.programs.map((program) => (
-                      <div key={program.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                    {console.log('Rendering programs:', selectedAcademyForPrograms.programs)}
+                    {selectedAcademyForPrograms.programs
+                      .filter(program => program && typeof program === 'object' && program.name)
+                      .map((program, index) => {
+                        console.log('Rendering program:', program);
+                        return (
+                          <div key={program.id || index} className="bg-white border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
@@ -1229,6 +1377,38 @@ const AcademiesManagement = ({ projectId }) => {
                               <span>Price: ${program.price}/month</span>
                               {program.maxCapacity && <span>Capacity: {program.maxCapacity}</span>}
                             </div>
+                            
+                            {/* Time Slots */}
+                            {program.timeSlots && program.timeSlots.length > 0 && (
+                              <div className="mt-2">
+                                <span className="text-xs text-gray-500 font-medium">Time Slots: </span>
+                                {program.timeSlots.map((slot, idx) => (
+                                  <span key={idx} className="text-xs text-gray-600 mr-2">
+                                    {slot.startTime} - {slot.endTime}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Days */}
+                            {program.days && program.days.length > 0 && (
+                              <div className="mt-1">
+                                <span className="text-xs text-gray-500 font-medium">Days: </span>
+                                <span className="text-xs text-gray-600">
+                                  {program.days.join(', ')}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Coaches */}
+                            {program.coaches && program.coaches.length > 0 && (
+                              <div className="mt-1">
+                                <span className="text-xs text-gray-500 font-medium">Coaches: </span>
+                                <span className="text-xs text-gray-600">
+                                  {program.coaches.map(coach => coach.name).join(', ')}
+                                </span>
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <button 
@@ -1240,7 +1420,8 @@ const AcademiesManagement = ({ projectId }) => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
