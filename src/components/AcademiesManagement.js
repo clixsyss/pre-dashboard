@@ -86,6 +86,7 @@ const AcademiesManagement = ({ projectId }) => {
     ageGroup: '',
     duration: '',
     price: '',
+    pricingType: 'per-session', // New field: per-session, per-week, per-month
     maxCapacity: '',
     description: '',
     days: [],
@@ -234,6 +235,7 @@ const AcademiesManagement = ({ projectId }) => {
       ageGroup: program.ageGroup || '',
       duration: program.duration || '',
       price: program.price || '',
+      pricingType: program.pricingType || 'per-session',
       maxCapacity: program.maxCapacity || '',
       description: program.description || '',
       days: program.days || [],
@@ -366,7 +368,12 @@ const AcademiesManagement = ({ projectId }) => {
     if (!programFormData.name.trim()) errors.name = 'Program name is required';
     if (!programFormData.category) errors.category = 'Category is required';
     if (!programFormData.ageGroup) errors.ageGroup = 'Age group is required';
-    if (!programFormData.duration) errors.duration = 'Duration is required';
+    
+    // Duration is only required for pricing types that have recurring periods
+    if (!programFormData.duration && programFormData.pricingType !== 'per-session' && programFormData.pricingType !== 'one-time') {
+      errors.duration = 'Duration is required for weekly, monthly, or term-based pricing';
+    }
+    
     if (!programFormData.price) errors.price = 'Price is required';
     if (programFormData.days.length === 0) errors.days = 'At least one day is required';
     
@@ -500,6 +507,7 @@ const AcademiesManagement = ({ projectId }) => {
         ageGroup: '',
         duration: '',
         price: '',
+        pricingType: 'per-session',
         maxCapacity: '',
         description: '',
         days: [],
@@ -1440,21 +1448,7 @@ const AcademiesManagement = ({ projectId }) => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Duration (months) *
-                      </label>
-                      <input
-                        type="text"
-                        // min="1"
-                        value={programFormData.duration}
-                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="e.g., 3"
-                      />
-                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Price (per month) *
+                        Price *
                       </label>
                       <input
                         type="number"
@@ -1466,6 +1460,40 @@ const AcademiesManagement = ({ projectId }) => {
                         placeholder="e.g., 150.00"
                       />
                       {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pricing Type *
+                      </label>
+                      <select 
+                        value={programFormData.pricingType}
+                        onChange={(e) => handleProgramFormChange('pricingType', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="per-session">Per Session</option>
+                        <option value="per-week">Per Week</option>
+                        <option value="per-month">Per Month</option>
+                        <option value="per-term">Per Term</option>
+                        <option value="one-time">One Time</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration {programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time' ? '(optional)' : '*'}
+                      </label>
+                      <input
+                        type="text"
+                        // min="1"
+                        value={programFormData.duration}
+                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder={programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time' ? 'e.g., 1 (optional)' : 'e.g., 3'}
+                        disabled={programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time'}
+                      />
+                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
+                      {(programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time') && (
+                        <p className="text-xs text-gray-500 mt-1">Duration not applicable for per-session or one-time pricing</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2044,21 +2072,7 @@ const AcademiesManagement = ({ projectId }) => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Duration (months) *
-                      </label>
-                      <input
-                        type="text"
-                        // min="1"
-                        value={programFormData.duration}
-                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="e.g., 3"
-                      />
-                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Price (per month) *
+                        Price *
                       </label>
                       <input
                         type="number"
@@ -2070,6 +2084,40 @@ const AcademiesManagement = ({ projectId }) => {
                         placeholder="e.g., 150.00"
                       />
                       {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pricing Type *
+                      </label>
+                      <select 
+                        value={programFormData.pricingType}
+                        onChange={(e) => handleProgramFormChange('pricingType', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="per-session">Per Session</option>
+                        <option value="per-week">Per Week</option>
+                        <option value="per-month">Per Month</option>
+                        <option value="per-term">Per Term</option>
+                        <option value="one-time">One Time</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration {programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time' ? '(optional)' : '*'}
+                      </label>
+                      <input
+                        type="text"
+                        // min="1"
+                        value={programFormData.duration}
+                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder={programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time' ? 'e.g., 1 (optional)' : 'e.g., 3'}
+                        disabled={programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time'}
+                      />
+                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
+                      {(programFormData.pricingType === 'per-session' || programFormData.pricingType === 'one-time') && (
+                        <p className="text-xs text-gray-500 mt-1">Duration not applicable for per-session or one-time pricing</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
