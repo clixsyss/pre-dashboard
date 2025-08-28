@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export const useBookingStore = create((set, get) => ({
@@ -14,8 +14,13 @@ export const useBookingStore = create((set, get) => ({
 
   fetchBookings: async (projectId, filters = {}) => {
     try {
+      console.log('fetchBookings called with:', { projectId, filters });
       set({ loading: true, error: null });
-      let q = collection(db, `projects/${projectId}/bookings`);
+      
+      const collectionPath = `projects/${projectId}/bookings`;
+      console.log('Collection path:', collectionPath);
+      
+      let q = collection(db, collectionPath);
       
       // Apply filters
       if (filters.status) {
@@ -34,15 +39,73 @@ export const useBookingStore = create((set, get) => ({
         q = query(q, where('date', '==', filters.date));
       }
       
-      // Order by date and time
-      q = query(q, orderBy('date'), orderBy('startTime'));
+      // Order by date only (since timeSlots is an array)
+      q = query(q, orderBy('date'));
       
+      console.log('Executing query...');
       const querySnapshot = await getDocs(q);
+      console.log('Query result:', { 
+        empty: querySnapshot.empty, 
+        size: querySnapshot.size,
+        docs: querySnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }))
+      });
+      
       const bookingsData = querySnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
       }));
-      set({ bookings: bookingsData });
+      
+      // Fetch user information for each booking
+      console.log('Fetching user information for bookings...');
+      const enrichedBookings = await Promise.all(
+        bookingsData.map(async (booking) => {
+          try {
+            if (booking.userId) {
+              console.log(`Fetching user data for userId: ${booking.userId}`);
+              const userDoc = await getDoc(doc(db, 'users', booking.userId));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                console.log(`User data for ${booking.userId}:`, userData);
+                const enrichedBooking = {
+                  ...booking,
+                  userName: userData.firstName && userData.lastName 
+                    ? `${userData.firstName} ${userData.lastName}` 
+                    : 'Unknown User',
+                  userEmail: userData.email || 'No email',
+                  userPhone: userData.mobile || 'No phone',
+                  userUnit: userData.projects?.find(p => p.projectId === projectId)?.unit || 'N/A'
+                };
+                console.log(`Enriched booking:`, enrichedBooking);
+                return enrichedBooking;
+              } else {
+                console.log(`No user document found for userId: ${booking.userId}`);
+              }
+            } else {
+              console.log(`No userId found in booking:`, booking);
+            }
+            return {
+              ...booking,
+              userName: 'Unknown User',
+              userEmail: 'No email',
+              userPhone: 'No phone',
+              userUnit: 'N/A'
+            };
+          } catch (error) {
+            console.error(`Error fetching user info for booking ${booking.id}:`, error);
+            return {
+              ...booking,
+              userName: 'Error loading user',
+              userEmail: 'Error loading email',
+              userPhone: 'Error loading phone',
+              userUnit: 'N/A'
+            };
+          }
+        })
+      );
+      
+      console.log('Enriched bookings data:', enrichedBookings);
+      set({ bookings: enrichedBookings });
+      
     } catch (error) {
       console.error("Error fetching bookings:", error);
       set({ error: error.message });
@@ -134,30 +197,6 @@ export const useBookingStore = create((set, get) => ({
     }
   },
 
-  updateBookingStatus: async (projectId, bookingId, status) => {
-    try {
-      set({ loading: true, error: null });
-      const bookingRef = doc(db, `projects/${projectId}/bookings`, bookingId);
-      
-      await updateDoc(bookingRef, { 
-        status,
-        updatedAt: serverTimestamp()
-      });
-
-      set((state) => ({
-        bookings: state.bookings.map(booking => 
-          booking.id === bookingId ? { ...booking, status } : booking
-        )
-      }));
-    } catch (error) {
-      console.error("Error updating booking status:", error);
-      set({ error: error.message });
-      throw error;
-    } finally {
-      set({ loading: false });
-    }
-  },
-
   updatePaymentStatus: async (projectId, bookingId, paymentStatus) => {
     try {
       set({ loading: true, error: null });
@@ -224,5 +263,60 @@ export const useBookingStore = create((set, get) => ({
     );
   },
 
-  clearBookings: () => set({ bookings: [], selectedBooking: null })
+  clearBookings: () => set({ bookings: [], selectedBooking: null }),
+
+  // View booking details
+  viewBooking: (bookingId) => {
+    const booking = get().bookings.find(b => b.id === bookingId);
+    if (booking) {
+      set({ selectedBooking: booking });
+    }
+    return booking;
+  },
+
+  // Update booking status
+  updateBookingStatus: async (projectId, bookingId, newStatus) => {
+    try {
+      set({ loading: true, error: null });
+      const bookingRef = doc(db, `projects/${projectId}/bookings`, bookingId);
+      
+      await updateDoc(bookingRef, { 
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      // Update local state
+      set((state) => ({
+        bookings: state.bookings.map(booking => 
+          booking.id === bookingId ? { ...booking, status: newStatus } : booking
+        ),
+        selectedBooking: state.selectedBooking?.id === bookingId 
+          ? { ...state.selectedBooking, status: newStatus }
+          : state.selectedBooking
+      }));
+
+      return true;
+    } catch (error) {
+      console.error("Error updating booking status:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  // Cancel booking
+  cancelBooking: async (projectId, bookingId) => {
+    return get().updateBookingStatus(projectId, bookingId, 'cancelled');
+  },
+
+  // Confirm booking
+  confirmBooking: async (projectId, bookingId) => {
+    return get().updateBookingStatus(projectId, bookingId, 'confirmed');
+  },
+
+  // Complete booking
+  completeBooking: async (projectId, bookingId) => {
+    return get().updateBookingStatus(projectId, bookingId, 'completed');
+  }
 }));
