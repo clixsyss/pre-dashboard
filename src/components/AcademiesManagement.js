@@ -15,6 +15,26 @@ import {
 import { useAcademyStore } from '../stores/academyStore';
 
 const AcademiesManagement = ({ projectId }) => {
+  // Helper function to safely get coach name
+  const getCoachName = (coach) => {
+    if (typeof coach === 'object' && coach && coach.name && typeof coach.name === 'string') {
+      return coach.name;
+    } else if (typeof coach === 'string') {
+      return coach;
+    } else {
+      return 'Unknown Coach';
+    }
+  };
+
+  // Helper function to safely get coach specialty
+  const getCoachSpecialty = (coach) => {
+    if (typeof coach === 'object' && coach && coach.specialty && typeof coach.specialty === 'string') {
+      return coach.specialty;
+    } else {
+      return '';
+    }
+  };
+
   // Academy store integration
   const {
     academyOptions: projectAcademies,
@@ -262,7 +282,7 @@ const AcademiesManagement = ({ projectId }) => {
       if (!isSelected) {
         delete newTimeSlotsByDay[day];
       } else if (!newTimeSlotsByDay[day]) {
-        // If day is added, initialize with empty time slots array
+        // If day is added, initialize with empty time slots array (but don't add slots yet)
         newTimeSlotsByDay[day] = [];
       }
       
@@ -303,7 +323,16 @@ const AcademiesManagement = ({ projectId }) => {
       if (!newTimeSlotsByDay[day]) {
         newTimeSlotsByDay[day] = [];
       }
-      newTimeSlotsByDay[day].push({ startTime: '', endTime: '' });
+      
+      // Check if we already have an empty time slot for this day
+      const hasEmptySlot = newTimeSlotsByDay[day].some(slot => 
+        !slot.startTime && !slot.endTime
+      );
+      
+      // Only add if we don't already have an empty slot
+      if (!hasEmptySlot) {
+        newTimeSlotsByDay[day].push({ startTime: '', endTime: '' });
+      }
       
       return {
         ...prev,
@@ -419,10 +448,21 @@ const AcademiesManagement = ({ projectId }) => {
 
     setIsSubmitting(true);
     try {
-      // Convert coaches from array of strings to array of objects for backward compatibility
-      const coachesData = programFormData.coaches.map(name => ({ name, specialty: '' }));
+      // Convert coaches to proper format - they should already be objects with name and specialty
+      console.log('Original coaches data:', programFormData.coaches);
+      const coachesData = programFormData.coaches.map(coach => {
+        if (typeof coach === 'object' && coach.name) {
+          return { name: coach.name, specialty: coach.specialty || '' };
+        } else if (typeof coach === 'string') {
+          return { name: coach, specialty: '' };
+        } else {
+          return { name: 'Unknown Coach', specialty: '' };
+        }
+      });
+      console.log('Processed coaches data:', coachesData);
       
       // Convert timeSlotsByDay to timeSlots array for backward compatibility
+      console.log('Original timeSlotsByDay:', programFormData.timeSlotsByDay);
       const timeSlotsData = [];
       Object.keys(programFormData.timeSlotsByDay).forEach(day => {
         if (programFormData.timeSlotsByDay[day] && programFormData.timeSlotsByDay[day].length > 0) {
@@ -434,6 +474,7 @@ const AcademiesManagement = ({ projectId }) => {
           });
         }
       });
+      console.log('Processed timeSlotsData:', timeSlotsData);
       
       const programData = {
         ...programFormData,
@@ -969,11 +1010,15 @@ const AcademiesManagement = ({ projectId }) => {
                                       {program.days.length} day{program.days.length > 1 ? 's' : ''}
                                     </span>
                                   )}
-                                  {program.timeSlots && program.timeSlots.length > 0 && (
+                                  {program.timeSlotsByDay && Object.keys(program.timeSlotsByDay).length > 0 ? (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                      {Object.values(program.timeSlotsByDay).reduce((total, slots) => total + slots.length, 0)} time slot{Object.values(program.timeSlotsByDay).reduce((total, slots) => total + slots.length, 0) > 1 ? 's' : ''}
+                                    </span>
+                                  ) : program.timeSlots && program.timeSlots.length > 0 ? (
                                     <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
                                       {program.timeSlots.length} time slot{program.timeSlots.length > 1 ? 's' : ''}
                                     </span>
-                                  )}
+                                  ) : null}
                                   {program.coaches && program.coaches.length > 0 && (
                                     <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
                                       {program.coaches.length} coach{program.coaches.length > 1 ? 'es' : ''}
@@ -1398,8 +1443,8 @@ const AcademiesManagement = ({ projectId }) => {
                         Duration (months) *
                       </label>
                       <input
-                        type="number"
-                        min="1"
+                        type="text"
+                        // min="1"
                         value={programFormData.duration}
                         onChange={(e) => handleProgramFormChange('duration', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1541,10 +1586,14 @@ const AcademiesManagement = ({ projectId }) => {
                         <div key={index} className="flex items-center gap-2">
                           <input
                             type="text"
-                            value={coach.name}
+                            value={typeof coach === 'object' && coach.name ? coach.name : 
+                                   typeof coach === 'string' ? coach : ''}
                             onChange={(e) => {
                               const newCoaches = [...programFormData.coaches];
-                              newCoaches[index] = { ...coach, name: e.target.value };
+                              newCoaches[index] = { 
+                                name: e.target.value, 
+                                specialty: typeof coach === 'object' && coach.specialty ? coach.specialty : '' 
+                              };
                               handleProgramFormChange('coaches', newCoaches);
                             }}
                             placeholder="Coach name"
@@ -1552,10 +1601,14 @@ const AcademiesManagement = ({ projectId }) => {
                           />
                           <input
                             type="text"
-                            value={coach.specialty}
+                            value={typeof coach === 'object' && coach.specialty ? coach.specialty : ''}
                             onChange={(e) => {
                               const newCoaches = [...programFormData.coaches];
-                              newCoaches[index] = { ...coach, specialty: e.target.value };
+                              newCoaches[index] = { 
+                                name: typeof coach === 'object' && coach.name ? coach.name : 
+                                      typeof coach === 'string' ? coach : '', 
+                                specialty: e.target.value 
+                              };
                               handleProgramFormChange('coaches', newCoaches);
                             }}
                             placeholder="Specialty"
@@ -1640,16 +1693,37 @@ const AcademiesManagement = ({ projectId }) => {
                             </div>
                             
                             {/* Time Slots */}
-                            {program.timeSlots && program.timeSlots.length > 0 && (
+                            {program.timeSlotsByDay && Object.keys(program.timeSlotsByDay).length > 0 ? (
+                              <div className="mt-2">
+                                <span className="text-xs text-gray-500 font-medium">Schedule: </span>
+                                {Object.entries(program.timeSlotsByDay).map(([day, slots]) => (
+                                  <div key={day} className="text-xs text-gray-600">
+                                    <span className="font-medium">{day}:</span>
+                                    {slots.map((slot, idx) => (
+                                      <span key={idx} className="ml-2">
+                                        {slot && typeof slot === 'object' && slot.startTime && slot.endTime ? 
+                                          `${slot.startTime} - ${slot.endTime}` : 
+                                          'Invalid time slot'
+                                        }
+                                        {idx < slots.length - 1 ? ', ' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : program.timeSlots && program.timeSlots.length > 0 ? (
                               <div className="mt-2">
                                 <span className="text-xs text-gray-500 font-medium">Time Slots: </span>
                                 {program.timeSlots.map((slot, idx) => (
                                   <span key={idx} className="text-xs text-gray-600 mr-2">
-                                    {slot.startTime} - {slot.endTime}
+                                    {slot && typeof slot === 'object' && slot.startTime && slot.endTime ? 
+                                      `${slot.startTime} - ${slot.endTime}` : 
+                                      'Invalid time slot'
+                                    }
                                   </span>
                                 ))}
                               </div>
-                            )}
+                            ) : null}
                             
                             {/* Days */}
                             {program.days && program.days.length > 0 && (
@@ -1666,7 +1740,7 @@ const AcademiesManagement = ({ projectId }) => {
                               <div className="mt-1">
                                 <span className="text-xs text-gray-500 font-medium">Coaches: </span>
                                 <span className="text-xs text-gray-600">
-                                  {program.coaches.map(coach => coach.name).join(', ')}
+                                  {program.coaches.map(coach => getCoachName(coach)).join(', ')}
                                 </span>
                               </div>
                             )}
@@ -1789,24 +1863,49 @@ const AcademiesManagement = ({ projectId }) => {
                 )}
               </div>
 
-              {/* Time Slots */}
-              {selectedProgramForView.timeSlots && selectedProgramForView.timeSlots.length > 0 && (
+              {/* Program Schedule */}
+              {selectedProgramForView.timeSlotsByDay && Object.keys(selectedProgramForView.timeSlotsByDay).length > 0 ? (
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Program Schedule</h3>
+                  <div className="space-y-3">
+                    {Object.entries(selectedProgramForView.timeSlotsByDay).map(([day, slots]) => (
+                      <div key={day} className="border-l-4 border-blue-200 pl-3">
+                        <h4 className="font-medium text-blue-900 mb-2">{day}</h4>
+                        <div className="space-y-1">
+                          {slots.map((slot, index) => (
+                            <div key={index} className="text-sm text-blue-700">
+                              {slot && typeof slot === 'object' && slot.startTime && slot.endTime ? 
+                                `${slot.startTime} - ${slot.endTime}` : 
+                                'Invalid time slot'
+                              }
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : selectedProgramForView.timeSlots && selectedProgramForView.timeSlots.length > 0 ? (
                 <div className="bg-blue-50 rounded-xl p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Time Slots</h3>
                   <div className="space-y-2">
                     {selectedProgramForView.timeSlots.map((slot, index) => (
                       <div key={index} className="flex items-center gap-2 text-sm">
                         <span className="font-medium text-blue-900">
-                          {slot.startTime} - {slot.endTime}
+                          {slot && typeof slot === 'object' && slot.startTime && slot.endTime ? 
+                            `${slot.startTime} - ${slot.endTime}` : 
+                            'Invalid time slot'
+                          }
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {/* Days */}
-              {selectedProgramForView.days && selectedProgramForView.days.length > 0 && (
+              {/* Days (only show if no timeSlotsByDay) */}
+              {(!selectedProgramForView.timeSlotsByDay || Object.keys(selectedProgramForView.timeSlotsByDay).length === 0) && 
+               selectedProgramForView.days && selectedProgramForView.days.length > 0 && (
                 <div className="bg-green-50 rounded-xl p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Days</h3>
                   <div className="flex flex-wrap gap-2">
@@ -1826,9 +1925,11 @@ const AcademiesManagement = ({ projectId }) => {
                   <div className="space-y-2">
                     {selectedProgramForView.coaches.map((coach, index) => (
                       <div key={index} className="flex items-center gap-3 text-sm">
-                        <span className="font-medium text-purple-900">{coach.name}</span>
-                        {coach.specialty && (
-                          <span className="text-purple-700">- {coach.specialty}</span>
+                        <span className="font-medium text-purple-900">
+                          {getCoachName(coach)}
+                        </span>
+                        {getCoachSpecialty(coach) && (
+                          <span className="text-purple-700">- {getCoachSpecialty(coach)}</span>
                         )}
                       </div>
                     ))}
@@ -1946,8 +2047,8 @@ const AcademiesManagement = ({ projectId }) => {
                         Duration (months) *
                       </label>
                       <input
-                        type="number"
-                        min="1"
+                        type="text"
+                        // min="1"
                         value={programFormData.duration}
                         onChange={(e) => handleProgramFormChange('duration', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2089,10 +2190,14 @@ const AcademiesManagement = ({ projectId }) => {
                         <div key={index} className="flex items-center gap-2">
                           <input
                             type="text"
-                            value={coach.name}
+                            value={typeof coach === 'object' && coach.name ? coach.name : 
+                                   typeof coach === 'string' ? coach : ''}
                             onChange={(e) => {
                               const newCoaches = [...programFormData.coaches];
-                              newCoaches[index] = { ...coach, name: e.target.value };
+                              newCoaches[index] = { 
+                                name: e.target.value, 
+                                specialty: typeof coach === 'object' && coach.specialty ? coach.specialty : '' 
+                              };
                               handleProgramFormChange('coaches', newCoaches);
                             }}
                             placeholder="Coach name"
@@ -2100,10 +2205,14 @@ const AcademiesManagement = ({ projectId }) => {
                           />
                           <input
                             type="text"
-                            value={coach.specialty}
+                            value={typeof coach === 'object' && coach.specialty ? coach.specialty : ''}
                             onChange={(e) => {
                               const newCoaches = [...programFormData.coaches];
-                              newCoaches[index] = { ...coach, specialty: e.target.value };
+                              newCoaches[index] = { 
+                                name: typeof coach === 'object' && coach.name ? coach.name : 
+                                      typeof coach === 'string' ? coach : '', 
+                                specialty: e.target.value 
+                              };
                               handleProgramFormChange('coaches', newCoaches);
                             }}
                             placeholder="Specialty"
