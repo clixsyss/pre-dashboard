@@ -25,6 +25,7 @@ const AcademiesManagement = ({ projectId }) => {
     updateAcademy,
     deleteAcademy,
     addProgram,
+    updateProgram,
     deleteProgram
   } = useAcademyStore();
 
@@ -37,6 +38,10 @@ const AcademiesManagement = ({ projectId }) => {
   const [isAddAcademyModalOpen, setIsAddAcademyModalOpen] = useState(false);
   const [selectedAcademyForPrograms, setSelectedAcademyForPrograms] = useState(null);
   const [isProgramsModalOpen, setIsProgramsModalOpen] = useState(false);
+  const [isEditProgramModalOpen, setIsEditProgramModalOpen] = useState(false);
+  const [selectedProgramForEdit, setSelectedProgramForEdit] = useState(null);
+  const [isViewProgramModalOpen, setIsViewProgramModalOpen] = useState(false);
+  const [selectedProgramForView, setSelectedProgramForView] = useState(null);
   
   // Form state for academy creation/editing
   const [academyFormData, setAcademyFormData] = useState({
@@ -63,8 +68,9 @@ const AcademiesManagement = ({ projectId }) => {
     price: '',
     maxCapacity: '',
     description: '',
-    timeSlots: [],
     days: [],
+    timeSlots: [], // Keep for backward compatibility
+    timeSlotsByDay: {},
     coaches: []
   });
 
@@ -185,6 +191,40 @@ const AcademiesManagement = ({ projectId }) => {
     }
   };
 
+  const handleViewProgram = (program) => {
+    setSelectedProgramForView(program);
+    setIsViewProgramModalOpen(true);
+  };
+
+  const handleEditProgram = (program) => {
+    setSelectedProgramForEdit(program);
+    
+    // Convert old timeSlots format to new timeSlotsByDay format
+    let timeSlotsByDay = {};
+    if (program.timeSlots && Array.isArray(program.timeSlots)) {
+      // If old format exists, convert it
+      timeSlotsByDay = { 'Monday': program.timeSlots }; // Default to Monday for old data
+    } else if (program.timeSlotsByDay) {
+      timeSlotsByDay = program.timeSlotsByDay;
+    }
+    
+    setProgramFormData({
+      name: program.name || '',
+      category: program.category || '',
+      ageGroup: program.ageGroup || '',
+      duration: program.duration || '',
+      price: program.price || '',
+      maxCapacity: program.maxCapacity || '',
+      description: program.description || '',
+      days: program.days || [],
+      timeSlots: program.timeSlots || [], // Keep for backward compatibility
+      timeSlotsByDay: timeSlotsByDay,
+      coaches: Array.isArray(program.coaches) ? program.coaches.map(c => typeof c === 'object' ? c.name : c) : []
+    });
+    setFormErrors({});
+    setIsEditProgramModalOpen(true);
+  };
+
   const handleDeleteAcademy = async (academyId) => {
     if (window.confirm('Are you sure you want to delete this academy? This will also delete all associated programs.')) {
       try {
@@ -210,6 +250,80 @@ const AcademiesManagement = ({ projectId }) => {
     }
   };
 
+  const handleDaySelection = (day, isSelected) => {
+    setProgramFormData(prev => {
+      const newDays = isSelected 
+        ? [...prev.days, day]
+        : prev.days.filter(d => d !== day);
+      
+      const newTimeSlotsByDay = { ...prev.timeSlotsByDay };
+      
+      // If day is removed, also remove its time slots
+      if (!isSelected) {
+        delete newTimeSlotsByDay[day];
+      } else if (!newTimeSlotsByDay[day]) {
+        // If day is added, initialize with empty time slots array
+        newTimeSlotsByDay[day] = [];
+      }
+      
+      return {
+        ...prev,
+        days: newDays,
+        timeSlotsByDay: newTimeSlotsByDay
+      };
+    });
+  };
+
+  const handleTimeSlotChange = (day, index, field, value) => {
+    setProgramFormData(prev => {
+      const newTimeSlotsByDay = { ...prev.timeSlotsByDay };
+      if (!newTimeSlotsByDay[day]) {
+        newTimeSlotsByDay[day] = [];
+      }
+      
+      if (!newTimeSlotsByDay[day][index]) {
+        newTimeSlotsByDay[day][index] = { startTime: '', endTime: '' };
+      }
+      
+      newTimeSlotsByDay[day][index] = {
+        ...newTimeSlotsByDay[day][index],
+        [field]: value
+      };
+      
+      return {
+        ...prev,
+        timeSlotsByDay: newTimeSlotsByDay
+      };
+    });
+  };
+
+  const addTimeSlot = (day) => {
+    setProgramFormData(prev => {
+      const newTimeSlotsByDay = { ...prev.timeSlotsByDay };
+      if (!newTimeSlotsByDay[day]) {
+        newTimeSlotsByDay[day] = [];
+      }
+      newTimeSlotsByDay[day].push({ startTime: '', endTime: '' });
+      
+      return {
+        ...prev,
+        timeSlotsByDay: newTimeSlotsByDay
+      };
+    });
+  };
+
+  const removeTimeSlot = (day, index) => {
+    setProgramFormData(prev => {
+      const newTimeSlotsByDay = { ...prev.timeSlotsByDay };
+      newTimeSlotsByDay[day] = newTimeSlotsByDay[day].filter((_, i) => i !== index);
+      
+      return {
+        ...prev,
+        timeSlotsByDay: newTimeSlotsByDay
+      };
+    });
+  };
+
   const validateAcademyForm = () => {
     const errors = {};
     if (!academyFormData.name.trim()) errors.name = 'Academy name is required';
@@ -225,8 +339,15 @@ const AcademiesManagement = ({ projectId }) => {
     if (!programFormData.ageGroup) errors.ageGroup = 'Age group is required';
     if (!programFormData.duration) errors.duration = 'Duration is required';
     if (!programFormData.price) errors.price = 'Price is required';
-    if (programFormData.timeSlots.length === 0) errors.timeSlots = 'At least one time slot is required';
     if (programFormData.days.length === 0) errors.days = 'At least one day is required';
+    
+    // Check if each selected day has at least one time slot
+    const hasTimeSlots = programFormData.days.every(day => 
+      programFormData.timeSlotsByDay[day] && 
+      programFormData.timeSlotsByDay[day].length > 0
+    );
+    if (!hasTimeSlots) errors.timeSlots = 'Each selected day must have at least one time slot';
+    
     return errors;
   };
 
@@ -298,13 +419,39 @@ const AcademiesManagement = ({ projectId }) => {
 
     setIsSubmitting(true);
     try {
+      // Convert coaches from array of strings to array of objects for backward compatibility
+      const coachesData = programFormData.coaches.map(name => ({ name, specialty: '' }));
+      
+      // Convert timeSlotsByDay to timeSlots array for backward compatibility
+      const timeSlotsData = [];
+      Object.keys(programFormData.timeSlotsByDay).forEach(day => {
+        if (programFormData.timeSlotsByDay[day] && programFormData.timeSlotsByDay[day].length > 0) {
+          programFormData.timeSlotsByDay[day].forEach(slot => {
+            timeSlotsData.push({
+              ...slot,
+              day: day
+            });
+          });
+        }
+      });
+      
       const programData = {
         ...programFormData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString()
+        coaches: coachesData,
+        timeSlots: timeSlotsData, // Include both formats for compatibility
+        id: selectedProgramForEdit ? selectedProgramForEdit.id : Date.now().toString(),
+        createdAt: selectedProgramForEdit ? selectedProgramForEdit.createdAt : new Date().toISOString()
       };
 
-      await addProgram(projectId, selectedAcademyForPrograms.id, programData);
+      if (selectedProgramForEdit) {
+        // Update existing program
+        await updateProgram(projectId, selectedAcademyForPrograms.id, selectedProgramForEdit.id, programData);
+        setIsEditProgramModalOpen(false);
+        setSelectedProgramForEdit(null);
+      } else {
+        // Create new program
+        await addProgram(projectId, selectedAcademyForPrograms.id, programData);
+      }
       
       setProgramFormData({
         name: '',
@@ -314,8 +461,9 @@ const AcademiesManagement = ({ projectId }) => {
         price: '',
         maxCapacity: '',
         description: '',
-        timeSlots: [],
         days: [],
+        timeSlots: [], // Keep for backward compatibility
+        timeSlotsByDay: {},
         coaches: []
       });
       setFormErrors({});
@@ -323,7 +471,7 @@ const AcademiesManagement = ({ projectId }) => {
       // Refresh academies to get updated programs
       await fetchAcademies(projectId);
     } catch (error) {
-      console.error('Error adding program:', error);
+      console.error('Error saving program:', error);
       setFormErrors({ submit: error.message });
     } finally {
       setIsSubmitting(false);
@@ -439,22 +587,6 @@ const AcademiesManagement = ({ projectId }) => {
         </div>
       )}
 
-      {/* Debug Info */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h3>
-        <p className="text-xs text-yellow-700">
-          Loading: {academiesLoading ? 'Yes' : 'No'} | 
-          Error: {academiesError || 'None'} | 
-          Academies Count: {projectAcademies?.length || 0} | 
-          Project ID: {projectId}
-        </p>
-        {projectAcademies && projectAcademies.length > 0 && (
-          <div className="mt-2">
-            <p className="text-xs text-yellow-700">Academy IDs: {projectAcademies.map(a => a.id).join(', ')}</p>
-          </div>
-        )}
-      </div>
-
       {/* Academies Table */}
       {!academiesLoading && !academiesError && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -543,14 +675,17 @@ const AcademiesManagement = ({ projectId }) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex flex-wrap gap-1">
                         {academy.programs && academy.programs.length > 0 ? (
-                          academy.programs.slice(0, 3).map((program, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
-                            >
-                              {program.name || 'Unnamed Program'}
-                            </span>
-                          ))
+                          academy.programs
+                            .filter(program => program && typeof program === 'object' && program.name)
+                            .slice(0, 3)
+                            .map((program, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
+                              >
+                                {program.name}
+                              </span>
+                            ))
                         ) : (
                           <span className="text-gray-500 text-xs">No programs</span>
                         )}
@@ -712,11 +847,13 @@ const AcademiesManagement = ({ projectId }) => {
                 </div>
               </div>
 
-              {/* Programs & Facilities Section */}
+              {/* Capacity & Operating Hours Section */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <Award className="h-5 w-5 mr-2 text-purple-600" />
-                  Programs & Facilities
+                  <svg className="h-5 w-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Academy Details
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -731,40 +868,161 @@ const AcademiesManagement = ({ projectId }) => {
                       {selectedAcademyForModal.operatingHours || 'Not specified'}
                     </p>
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Programs Offered</label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedAcademyForModal.programs && selectedAcademyForModal.programs.length > 0 ? (
-                        selectedAcademyForModal.programs.map((program, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 rounded-full"
-                          >
-                            {program}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-sm text-gray-500">No programs listed</span>
-                      )}
-                    </div>
+                </div>
+              </div>
+
+              {/* Programs Section */}
+              <div className="bg-blue-50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Award className="h-5 w-5 mr-2 text-blue-600" />
+                    Programs Offered
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setIsAcademyModalOpen(false);
+                      setSelectedAcademyForPrograms(selectedAcademyForModal);
+                      setIsProgramsModalOpen(true);
+                    }}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Manage Programs
+                  </button>
+                </div>
+                
+                {selectedAcademyForModal.programs && selectedAcademyForModal.programs.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {selectedAcademyForModal.programs
+                      .filter(program => program && typeof program === 'object' && program.name)
+                      .map((program, index) => (
+                        <div key={index} className="bg-white rounded-lg p-3 border border-blue-200 hover:border-blue-300 transition-colors">
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-medium text-gray-900 text-sm">{program.name}</h4>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setIsAcademyModalOpen(false);
+                                  setSelectedAcademyForPrograms(selectedAcademyForModal);
+                                  handleViewProgram(program);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-colors"
+                                title="View Details"
+                              >
+                                <Eye className="h-3 w-3" />
+                              </button>
+                              <button
+                                                                 onClick={() => {
+                                   setIsAcademyModalOpen(false);
+                                   setSelectedAcademyForPrograms(selectedAcademyForModal);
+                                   handleEditProgram(program);
+                                 }}
+                                 className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50 transition-colors"
+                                 title="Edit Program"
+                               >
+                                 <Edit className="h-3 w-3" />
+                               </button>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Are you sure you want to delete "${program.name}"?`)) {
+                                    handleDeleteProgram(program.id);
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition-colors"
+                                title="Delete Program"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1 text-xs text-gray-600">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Category:</span>
+                              <span className="capitalize">{program.category || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Age Group:</span>
+                              <span className="capitalize">{program.ageGroup || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Duration:</span>
+                              <span>{program.duration || 'N/A'} months</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Price:</span>
+                              <span>${program.price || 'N/A'}/month</span>
+                            </div>
+                            {program.maxCapacity && (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Capacity:</span>
+                                <span>{program.maxCapacity} students</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                                                        {/* Quick Info Tags */}
+                              <div className="mt-3 pt-2 border-t border-gray-100">
+                                <div className="flex flex-wrap gap-1">
+                                  {program.days && program.days.length > 0 && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                                      {program.days.length} day{program.days.length > 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                  {program.timeSlots && program.timeSlots.length > 0 && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                      {program.timeSlots.length} time slot{program.timeSlots.length > 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                  {program.coaches && program.coaches.length > 0 && (
+                                    <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                                      {program.coaches.length} coach{program.coaches.length > 1 ? 'es' : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                        </div>
+                      ))}
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Facilities</label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {selectedAcademyForModal.facilities && selectedAcademyForModal.facilities.length > 0 ? (
-                        selectedAcademyForModal.facilities.map((facility, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full"
-                          >
-                            {facility}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-sm text-gray-500">No facilities listed</span>
-                      )}
-                    </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <Award className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500 mb-3">No programs listed yet</p>
+                    <button
+                      onClick={() => {
+                        setIsAcademyModalOpen(false);
+                        setSelectedAcademyForPrograms(selectedAcademyForModal);
+                        setIsProgramsModalOpen(true);
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Add Your First Program
+                    </button>
                   </div>
+                )}
+              </div>
+
+              {/* Facilities Section */}
+              <div className="bg-green-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  Facilities
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedAcademyForModal.facilities && selectedAcademyForModal.facilities.length > 0 ? (
+                    selectedAcademyForModal.facilities.map((facility, index) => (
+                                             <span
+                         key={index}
+                         className="inline-flex px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full"
+                       >
+                         {facility}
+                       </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-500">No facilities listed</span>
+                  )}
                 </div>
               </div>
 
@@ -1191,81 +1449,84 @@ const AcademiesManagement = ({ projectId }) => {
                     />
                   </div>
 
-                  {/* Time Slots */}
+                  {/* Program Schedule - Days with Times */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Time Slots *
+                      Program Schedule - Days with Times *
                     </label>
-                    <div className="space-y-2">
-                      {programFormData.timeSlots.map((slot, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <input
-                            type="time"
-                            value={slot.startTime}
-                            onChange={(e) => {
-                              const newSlots = [...programFormData.timeSlots];
-                              newSlots[index] = { ...slot, startTime: e.target.value };
-                              handleProgramFormChange('timeSlots', newSlots);
-                            }}
-                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                          <span className="text-gray-500">to</span>
-                          <input
-                            type="time"
-                            value={slot.endTime}
-                            onChange={(e) => {
-                              const newSlots = [...programFormData.timeSlots];
-                              newSlots[index] = { ...slot, endTime: e.target.value };
-                              handleProgramFormChange('timeSlots', newSlots);
-                            }}
-                            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newSlots = programFormData.timeSlots.filter((_, i) => i !== index);
-                              handleProgramFormChange('timeSlots', newSlots);
-                            }}
-                            className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newSlots = [...programFormData.timeSlots, { startTime: '', endTime: '' }];
-                          handleProgramFormChange('timeSlots', newSlots);
-                        }}
-                        className="text-blue-600 hover:text-blue-900 text-sm font-medium"
-                      >
-                        + Add Time Slot
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Days */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Days *
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-4">
                       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
-                        <label key={day} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={programFormData.days.includes(day)}
-                            onChange={(e) => {
-                              const newDays = e.target.checked
-                                ? [...programFormData.days, day]
-                                : programFormData.days.filter(d => d !== day);
-                              handleProgramFormChange('days', newDays);
-                            }}
-                            className="mr-2 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="text-sm text-gray-700">{day}</span>
-                        </label>
+                        <div key={day} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={programFormData.days.includes(day)}
+                                onChange={(e) => handleDaySelection(day, e.target.checked)}
+                                className="mr-3 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                              />
+                              <span className="font-medium text-gray-900">{day}</span>
+                            </label>
+                            {programFormData.days.includes(day) && (
+                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Time Slots for this day */}
+                          {programFormData.days.includes(day) && (
+                            <div className="ml-6 space-y-3">
+                              <div className="text-sm text-gray-600 mb-2">
+                                Time slots for {day}:
+                              </div>
+                              
+                              {programFormData.timeSlotsByDay[day] && programFormData.timeSlotsByDay[day].map((slot, index) => (
+                                <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="time"
+                                      value={slot.startTime}
+                                      onChange={(e) => handleTimeSlotChange(day, index, 'startTime', e.target.value)}
+                                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    />
+                                    <span className="text-gray-500 text-sm">to</span>
+                                    <input
+                                      type="time"
+                                      value={slot.endTime}
+                                      onChange={(e) => handleTimeSlotChange(day, index, 'endTime', e.target.value)}
+                                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    />
+                                  </div>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTimeSlot(day, index)}
+                                    className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                    title="Remove time slot"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => addTimeSlot(day)}
+                                className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center gap-1"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add Time for {day}
+                              </button>
+                            </div>
+                          )}
+                          
+                          {!programFormData.days.includes(day) && (
+                            <div className="ml-6 text-sm text-gray-500 italic">
+                              Check the box above to add time slots for {day}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -1412,8 +1673,23 @@ const AcademiesManagement = ({ projectId }) => {
                           </div>
                           <div className="flex items-center gap-2">
                             <button 
+                              onClick={() => handleViewProgram(program)}
+                              className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                              title="View Program"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleEditProgram(program)}
+                              className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
+                              title="Edit Program"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
                               onClick={() => handleDeleteProgram(program.id)}
                               className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                              title="Delete Program"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1443,6 +1719,452 @@ const AcademiesManagement = ({ projectId }) => {
                 className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Program Modal */}
+      {isViewProgramModalOpen && selectedProgramForView && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Program Details</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedProgramForView.name} - {selectedProgramForView.category}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsViewProgramModalOpen(false);
+                  setSelectedProgramForView(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Program Name</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedProgramForView.name}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedProgramForView.category}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Age Group</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedProgramForView.ageGroup}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Duration</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedProgramForView.duration} months</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">${selectedProgramForView.price}/month</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Max Capacity</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedProgramForView.maxCapacity || 'Unlimited'}</p>
+                  </div>
+                </div>
+                {selectedProgramForView.description && (
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Description</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedProgramForView.description}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Time Slots */}
+              {selectedProgramForView.timeSlots && selectedProgramForView.timeSlots.length > 0 && (
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Time Slots</h3>
+                  <div className="space-y-2">
+                    {selectedProgramForView.timeSlots.map((slot, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-blue-900">
+                          {slot.startTime} - {slot.endTime}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Days */}
+              {selectedProgramForView.days && selectedProgramForView.days.length > 0 && (
+                <div className="bg-green-50 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Days</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProgramForView.days.map((day, index) => (
+                      <span key={index} className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                        {day}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Coaches */}
+              {selectedProgramForView.coaches && selectedProgramForView.coaches.length > 0 && (
+                <div className="bg-purple-50 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Coaches</h3>
+                  <div className="space-y-2">
+                    {selectedProgramForView.coaches.map((coach, index) => (
+                      <div key={index} className="flex items-center gap-3 text-sm">
+                        <span className="font-medium text-purple-900">{coach.name}</span>
+                        {coach.specialty && (
+                          <span className="text-purple-700">- {coach.specialty}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end p-6 border-t border-gray-100 space-x-3">
+              <button
+                onClick={() => handleEditProgram(selectedProgramForView)}
+                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Edit Program
+              </button>
+              <button
+                onClick={() => {
+                  setIsViewProgramModalOpen(false);
+                  setSelectedProgramForView(null);
+                }}
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Program Modal */}
+      {isEditProgramModalOpen && selectedProgramForEdit && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Edit Program</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Update program: {selectedProgramForEdit.name}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditProgramModalOpen(false);
+                  setSelectedProgramForEdit(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content - Same form as Add Program */}
+            <div className="p-6">
+              {/* Add New Program Section */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Program</h3>
+                <form onSubmit={handleProgramSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Program Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={programFormData.name}
+                        onChange={(e) => handleProgramFormChange('name', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Football Training"
+                      />
+                      {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category *
+                      </label>
+                      <select 
+                        value={programFormData.category}
+                        onChange={(e) => handleProgramFormChange('category', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Category</option>
+                        <option value="team-sports">Team Sports</option>
+                        <option value="individual-sports">Individual Sports</option>
+                        <option value="fitness">Fitness</option>
+                        <option value="wellness">Wellness</option>
+                        <option value="martial-arts">Martial Arts</option>
+                        <option value="aquatics">Aquatics</option>
+                      </select>
+                      {formErrors.category && <p className="text-red-500 text-xs mt-1">{formErrors.category}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Age Group *
+                      </label>
+                      <select 
+                        value={programFormData.ageGroup}
+                        onChange={(e) => handleProgramFormChange('ageGroup', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Age Group</option>
+                        <option value="kids">Kids (3-12)</option>
+                        <option value="teens">Teens (13-17)</option>
+                        <option value="adults">Adults (18+)</option>
+                        <option value="seniors">Seniors (50+)</option>
+                        <option value="all-ages">All Ages</option>
+                      </select>
+                      {formErrors.ageGroup && <p className="text-red-500 text-xs mt-1">{formErrors.ageGroup}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration (months) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={programFormData.duration}
+                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 3"
+                      />
+                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Price (per month) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={programFormData.price}
+                        onChange={(e) => handleProgramFormChange('price', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 150.00"
+                      />
+                      {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={programFormData.maxCapacity}
+                        onChange={(e) => handleProgramFormChange('maxCapacity', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={programFormData.description}
+                      onChange={(e) => handleProgramFormChange('description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe the program, what students will learn, requirements..."
+                    />
+                  </div>
+
+                  {/* Program Schedule - Days with Times */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Program Schedule - Days with Times *
+                    </label>
+                    <div className="space-y-4">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                        <div key={day} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={programFormData.days.includes(day)}
+                                onChange={(e) => handleDaySelection(day, e.target.checked)}
+                                className="mr-3 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                              />
+                              <span className="font-medium text-gray-900">{day}</span>
+                            </label>
+                            {programFormData.days.includes(day) && (
+                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Time Slots for this day */}
+                          {programFormData.days.includes(day) && (
+                            <div className="ml-6 space-y-3">
+                              <div className="text-sm text-gray-600 mb-2">
+                                Time slots for {day}:
+                              </div>
+                              
+                              {programFormData.timeSlotsByDay[day] && programFormData.timeSlotsByDay[day].map((slot, index) => (
+                                <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="time"
+                                      value={slot.startTime}
+                                      onChange={(e) => handleTimeSlotChange(day, index, 'startTime', e.target.value)}
+                                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    />
+                                    <span className="text-gray-500 text-sm">to</span>
+                                    <input
+                                      type="time"
+                                      value={slot.endTime}
+                                      onChange={(e) => handleTimeSlotChange(day, index, 'endTime', e.target.value)}
+                                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    />
+                                  </div>
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTimeSlot(day, index)}
+                                    className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                    title="Remove time slot"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => addTimeSlot(day)}
+                                className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center gap-1"
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add Time for {day}
+                              </button>
+                            </div>
+                          )}
+                          
+                          {!programFormData.days.includes(day) && (
+                            <div className="ml-6 text-sm text-gray-500 italic">
+                              Check the box above to add time slots for {day}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coaches */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Coaches
+                    </label>
+                    <div className="space-y-2">
+                      {programFormData.coaches.map((coach, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={coach.name}
+                            onChange={(e) => {
+                              const newCoaches = [...programFormData.coaches];
+                              newCoaches[index] = { ...coach, name: e.target.value };
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            placeholder="Coach name"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <input
+                            type="text"
+                            value={coach.specialty}
+                            onChange={(e) => {
+                              const newCoaches = [...programFormData.coaches];
+                              newCoaches[index] = { ...coach, specialty: e.target.value };
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            placeholder="Specialty"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newCoaches = programFormData.coaches.filter((_, i) => i !== index);
+                              handleProgramFormChange('coaches', newCoaches);
+                            }}
+                            className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCoaches = [...programFormData.coaches, { name: '', specialty: '' }];
+                          handleProgramFormChange('coaches', newCoaches);
+                        }}
+                        className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                      >
+                        + Add Coach
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <Edit className="h-4 w-4 mr-2 inline" />
+                      {isSubmitting ? 'Updating...' : 'Update Program'}
+                    </button>
+                  </div>
+
+                  {/* Submit Error Display */}
+                  {formErrors.submit && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                      <p className="text-red-600 text-sm">{formErrors.submit}</p>
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end p-6 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setIsEditProgramModalOpen(false);
+                  setSelectedProgramForEdit(null);
+                }}
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
