@@ -243,6 +243,7 @@ const AcademiesManagement = ({ projectId }) => {
 
       console.log('Submitting academy data:', academyData);
       console.log('Form data before submission:', academyFormData);
+      console.log('Selected academy for modal:', selectedAcademyForModal);
 
       if (selectedAcademyForModal) {
         // Update existing academy
@@ -488,7 +489,7 @@ const AcademiesManagement = ({ projectId }) => {
                         </div>
                         <div className="ml-3 min-w-0 flex-1">
                           <div className="text-sm font-semibold text-gray-900 truncate">
-                            {academy.id || 'Unknown Academy'}
+                            {academy.name || 'Unknown Academy'}
                           </div>
                           <div className="text-xs text-gray-500 truncate">
                             {academy.type || 'General'}
