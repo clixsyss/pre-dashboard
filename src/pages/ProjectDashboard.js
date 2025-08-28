@@ -944,7 +944,6 @@ const ProjectDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <div className="flex items-center">
-                              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
                               <span>
                                 {booking.type === 'court'
                                   ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`

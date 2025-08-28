@@ -17,13 +17,15 @@ import { useAcademyStore } from '../stores/academyStore';
 const AcademiesManagement = ({ projectId }) => {
   // Academy store integration
   const {
-    academies: projectAcademies,
+    academyOptions: projectAcademies,
     fetchAcademies,
     loading: academiesLoading,
     error: academiesError,
     addAcademy,
     updateAcademy,
-    deleteAcademy
+    deleteAcademy,
+    addProgram,
+    deleteProgram
   } = useAcademyStore();
 
   // State management
@@ -35,6 +37,37 @@ const AcademiesManagement = ({ projectId }) => {
   const [isAddAcademyModalOpen, setIsAddAcademyModalOpen] = useState(false);
   const [selectedAcademyForPrograms, setSelectedAcademyForPrograms] = useState(null);
   const [isProgramsModalOpen, setIsProgramsModalOpen] = useState(false);
+  
+  // Form state for academy creation/editing
+  const [academyFormData, setAcademyFormData] = useState({
+    name: '',
+    type: 'sports',
+    establishedYear: '',
+    rating: 0,
+    description: '',
+    email: '',
+    phone: '',
+    location: '',
+    website: '',
+    capacity: 0,
+    operatingHours: '',
+    facilities: ''
+  });
+
+  // Form state for program creation/editing
+  const [programFormData, setProgramFormData] = useState({
+    name: '',
+    category: '',
+    ageGroup: '',
+    duration: '',
+    price: '',
+    maxCapacity: '',
+    description: ''
+  });
+
+  // Form validation state
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch academies when component mounts
   useEffect(() => {
@@ -44,8 +77,19 @@ const AcademiesManagement = ({ projectId }) => {
     }
   }, [projectId, fetchAcademies]);
 
+  // Debug effect to see when academies change
+  useEffect(() => {
+    console.log('Academies data changed:', { projectAcademies, length: projectAcademies?.length });
+  }, [projectAcademies]);
+
+  // Debug effect to see when form data changes
+  useEffect(() => {
+    console.log('Form data changed:', academyFormData);
+  }, [academyFormData]);
+
   // Filter academies based on search and filters
   const getFilteredAcademies = () => {
+    console.log('getFilteredAcademies called with:', { projectAcademies, length: projectAcademies?.length });
     if (!projectAcademies || projectAcademies.length === 0) return [];
     
     let filtered = [...projectAcademies];
@@ -78,12 +122,47 @@ const AcademiesManagement = ({ projectId }) => {
   };
 
   const handleEditAcademy = (academy) => {
+    console.log('Editing academy:', academy);
     setSelectedAcademyForModal(academy);
+    
+    const formData = {
+      name: academy.name || '',
+      type: academy.type || 'sports',
+      establishedYear: academy.establishedYear || '',
+      rating: academy.rating || 0,
+      description: academy.description || '',
+      email: academy.email || '',
+      phone: academy.phone || '',
+      location: academy.location || '',
+      website: academy.website || '',
+      capacity: academy.capacity || 0,
+      operatingHours: academy.operatingHours || '',
+      facilities: academy.facilities ? academy.facilities.join(', ') : ''
+    };
+    
+    console.log('Setting form data:', formData);
+    setAcademyFormData(formData);
+    setFormErrors({});
     setIsAddAcademyModalOpen(true);
   };
 
   const handleAddNewAcademy = () => {
     setSelectedAcademyForModal(null);
+    setAcademyFormData({
+      name: '',
+      type: 'sports',
+      establishedYear: '',
+      rating: 0,
+      description: '',
+      email: '',
+      phone: '',
+      location: '',
+      website: '',
+      capacity: 0,
+      operatingHours: '',
+      facilities: ''
+    });
+    setFormErrors({});
     setIsAddAcademyModalOpen(true);
   };
 
@@ -92,15 +171,153 @@ const AcademiesManagement = ({ projectId }) => {
     setIsProgramsModalOpen(true);
   };
 
+  const handleDeleteProgram = async (programId) => {
+    if (window.confirm('Are you sure you want to delete this program?')) {
+      try {
+        await deleteProgram(projectId, selectedAcademyForPrograms.id, programId);
+        await fetchAcademies(projectId);
+      } catch (error) {
+        console.error('Error deleting program:', error);
+      }
+    }
+  };
 
   const handleDeleteAcademy = async (academyId) => {
-    if (window.confirm('Are you sure you want to delete this academy?')) {
+    if (window.confirm('Are you sure you want to delete this academy? This will also delete all associated programs.')) {
       try {
         await deleteAcademy(projectId, academyId);
-        console.log('Academy deleted:', academyId);
+        await fetchAcademies(projectId);
       } catch (error) {
         console.error('Error deleting academy:', error);
       }
+    }
+  };
+
+  const handleAcademyFormChange = (field, value) => {
+    setAcademyFormData(prev => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const handleProgramFormChange = (field, value) => {
+    setProgramFormData(prev => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateAcademyForm = () => {
+    const errors = {};
+    if (!academyFormData.name.trim()) errors.name = 'Academy name is required';
+    if (!academyFormData.email.trim()) errors.email = 'Email is required';
+    if (!academyFormData.location.trim()) errors.location = 'Location is required';
+    return errors;
+  };
+
+  const validateProgramForm = () => {
+    const errors = {};
+    if (!programFormData.name.trim()) errors.name = 'Program name is required';
+    if (!programFormData.category) errors.category = 'Category is required';
+    if (!programFormData.ageGroup) errors.ageGroup = 'Age group is required';
+    if (!programFormData.duration) errors.duration = 'Duration is required';
+    if (!programFormData.price) errors.price = 'Price is required';
+    return errors;
+  };
+
+  const handleAcademySubmit = async (e) => {
+    e.preventDefault();
+    const errors = validateAcademyForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const academyData = {
+        ...academyFormData,
+        facilities: academyFormData.facilities ? academyFormData.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
+        programs: selectedAcademyForModal?.programs || []
+      };
+
+      console.log('Submitting academy data:', academyData);
+      console.log('Form data before submission:', academyFormData);
+
+      if (selectedAcademyForModal) {
+        // Update existing academy
+        console.log('Updating academy:', selectedAcademyForModal.id);
+        await updateAcademy(projectId, academyData);
+      } else {
+        // Create new academy
+        console.log('Creating new academy for project:', projectId);
+        await addAcademy(projectId, academyData);
+      }
+
+      setIsAddAcademyModalOpen(false);
+      setSelectedAcademyForModal(null);
+      setAcademyFormData({
+        name: '',
+        type: 'sports',
+        establishedYear: '',
+        rating: 0,
+        description: '',
+        email: '',
+        phone: '',
+        location: '',
+        website: '',
+        capacity: 0,
+        operatingHours: '',
+        facilities: ''
+      });
+      setFormErrors({});
+      
+      // Refresh academies
+      await fetchAcademies(projectId);
+    } catch (error) {
+      console.error('Error saving academy:', error);
+      setFormErrors({ submit: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleProgramSubmit = async (e) => {
+    e.preventDefault();
+    const errors = validateProgramForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const programData = {
+        ...programFormData,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString()
+      };
+
+      await addProgram(projectId, selectedAcademyForPrograms.id, programData);
+      
+      setProgramFormData({
+        name: '',
+        category: '',
+        ageGroup: '',
+        duration: '',
+        price: '',
+        maxCapacity: '',
+        description: ''
+      });
+      setFormErrors({});
+      
+      // Refresh academies to get updated programs
+      await fetchAcademies(projectId);
+    } catch (error) {
+      console.error('Error adding program:', error);
+      setFormErrors({ submit: error.message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -213,6 +430,22 @@ const AcademiesManagement = ({ projectId }) => {
         </div>
       )}
 
+      {/* Debug Info */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h3>
+        <p className="text-xs text-yellow-700">
+          Loading: {academiesLoading ? 'Yes' : 'No'} | 
+          Error: {academiesError || 'None'} | 
+          Academies Count: {projectAcademies?.length || 0} | 
+          Project ID: {projectId}
+        </p>
+        {projectAcademies && projectAcademies.length > 0 && (
+          <div className="mt-2">
+            <p className="text-xs text-yellow-700">Academy IDs: {projectAcademies.map(a => a.id).join(', ')}</p>
+          </div>
+        )}
+      </div>
+
       {/* Academies Table */}
       {!academiesLoading && !academiesError && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -255,7 +488,7 @@ const AcademiesManagement = ({ projectId }) => {
                         </div>
                         <div className="ml-3 min-w-0 flex-1">
                           <div className="text-sm font-semibold text-gray-900 truncate">
-                            {academy.name || 'Unknown Academy'}
+                            {academy.id || 'Unknown Academy'}
                           </div>
                           <div className="text-xs text-gray-500 truncate">
                             {academy.type || 'General'}
@@ -599,7 +832,7 @@ const AcademiesManagement = ({ projectId }) => {
 
             {/* Modal Content */}
             <div className="p-6">
-              <form className="space-y-6">
+              <form id="academyForm" onSubmit={handleAcademySubmit} className="space-y-6">
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -608,17 +841,20 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="text"
-                      defaultValue={selectedAcademyForModal?.name || ''}
+                      value={academyFormData.name}
+                      onChange={(e) => handleAcademyFormChange('name', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter academy name"
                     />
+                    {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Type *
                     </label>
                     <select
-                      defaultValue={selectedAcademyForModal?.type || 'sports'}
+                      value={academyFormData.type}
+                      onChange={(e) => handleAcademyFormChange('type', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="sports">Sports</option>
@@ -634,7 +870,8 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="number"
-                      defaultValue={selectedAcademyForModal?.establishedYear || ''}
+                      value={academyFormData.establishedYear}
+                      onChange={(e) => handleAcademyFormChange('establishedYear', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="e.g., 2020"
                     />
@@ -648,7 +885,8 @@ const AcademiesManagement = ({ projectId }) => {
                       min="0"
                       max="5"
                       step="0.1"
-                      defaultValue={selectedAcademyForModal?.rating || 0}
+                      value={academyFormData.rating}
+                      onChange={(e) => handleAcademyFormChange('rating', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="0.0 - 5.0"
                     />
@@ -661,7 +899,8 @@ const AcademiesManagement = ({ projectId }) => {
                     Description
                   </label>
                   <textarea
-                    defaultValue={selectedAcademyForModal?.description || ''}
+                    value={academyFormData.description}
+                    onChange={(e) => handleAcademyFormChange('description', e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Describe the academy and its mission..."
@@ -676,10 +915,12 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="email"
-                      defaultValue={selectedAcademyForModal?.email || ''}
+                      value={academyFormData.email}
+                      onChange={(e) => handleAcademyFormChange('email', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="academy@example.com"
                     />
+                    {formErrors.email && <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -687,7 +928,8 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="tel"
-                      defaultValue={selectedAcademyForModal?.phone || ''}
+                      value={academyFormData.phone}
+                      onChange={(e) => handleAcademyFormChange('phone', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="+1 (555) 123-4567"
                     />
@@ -698,10 +940,12 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="text"
-                      defaultValue={selectedAcademyForModal?.location || ''}
+                      value={academyFormData.location}
+                      onChange={(e) => handleAcademyFormChange('location', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter location or address"
                     />
+                    {formErrors.location && <p className="text-red-500 text-xs mt-1">{formErrors.location}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -709,7 +953,8 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="url"
-                      defaultValue={selectedAcademyForModal?.website || ''}
+                      value={academyFormData.website}
+                      onChange={(e) => handleAcademyFormChange('website', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="https://academy.com"
                     />
@@ -724,7 +969,8 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="number"
-                      defaultValue={selectedAcademyForModal?.capacity || 0}
+                      value={academyFormData.capacity}
+                      onChange={(e) => handleAcademyFormChange('capacity', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Number of students"
                     />
@@ -735,7 +981,8 @@ const AcademiesManagement = ({ projectId }) => {
                     </label>
                     <input
                       type="text"
-                      defaultValue={selectedAcademyForModal?.operatingHours || ''}
+                      value={academyFormData.operatingHours}
+                      onChange={(e) => handleAcademyFormChange('operatingHours', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="e.g., Mon-Fri 8AM-8PM"
                     />
@@ -749,11 +996,19 @@ const AcademiesManagement = ({ projectId }) => {
                   </label>
                   <input
                     type="text"
-                    defaultValue={selectedAcademyForModal?.facilities?.join(', ') || ''}
+                    value={academyFormData.facilities}
+                    onChange={(e) => handleAcademyFormChange('facilities', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Indoor Court, Swimming Pool, Gym, Locker Rooms"
                   />
                 </div>
+
+                {/* Submit Error Display */}
+                {formErrors.submit && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-red-600 text-sm">{formErrors.submit}</p>
+                  </div>
+                )}
               </form>
             </div>
 
@@ -768,15 +1023,20 @@ const AcademiesManagement = ({ projectId }) => {
               >
                 Cancel
               </button>
-              <button
-                onClick={() => {
-                  // TODO: Implement save functionality
-                  console.log('Save academy functionality to be implemented');
-                }}
-                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                {selectedAcademyForModal ? 'Update Academy' : 'Create Academy'}
-              </button>
+                              <button
+                  type="submit"
+                  form="academyForm"
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {selectedAcademyForModal ? 'Update Academy' : 'Create Academy'}
+                  {isSubmitting && (
+                    <svg className="animate-spin h-4 w-4 ml-2 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                </button>
             </div>
           </div>
         </div>
@@ -811,10 +1071,183 @@ const AcademiesManagement = ({ projectId }) => {
 
             {/* Modal Content */}
             <div className="p-6">
-              <div className="text-center py-8 text-gray-500">
-                <Award className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-lg font-medium">Programs Management</p>
-                <p className="text-sm">Add and manage programs for this academy</p>
+              {/* Add New Program Section */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Program</h3>
+                <form onSubmit={handleProgramSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Program Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={programFormData.name}
+                        onChange={(e) => handleProgramFormChange('name', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Football Training"
+                      />
+                      {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category *
+                      </label>
+                      <select 
+                        value={programFormData.category}
+                        onChange={(e) => handleProgramFormChange('category', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Category</option>
+                        <option value="team-sports">Team Sports</option>
+                        <option value="individual-sports">Individual Sports</option>
+                        <option value="fitness">Fitness</option>
+                        <option value="wellness">Wellness</option>
+                        <option value="martial-arts">Martial Arts</option>
+                        <option value="aquatics">Aquatics</option>
+                      </select>
+                      {formErrors.category && <p className="text-red-500 text-xs mt-1">{formErrors.category}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Age Group *
+                      </label>
+                      <select 
+                        value={programFormData.ageGroup}
+                        onChange={(e) => handleProgramFormChange('ageGroup', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Age Group</option>
+                        <option value="kids">Kids (3-12)</option>
+                        <option value="teens">Teens (13-17)</option>
+                        <option value="adults">Adults (18+)</option>
+                        <option value="seniors">Seniors (50+)</option>
+                        <option value="all-ages">All Ages</option>
+                      </select>
+                      {formErrors.ageGroup && <p className="text-red-500 text-xs mt-1">{formErrors.ageGroup}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration (months) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={programFormData.duration}
+                        onChange={(e) => handleProgramFormChange('duration', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 3"
+                      />
+                      {formErrors.duration && <p className="text-red-500 text-xs mt-1">{formErrors.duration}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Price (per month) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={programFormData.price}
+                        onChange={(e) => handleProgramFormChange('price', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 150.00"
+                      />
+                      {formErrors.price && <p className="text-red-500 text-xs mt-1">{formErrors.price}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={programFormData.maxCapacity}
+                        onChange={(e) => handleProgramFormChange('maxCapacity', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={programFormData.description}
+                      onChange={(e) => handleProgramFormChange('description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe the program, what students will learn, requirements..."
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <Plus className="h-4 w-4 mr-2 inline" />
+                      {isSubmitting ? 'Adding...' : 'Add Program'}
+                    </button>
+                  </div>
+
+                  {/* Submit Error Display */}
+                  {formErrors.submit && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                      <p className="text-red-600 text-sm">{formErrors.submit}</p>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              {/* Existing Programs Section */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Programs</h3>
+                
+                {selectedAcademyForPrograms.programs && selectedAcademyForPrograms.programs.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedAcademyForPrograms.programs.map((program) => (
+                      <div key={program.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="text-lg font-medium text-gray-900">{program.name}</h4>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                                {program.category}
+                              </span>
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                                {program.ageGroup}
+                              </span>
+                            </div>
+                            <p className="text-gray-600 text-sm mb-2">
+                              {program.description || 'No description available'}
+                            </p>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>Duration: {program.duration} months</span>
+                              <span>Price: ${program.price}/month</span>
+                              {program.maxCapacity && <span>Capacity: {program.maxCapacity}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => handleDeleteProgram(program.id)}
+                              className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Award className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-lg font-medium">No programs yet</p>
+                    <p className="text-sm">Add your first program using the form above</p>
+                  </div>
+                )}
               </div>
             </div>
 

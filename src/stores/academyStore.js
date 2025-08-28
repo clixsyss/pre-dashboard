@@ -40,27 +40,46 @@ export const useAcademyStore = create((set, get) => ({
   addAcademy: async (projectId, academy) => {
     try {
       set({ loading: true, error: null });
-      const academyRef = doc(db, `projects/${projectId}/academies`, academy.name);
+      const academyId = Date.now().toString();
+      const academyRef = doc(db, `projects/${projectId}/academies`, academyId);
       await setDoc(academyRef, {
+        name: academy.name,
+        type: academy.type,
+        establishedYear: academy.establishedYear,
+        rating: academy.rating,
+        description: academy.description,
         email: academy.email,
         phone: academy.phone,
+        location: academy.location,
         website: academy.website,
+        capacity: academy.capacity,
+        operatingHours: academy.operatingHours,
+        facilities: academy.facilities,
         programs: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      });
 
       const newAcademy = {
-        id: academy.name,
+        id: academyId,
+        name: academy.name,
+        type: academy.type,
+        establishedYear: academy.establishedYear,
+        rating: academy.rating,
+        description: academy.description,
         email: academy.email,
         phone: academy.phone,
+        location: academy.location,
         website: academy.website,
+        capacity: academy.capacity,
+        operatingHours: academy.operatingHours,
+        facilities: academy.facilities,
         programs: []
       };
 
       set((state) => ({
         academyOptions: [...state.academyOptions, newAcademy],
-        programsByAcademy: { ...state.programsByAcademy, [academy.name]: [] }
+        programsByAcademy: { ...state.programsByAcademy, [academyId]: [] }
       }));
     } catch (error) {
       console.error("Error adding academy:", error);
@@ -74,17 +93,26 @@ export const useAcademyStore = create((set, get) => ({
   updateAcademy: async (projectId, academy) => {
     try {
       set({ loading: true, error: null });
-      const academyRef = doc(db, `projects/${projectId}/academies`, academy.name);
+      const academyRef = doc(db, `projects/${projectId}/academies`, academy.id);
       await updateDoc(academyRef, {
+        name: academy.name,
+        type: academy.type,
+        establishedYear: academy.establishedYear,
+        rating: academy.rating,
+        description: academy.description,
         email: academy.email,
         phone: academy.phone,
+        location: academy.location,
         website: academy.website,
+        capacity: academy.capacity,
+        operatingHours: academy.operatingHours,
+        facilities: academy.facilities,
         updatedAt: serverTimestamp()
       });
 
       set((state) => {
         const updatedOptions = state.academyOptions.map(a => 
-          a.id === academy.name ? { ...a, ...academy } : a
+          a.id === academy.id ? { ...a, ...academy } : a
         );
         return { academyOptions: updatedOptions };
       });
