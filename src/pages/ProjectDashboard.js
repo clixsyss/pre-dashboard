@@ -891,25 +891,6 @@ const ProjectDashboard = () => {
 
         {activeTab === 'bookings' && (
           <div className="space-y-6">
-            {/* Debug Info - Remove in production */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h4>
-                <div className="text-xs text-yellow-700">
-                  <p>Total Bookings: {projectBookings?.length || 0}</p>
-                  <p>Upcoming: {getUpcomingBookings().length}</p>
-                  <p>Past: {getPastBookings().length}</p>
-                  {projectBookings && projectBookings.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="cursor-pointer">Sample Booking Data</summary>
-                      <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-auto">
-                        {JSON.stringify(projectBookings[0], null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Bookings Header */}
             <div className="flex items-center justify-between">
@@ -1044,9 +1025,6 @@ const ProjectDashboard = () => {
                               Date & Time
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Duration
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
                               Price
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
@@ -1080,17 +1058,7 @@ const ProjectDashboard = () => {
                                     <div className="text-xs text-gray-400 truncate">
                                       🏠 Unit {booking.userUnit || 'N/A'}
                                     </div>
-                                    {/* Debug info - remove in production */}
-                                    {process.env.NODE_ENV === 'development' && (
-                                      <div className="text-xs text-red-400 mt-1">
-                                        Debug: {JSON.stringify({
-                                          userName: booking.userName,
-                                          userEmail: booking.userEmail,
-                                          userPhone: booking.userPhone,
-                                          userUnit: booking.userUnit
-                                        })}
-                                      </div>
-                                    )}
+                                    
                                   </div>
                                 </div>
                               </td>
@@ -1122,14 +1090,6 @@ const ProjectDashboard = () => {
                                     </span>
                                   )}
                                 </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {booking.duration ||
-                                  (booking.startTime && booking.endTime
-                                    ? `${booking.startTime} - ${booking.endTime}`
-                                    : '1 hour'
-                                  )
-                                }
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <span className="font-medium text-green-600">
@@ -1219,9 +1179,6 @@ const ProjectDashboard = () => {
                               Date & Time
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Duration
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Price
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1255,17 +1212,6 @@ const ProjectDashboard = () => {
                                     <div className="text-xs text-gray-400 truncate">
                                       🏠 Unit {booking.userUnit || 'N/A'}
                                     </div>
-                                    {/* Debug info - remove in production */}
-                                    {process.env.NODE_ENV === 'development' && (
-                                      <div className="text-xs text-red-400 mt-1">
-                                        Debug: {JSON.stringify({
-                                          userName: booking.userName,
-                                          userEmail: booking.userEmail,
-                                          userPhone: booking.userPhone,
-                                          userUnit: booking.userUnit
-                                        })}
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -1297,14 +1243,6 @@ const ProjectDashboard = () => {
                                     </span>
                                   )}
                                 </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {booking.duration ||
-                                  (booking.startTime && booking.endTime
-                                    ? `${booking.startTime} - ${booking.endTime}`
-                                    : '1 hour'
-                                  )
-                                }
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <span className="font-medium text-green-600">
