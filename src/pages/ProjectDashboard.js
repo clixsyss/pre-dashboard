@@ -50,6 +50,7 @@ const ProjectDashboard = () => {
   const [bookingSearchTerm, setBookingSearchTerm] = useState('');
   const [bookingServiceFilter, setBookingServiceFilter] = useState('all');
   const [courtFilter, setCourtFilter] = useState('all');
+  const [academyFilter, setAcademyFilter] = useState('all');
   const [bookingStatusFilter, setBookingStatusFilter] = useState('all');
 
   // Modal state
@@ -154,6 +155,14 @@ const ProjectDashboard = () => {
     }
   }, [activeTab, projectId, fetchBookings]);
 
+  // Debug: Log booking data when it changes
+  useEffect(() => {
+    if (projectBookings && projectBookings.length > 0) {
+      console.log('Project bookings updated:', projectBookings);
+      console.log('Sample booking data:', projectBookings[0]);
+    }
+  }, [projectBookings]);
+
 
 
   // Filter bookings based on search and filters
@@ -185,6 +194,10 @@ const ProjectDashboard = () => {
 
     if (courtFilter !== 'all') {
       filtered = filtered.filter(booking => booking.courtName === courtFilter);
+    }
+
+    if (academyFilter !== 'all') {
+      filtered = filtered.filter(booking => booking.academyName === academyFilter);
     }
 
     if (bookingStatusFilter !== 'all') {
@@ -245,6 +258,28 @@ const ProjectDashboard = () => {
       // If no date, don't include in past
       return false;
     });
+  };
+
+  // Admin status change function
+  const handleStatusChange = async (bookingId, newStatus) => {
+    try {
+      // Update the booking status in the store
+      if (newStatus === 'confirmed') {
+        await confirmBooking(projectId, bookingId);
+      } else if (newStatus === 'cancelled') {
+        await cancelBooking(projectId, bookingId);
+      } else if (newStatus === 'completed') {
+        await completeBooking(projectId, bookingId);
+      }
+      
+      console.log(`Booking ${bookingId} status changed to ${newStatus}`);
+      
+      // Refresh bookings to get updated data
+      await fetchBookings(projectId);
+    } catch (error) {
+      console.error('Error changing booking status:', error);
+      // You could add a toast notification here
+    }
   };
 
   const getProjectStats = () => {
@@ -856,6 +891,26 @@ const ProjectDashboard = () => {
 
         {activeTab === 'bookings' && (
           <div className="space-y-6">
+            {/* Debug Info - Remove in production */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h4>
+                <div className="text-xs text-yellow-700">
+                  <p>Total Bookings: {projectBookings?.length || 0}</p>
+                  <p>Upcoming: {getUpcomingBookings().length}</p>
+                  <p>Past: {getPastBookings().length}</p>
+                  {projectBookings && projectBookings.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer">Sample Booking Data</summary>
+                      <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-auto">
+                        {JSON.stringify(projectBookings[0], null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Bookings Header */}
             <div className="flex items-center justify-between">
               <div>
@@ -883,8 +938,9 @@ const ProjectDashboard = () => {
 
             {/* Search and Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Search Input */}
+                <div className="relative lg:col-span-2">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
@@ -894,6 +950,8 @@ const ProjectDashboard = () => {
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+
+                {/* Service Type Filter */}
                 <select
                   value={bookingServiceFilter}
                   onChange={(e) => setBookingServiceFilter(e.target.value)}
@@ -903,16 +961,8 @@ const ProjectDashboard = () => {
                   <option value="court">Court Booking</option>
                   <option value="academy">Academy Program</option>
                 </select>
-                <select
-                  value={courtFilter}
-                  onChange={(e) => setCourtFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Courts</option>
-                  {projectBookings && [...new Set(projectBookings.filter(b => b.courtName).map(b => b.courtName))].map(courtName => (
-                    <option key={courtName} value={courtName}>{courtName}</option>
-                  ))}
-                </select>
+
+                {/* Status Filter */}
                 <select
                   value={bookingStatusFilter}
                   onChange={(e) => setBookingStatusFilter(e.target.value)}
@@ -923,6 +973,33 @@ const ProjectDashboard = () => {
                   <option value="pending">Pending</option>
                   <option value="cancelled">Cancelled</option>
                   <option value="completed">Completed</option>
+                </select>
+              </div>
+
+              {/* Additional Filters Row */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Court Filter */}
+                <select
+                  value={courtFilter}
+                  onChange={(e) => setCourtFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Courts</option>
+                  {projectBookings && [...new Set(projectBookings.filter(b => b.courtName).map(b => b.courtName))].map(courtName => (
+                    <option key={courtName} value={courtName}>{courtName}</option>
+                  ))}
+                </select>
+
+                {/* Academy Filter */}
+                <select
+                  value={academyFilter || 'all'}
+                  onChange={(e) => setAcademyFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Academies</option>
+                  {projectBookings && [...new Set(projectBookings.filter(b => b.academyName).map(b => b.academyName))].map(academyName => (
+                    <option key={academyName} value={academyName}>{academyName}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -995,11 +1072,25 @@ const ProjectDashboard = () => {
                                       {booking.userName || 'Unknown User'}
                                     </div>
                                     <div className="text-xs text-gray-500 truncate">
-                                      {booking.userEmail || 'No email'}
+                                      📧 {booking.userEmail || 'No email'}
                                     </div>
                                     <div className="text-xs text-gray-400 truncate">
-                                      Unit {booking.userUnit || 'N/A'} • {booking.userPhone || 'No phone'}
+                                      📱 {booking.userPhone || 'No phone'}
                                     </div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      🏠 Unit {booking.userUnit || 'N/A'}
+                                    </div>
+                                    {/* Debug info - remove in production */}
+                                    {process.env.NODE_ENV === 'development' && (
+                                      <div className="text-xs text-red-400 mt-1">
+                                        Debug: {JSON.stringify({
+                                          userName: booking.userName,
+                                          userEmail: booking.userEmail,
+                                          userPhone: booking.userPhone,
+                                          userUnit: booking.userUnit
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -1067,41 +1158,17 @@ const ProjectDashboard = () => {
                                     <Eye className="h-4 w-4" />
                                   </button>
 
-                                  {/* Status Management Buttons */}
-                                  {booking.status === 'pending' && (
-                                    <>
-                                      <button
-                                        onClick={() => handleConfirmBooking(booking.id)}
-                                        className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                        title="Confirm Booking"
-                                      >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => handleCancelBooking(booking.id)}
-                                        className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                        title="Cancel Booking"
-                                      >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {booking.status === 'confirmed' && (
-                                    <button
-                                      onClick={() => handleCompleteBooking(booking.id)}
-                                      className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
-                                      title="Mark as Completed"
-                                    >
-                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                    </button>
-                                  )}
+                                  {/* Status Change Dropdown */}
+                                  <select
+                                    value={booking.status || 'pending'}
+                                    onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="completed">Completed</option>
+                                  </select>
                                 </div>
                               </td>
                             </tr>
@@ -1180,11 +1247,25 @@ const ProjectDashboard = () => {
                                       {booking.userName || 'Unknown User'}
                                     </div>
                                     <div className="text-xs text-gray-500 truncate">
-                                      {booking.userEmail || 'No email'}
+                                      📧 {booking.userEmail || 'No email'}
                                     </div>
                                     <div className="text-xs text-gray-400 truncate">
-                                      Unit {booking.userUnit || 'N/A'} • {booking.userPhone || 'No phone'}
+                                      📱 {booking.userPhone || 'No phone'}
                                     </div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      🏠 Unit {booking.userUnit || 'N/A'}
+                                    </div>
+                                    {/* Debug info - remove in production */}
+                                    {process.env.NODE_ENV === 'development' && (
+                                      <div className="text-xs text-red-400 mt-1">
+                                        Debug: {JSON.stringify({
+                                          userName: booking.userName,
+                                          userEmail: booking.userEmail,
+                                          userPhone: booking.userPhone,
+                                          userUnit: booking.userUnit
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -1251,6 +1332,18 @@ const ProjectDashboard = () => {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </button>
+
+                                  {/* Status Change Dropdown */}
+                                  <select
+                                    value={booking.status || 'pending'}
+                                    onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  >
+                                    <option value="pending">Pending</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="completed">Completed</option>
+                                  </select>
                                 </div>
                               </td>
                             </tr>
