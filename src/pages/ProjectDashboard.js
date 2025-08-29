@@ -160,6 +160,20 @@ const ProjectDashboard = () => {
     if (projectBookings && projectBookings.length > 0) {
       console.log('Project bookings updated:', projectBookings);
       console.log('Sample booking data:', projectBookings[0]);
+      
+      // Debug academy data specifically
+      const academyBookings = projectBookings.filter(b => 
+        b.type === 'academy' || b.academyId || b.academyName
+      );
+      console.log('Academy bookings found:', academyBookings);
+      console.log('Academy names:', [...new Set(academyBookings.map(b => b.academyName).filter(Boolean))]);
+      
+      // Debug court data specifically
+      const courtBookings = projectBookings.filter(b => 
+        b.type === 'court' || b.courtId || b.courtName
+      );
+      console.log('Court bookings found:', courtBookings);
+      console.log('Court names:', [...new Set(courtBookings.map(b => b.courtName).filter(Boolean))]);
     }
   }, [projectBookings]);
 
@@ -184,9 +198,9 @@ const ProjectDashboard = () => {
     if (bookingServiceFilter !== 'all') {
       filtered = filtered.filter(booking => {
         if (bookingServiceFilter === 'court') {
-          return booking.courtId || booking.type === 'court';
+          return booking.courtId || booking.type === 'court' || booking.courtName;
         } else if (bookingServiceFilter === 'academy') {
-          return booking.academyId || booking.type === 'academy';
+          return booking.academyId || booking.type === 'academy' || booking.academyName;
         }
         return true;
       });
@@ -197,7 +211,11 @@ const ProjectDashboard = () => {
     }
 
     if (academyFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.academyName === academyFilter);
+      filtered = filtered.filter(booking => 
+        booking.academyName === academyFilter || 
+        booking.academyId === academyFilter ||
+        (booking.type === 'academy' && booking.academyName === academyFilter)
+      );
     }
 
     if (bookingStatusFilter !== 'all') {
@@ -211,13 +229,13 @@ const ProjectDashboard = () => {
   const getUpcomingBookings = () => {
     const filtered = getFilteredBookings();
     const now = new Date();
-    
+
     return filtered.filter(booking => {
       // Skip completed or cancelled bookings
       if (booking.status === 'completed' || booking.status === 'cancelled') {
         return false;
       }
-      
+
       // If booking has a date, check if it's in the future
       if (booking.date) {
         try {
@@ -228,7 +246,7 @@ const ProjectDashboard = () => {
           return true;
         }
       }
-      
+
       // If no date but status is pending or confirmed, consider it upcoming
       return booking.status === 'pending' || booking.status === 'confirmed';
     });
@@ -237,13 +255,13 @@ const ProjectDashboard = () => {
   const getPastBookings = () => {
     const filtered = getFilteredBookings();
     const now = new Date();
-    
+
     return filtered.filter(booking => {
       // Include completed or cancelled bookings
       if (booking.status === 'completed' || booking.status === 'cancelled') {
         return true;
       }
-      
+
       // If booking has a date, check if it's in the past
       if (booking.date) {
         try {
@@ -254,7 +272,7 @@ const ProjectDashboard = () => {
           return false;
         }
       }
-      
+
       // If no date, don't include in past
       return false;
     });
@@ -271,9 +289,9 @@ const ProjectDashboard = () => {
       } else if (newStatus === 'completed') {
         await completeBooking(projectId, bookingId);
       }
-      
+
       console.log(`Booking ${bookingId} status changed to ${newStatus}`);
-      
+
       // Refresh bookings to get updated data
       await fetchBookings(projectId);
     } catch (error) {
@@ -917,6 +935,36 @@ const ProjectDashboard = () => {
               </div>
             </div>
 
+            {/* Debug Info - Remove in production */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h4>
+              <div className="text-xs text-yellow-700">
+                <p>Total Bookings: {projectBookings?.length || 0}</p>
+                <p>Upcoming: {getUpcomingBookings().length}</p>
+                <p>Past: {getPastBookings().length}</p>
+                <p>Academy Bookings: {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}</p>
+                <p>Court Bookings: {projectBookings?.filter(b => b.type === 'court' || b.courtId || b.courtName).length || 0}</p>
+                {projectBookings && projectBookings.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer">Sample Booking Data</summary>
+                    <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-auto">
+                      {JSON.stringify(projectBookings[0], null, 2)}
+                    </pre>
+                  </details>
+                )}
+                {projectBookings && projectBookings.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer">Academy Names Found</summary>
+                    <div className="mt-2 text-xs bg-white p-2 rounded border">
+                      {[...new Set(projectBookings.filter(b => b.academyName && b.academyName.trim() !== '').map(b => b.academyName))].map(name => (
+                        <div key={name}>• {name}</div>
+                      ))}
+                    </div>
+                  </details>
+                  )}
+              </div>
+            </div>
+
             {/* Search and Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -978,7 +1026,11 @@ const ProjectDashboard = () => {
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Academies</option>
-                  {projectBookings && [...new Set(projectBookings.filter(b => b.academyName).map(b => b.academyName))].map(academyName => (
+                  {projectBookings && [...new Set(
+                    projectBookings
+                      .filter(b => (b.academyName && b.academyName.trim() !== '') || b.academyId)
+                      .map(b => b.academyName || b.academyId)
+                  )].map(academyName => (
                     <option key={academyName} value={academyName}>{academyName}</option>
                   ))}
                 </select>
@@ -1005,7 +1057,7 @@ const ProjectDashboard = () => {
                     {getUpcomingBookings().length}
                   </span>
                 </div>
-                
+
                 {getUpcomingBookings().length > 0 ? (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto">
@@ -1050,15 +1102,12 @@ const ProjectDashboard = () => {
                                       {booking.userName || 'Unknown User'}
                                     </div>
                                     <div className="text-xs text-gray-500 truncate">
-                                      📧 {booking.userEmail || 'No email'}
+                                      {booking.userEmail || 'No email'}
                                     </div>
                                     <div className="text-xs text-gray-400 truncate">
-                                      📱 {booking.userPhone || 'No phone'}
+                                      {booking.userPhone || 'No phone'}
                                     </div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      🏠 Unit {booking.userUnit || 'N/A'}
-                                    </div>
-                                    
+
                                   </div>
                                 </div>
                               </td>
@@ -1083,7 +1132,7 @@ const ProjectDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
                                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span>{booking.date || 'No date'}</span>
+                                  <span>{booking.date || 'No date'}</span> <br />
                                   {booking.timeSlots && booking.timeSlots.length > 0 && (
                                     <span className="ml-2 text-xs text-gray-500">
                                       ({booking.timeSlots.join(', ')})
@@ -1104,7 +1153,7 @@ const ProjectDashboard = () => {
                                     : booking.status === 'cancelled'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-gray-100 text-gray-800'
-                                    }`}>
+                                  }`}>
                                   {booking.status || 'Unknown'}
                                 </span>
                               </td>
@@ -1159,7 +1208,7 @@ const ProjectDashboard = () => {
                     {getPastBookings().length}
                   </span>
                 </div>
-                
+
                 {getPastBookings().length > 0 ? (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto">
@@ -1204,13 +1253,10 @@ const ProjectDashboard = () => {
                                       {booking.userName || 'Unknown User'}
                                     </div>
                                     <div className="text-xs text-gray-500 truncate">
-                                      📧 {booking.userEmail || 'No email'}
+                                      {booking.userEmail || 'No email'}
                                     </div>
                                     <div className="text-xs text-gray-400 truncate">
-                                      📱 {booking.userPhone || 'No phone'}
-                                    </div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      🏠 Unit {booking.userUnit || 'N/A'}
+                                      {booking.userPhone || 'No phone'}
                                     </div>
                                   </div>
                                 </div>
@@ -1257,7 +1303,7 @@ const ProjectDashboard = () => {
                                     : booking.status === 'cancelled'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-gray-100 text-gray-800'
-                                    }`}>
+                                  }`}>
                                   {booking.status || 'Unknown'}
                                 </span>
                               </td>
@@ -2038,14 +2084,14 @@ const ProjectDashboard = () => {
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Current Status</label>
                     <div className="mt-2">
                       <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${selectedBookingForModal.status === 'confirmed'
-                          ? 'bg-green-100 text-green-800'
-                          : selectedBookingForModal.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : selectedBookingForModal.status === 'cancelled'
-                              ? 'bg-red-100 text-red-800'
-                              : selectedBookingForModal.status === 'completed'
-                                ? 'bg-purple-100 text-purple-800'
-                                : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-100 text-green-800'
+                        : selectedBookingForModal.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : selectedBookingForModal.status === 'cancelled'
+                            ? 'bg-red-100 text-red-800'
+                            : selectedBookingForModal.status === 'completed'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-gray-100 text-gray-800'
                         }`}>
                         {selectedBookingForModal.status || 'Unknown'}
                       </span>
