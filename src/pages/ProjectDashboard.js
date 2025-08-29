@@ -194,6 +194,59 @@ const ProjectDashboard = () => {
     return filtered;
   };
 
+  // Separate upcoming and past bookings
+  const getUpcomingBookings = () => {
+    const filtered = getFilteredBookings();
+    const now = new Date();
+    
+    return filtered.filter(booking => {
+      // Skip completed or cancelled bookings
+      if (booking.status === 'completed' || booking.status === 'cancelled') {
+        return false;
+      }
+      
+      // If booking has a date, check if it's in the future
+      if (booking.date) {
+        try {
+          const bookingDate = new Date(booking.date);
+          return bookingDate >= now;
+        } catch (error) {
+          // If date parsing fails, consider it upcoming
+          return true;
+        }
+      }
+      
+      // If no date but status is pending or confirmed, consider it upcoming
+      return booking.status === 'pending' || booking.status === 'confirmed';
+    });
+  };
+
+  const getPastBookings = () => {
+    const filtered = getFilteredBookings();
+    const now = new Date();
+    
+    return filtered.filter(booking => {
+      // Include completed or cancelled bookings
+      if (booking.status === 'completed' || booking.status === 'cancelled') {
+        return true;
+      }
+      
+      // If booking has a date, check if it's in the past
+      if (booking.date) {
+        try {
+          const bookingDate = new Date(booking.date);
+          return bookingDate < now;
+        } catch (error) {
+          // If date parsing fails, don't include in past
+          return false;
+        }
+      }
+      
+      // If no date, don't include in past
+      return false;
+    });
+  };
+
   const getProjectStats = () => {
     const totalUsers = projectUsers.length;
     const activeUsers = projectUsers.filter(user => user.registrationStatus === 'completed').length;
@@ -884,184 +937,353 @@ const ProjectDashboard = () => {
               </div>
             )}
 
-
-
-            {/* Bookings Table */}
+            {/* Upcoming Bookings Section */}
             {!bookingsLoading && !bookingsError && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          User
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Service
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Location
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date & Time
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Duration
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Price
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {getFilteredBookings().map((booking) => (
-                        <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <Users className="h-5 w-5 text-blue-600" />
-                                </div>
-                              </div>
-                              <div className="ml-3 min-w-0 flex-1">
-                                <div className="text-sm font-semibold text-gray-900 truncate">
-                                  {booking.userName || 'Unknown User'}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {booking.userEmail || 'No email'}
-                                </div>
-                                <div className="text-xs text-gray-400 truncate">
-                                  Unit {booking.userUnit || 'N/A'} • {booking.userPhone || 'No phone'}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex items-center">
-                              <span>
-                                {booking.type === 'court'
-                                  ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
-                                  : booking.type === 'academy'
-                                    ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
-                                    : 'Unknown Service'
-                                }
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex items-center">
-                              <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                              <span>{booking.courtLocation || 'No location'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                              <span>{booking.date || 'No date'}</span>
-                              {booking.timeSlots && booking.timeSlots.length > 0 && (
-                                <span className="ml-2 text-xs text-gray-500">
-                                  ({booking.timeSlots.join(', ')})
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {booking.duration ||
-                              (booking.startTime && booking.endTime
-                                ? `${booking.startTime} - ${booking.endTime}`
-                                : '1 hour'
-                              )
-                            }
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <span className="font-medium text-green-600">
-                              ${booking.totalPrice || 0}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
-                              ? 'bg-green-100 text-green-800'
-                              : booking.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : booking.status === 'cancelled'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
-                              {booking.status || 'Unknown'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleViewBooking(booking)}
-                                className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                title="View Details"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-
-                              {/* Status Management Buttons */}
-                              {booking.status === 'pending' && (
-                                <>
-                                  <button
-                                    onClick={() => handleConfirmBooking(booking.id)}
-                                    className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                    title="Confirm Booking"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelBooking(booking.id)}
-                                    className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                    title="Cancel Booking"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-
-                              {booking.status === 'confirmed' && (
-                                <button
-                                  onClick={() => handleCompleteBooking(booking.id)}
-                                  className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
-                                  title="Mark as Completed"
-                                >
-                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-xl font-semibold text-gray-900">Upcoming Bookings</h3>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                    {getUpcomingBookings().length}
+                  </span>
                 </div>
+                
+                {getUpcomingBookings().length > 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-blue-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              User
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Service
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Location
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Date & Time
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Duration
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Status
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {getUpcomingBookings().map((booking) => (
+                            <tr key={booking.id} className="hover:bg-blue-50 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <Users className="h-5 w-5 text-blue-600" />
+                                    </div>
+                                  </div>
+                                  <div className="ml-3 min-w-0 flex-1">
+                                    <div className="text-sm font-semibold text-gray-900 truncate">
+                                      {booking.userName || 'Unknown User'}
+                                    </div>
+                                    <div className="text-xs text-gray-500 truncate">
+                                      {booking.userEmail || 'No email'}
+                                    </div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      Unit {booking.userUnit || 'N/A'} • {booking.userPhone || 'No phone'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <span>
+                                    {booking.type === 'court'
+                                      ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
+                                      : booking.type === 'academy'
+                                        ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
+                                        : 'Unknown Service'
+                                    }
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                                  <span>{booking.courtLocation || 'No location'}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                                  <span>{booking.date || 'No date'}</span>
+                                  {booking.timeSlots && booking.timeSlots.length > 0 && (
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      ({booking.timeSlots.join(', ')})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {booking.duration ||
+                                  (booking.startTime && booking.endTime
+                                    ? `${booking.startTime} - ${booking.endTime}`
+                                    : '1 hour'
+                                  )
+                                }
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span className="font-medium text-green-600">
+                                  ${booking.totalPrice || 0}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : booking.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : booking.status === 'cancelled'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                  {booking.status || 'Unknown'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleViewBooking(booking)}
+                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
 
-                {/* Empty State */}
-                {getFilteredBookings().length === 0 && (
-                  <div className="text-center py-12">
-                    <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
-                    <p className="text-gray-600">
-                      {projectBookings && projectBookings.length > 0
-                        ? 'No bookings match your search criteria.'
-                        : 'Get started by creating your first booking.'
-                      }
-                    </p>
+                                  {/* Status Management Buttons */}
+                                  {booking.status === 'pending' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleConfirmBooking(booking.id)}
+                                        className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
+                                        title="Confirm Booking"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => handleCancelBooking(booking.id)}
+                                        className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                        title="Cancel Booking"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {booking.status === 'confirmed' && (
+                                    <button
+                                      onClick={() => handleCompleteBooking(booking.id)}
+                                      className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
+                                      title="Mark as Completed"
+                                    >
+                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                    <div className="text-center">
+                      <Calendar className="h-16 w-16 text-blue-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming bookings</h3>
+                      <p className="text-gray-600">All upcoming bookings have been completed or cancelled.</p>
+                    </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Past Bookings Section */}
+            {!bookingsLoading && !bookingsError && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-8 bg-gray-400 rounded-full"></div>
+                  <h3 className="text-xl font-semibold text-gray-900">Past Bookings</h3>
+                  <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                    {getPastBookings().length}
+                  </span>
+                </div>
+                
+                {getPastBookings().length > 0 ? (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              User
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Service
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Location
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date & Time
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Duration
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Price
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Status
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {getPastBookings().map((booking) => (
+                            <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                      <Users className="h-5 w-5 text-gray-600" />
+                                    </div>
+                                  </div>
+                                  <div className="ml-3 min-w-0 flex-1">
+                                    <div className="text-sm font-semibold text-gray-900 truncate">
+                                      {booking.userName || 'Unknown User'}
+                                    </div>
+                                    <div className="text-xs text-gray-500 truncate">
+                                      {booking.userEmail || 'No email'}
+                                    </div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      Unit {booking.userUnit || 'N/A'} • {booking.userPhone || 'No phone'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <span>
+                                    {booking.type === 'court'
+                                      ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
+                                      : booking.type === 'academy'
+                                        ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
+                                        : 'Unknown Service'
+                                    }
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                                  <span>{booking.courtLocation || 'No location'}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center">
+                                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                                  <span>{booking.date || 'No date'}</span>
+                                  {booking.timeSlots && booking.timeSlots.length > 0 && (
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      ({booking.timeSlots.join(', ')})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {booking.duration ||
+                                  (booking.startTime && booking.endTime
+                                    ? `${booking.startTime} - ${booking.endTime}`
+                                    : '1 hour'
+                                  )
+                                }
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span className="font-medium text-green-600">
+                                  ${booking.totalPrice || 0}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : booking.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : booking.status === 'cancelled'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                  {booking.status || 'Unknown'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleViewBooking(booking)}
+                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                    title="View Details"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                    <div className="text-center">
+                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No past bookings</h3>
+                      <p className="text-gray-600">No completed or cancelled bookings found.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Empty State for All Bookings */}
+            {!bookingsLoading && !bookingsError && getFilteredBookings().length === 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                <div className="text-center">
+                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
+                  <p className="text-gray-600">
+                    {projectBookings && projectBookings.length > 0
+                      ? 'No bookings match your search criteria.'
+                      : 'Get started by creating your first booking.'
+                    }
+                  </p>
+                </div>
               </div>
             )}
           </div>
