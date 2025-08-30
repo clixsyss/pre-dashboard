@@ -17,7 +17,6 @@ import {
   Package,
   Key,
   BarChart3,
-  Settings
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
