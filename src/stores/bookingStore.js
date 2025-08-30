@@ -14,11 +14,9 @@ export const useBookingStore = create((set, get) => ({
 
   fetchBookings: async (projectId, filters = {}) => {
     try {
-      console.log('fetchBookings called with:', { projectId, filters });
       set({ loading: true, error: null });
       
       const collectionPath = `projects/${projectId}/bookings`;
-      console.log('Collection path:', collectionPath);
       
       let q = collection(db, collectionPath);
       
@@ -44,13 +42,7 @@ export const useBookingStore = create((set, get) => ({
       // So we'll order by createdAt for all bookings, which both types have
       q = query(q, orderBy('createdAt', 'desc'));
       
-      console.log('Executing query...');
       const querySnapshot = await getDocs(q);
-      console.log('Query result:', { 
-        empty: querySnapshot.empty, 
-        size: querySnapshot.size,
-        docs: querySnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }))
-      });
       
       const bookingsData = querySnapshot.docs.map(docSnap => ({
         id: docSnap.id,
@@ -58,16 +50,13 @@ export const useBookingStore = create((set, get) => ({
       }));
       
       // Fetch user information for each booking
-      console.log('Fetching user information for bookings...');
       const enrichedBookings = await Promise.all(
         bookingsData.map(async (booking) => {
           try {
             if (booking.userId) {
-              console.log(`Fetching user data for userId: ${booking.userId}`);
               const userDoc = await getDoc(doc(db, 'users', booking.userId));
               if (userDoc.exists()) {
                 const userData = userDoc.data();
-                console.log(`User data for ${booking.userId}:`, userData);
                 const enrichedBooking = {
                   ...booking,
                   userName: userData.firstName && userData.lastName 
@@ -77,13 +66,12 @@ export const useBookingStore = create((set, get) => ({
                   userPhone: userData.mobile || 'No phone',
                   userUnit: userData.projects?.find(p => p.projectId === projectId)?.unit || 'N/A'
                 };
-                console.log(`Enriched booking:`, enrichedBooking);
                 return enrichedBooking;
               } else {
-                console.log(`No user document found for userId: ${booking.userId}`);
+                // User not found
               }
             } else {
-              console.log(`No userId found in booking:`, booking);
+              // No userId in booking
             }
             return {
               ...booking,
@@ -105,7 +93,6 @@ export const useBookingStore = create((set, get) => ({
         })
       );
       
-      console.log('Enriched bookings data:', enrichedBookings);
       set({ bookings: enrichedBookings });
       
     } catch (error) {

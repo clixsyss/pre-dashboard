@@ -19,7 +19,7 @@ import {
   BarChart3,
   Settings
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -57,8 +57,7 @@ const ProjectDashboard = () => {
   const [selectedBookingForModal, setSelectedBookingForModal] = useState(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   
-  // Local state for testing all bookings
-  const [allBookings, setAllBookings] = useState([]);
+
 
   // Service tabs configuration
   const serviceTabs = [
@@ -150,30 +149,6 @@ const ProjectDashboard = () => {
       fetchBookings(projectId);
     }
   }, [activeTab, projectId, fetchBookings]);
-
-  // Debug: Log when bookings data changes
-  useEffect(() => {
-    if (projectBookings && projectBookings.length > 0) {
-      console.log('Bookings data loaded:', projectBookings.length, 'bookings');
-      console.log('First booking sample:', projectBookings[0]);
-      
-      // Check for academy bookings
-      const academyBookings = projectBookings.filter(b => 
-        b.type === 'academy' || b.academyId || b.academyName
-      );
-      console.log('Academy bookings found:', academyBookings.length);
-      
-      // Check for court bookings
-      const courtBookings = projectBookings.filter(b => 
-        b.type === 'court' || b.courtId || b.courtName
-      );
-      console.log('Court bookings found:', courtBookings.length);
-    }
-  }, [projectBookings]);
-
-
-
-
 
   // Filter bookings based on search and filters
   const getFilteredBookings = () => {
@@ -379,85 +354,7 @@ const ProjectDashboard = () => {
     }
   };
 
-  // Function to fetch ALL bookings without user filtering
-  const fetchAllBookings = async (projectId) => {
-    try {
-      console.log('Fetching ALL bookings for project:', projectId);
-      setLoading(true);
-      
-      // Direct Firestore query to get all bookings
-      const collectionPath = `projects/${projectId}/bookings`;
-      const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
-      console.log('Raw query result:', querySnapshot.size, 'bookings');
-      
-      const allBookings = querySnapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data()
-      }));
-      
-      console.log('All bookings data:', allBookings);
-      
-      // Update local state with all bookings
-      // Note: This bypasses the user enrichment, but shows us the raw data
-      setAllBookings(allBookings);
-      
-    } catch (error) {
-      console.error('Error fetching all bookings:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // Function to test different project IDs to find academy bookings
-  const testDifferentProjects = async () => {
-    try {
-      console.log('Testing different projects for academy bookings...');
-      setLoading(true);
-      
-      // First, let's see what projects exist
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
-      const projects = projectsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      console.log('Available projects:', projects);
-      
-      // Test each project for academy bookings
-      for (const project of projects) {
-        console.log(`\n--- Testing Project: ${project.name} (${project.id}) ---`);
-        
-        try {
-          const bookingsRef = collection(db, `projects/${project.id}/bookings`);
-          const q = query(bookingsRef, where('type', '==', 'academy'));
-          const academySnapshot = await getDocs(q);
-          
-          console.log(`Project ${project.name}: ${academySnapshot.size} academy bookings found`);
-          
-          if (academySnapshot.size > 0) {
-            const academyBookings = academySnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            console.log('Academy bookings found:', academyBookings);
-            
-            // Show this in the UI
-            setAllBookings(academyBookings);
-            break; // Found academy bookings, stop searching
-          }
-        } catch (error) {
-          console.error(`Error checking project ${project.id}:`, error);
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error testing different projects:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -1002,18 +899,7 @@ const ProjectDashboard = () => {
                   </svg>
                   Refresh
                 </button>
-                <button
-                  onClick={() => fetchAllBookings(projectId)}
-                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
-                >
-                  🔍 Fetch ALL Bookings
-                </button>
-                <button
-                  onClick={() => testDifferentProjects()}
-                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-                >
-                  🧪 Test Different Projects
-                </button>
+
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                   <Plus className="h-4 w-4 mr-2 inline" />
                   New Booking
@@ -1069,82 +955,6 @@ const ProjectDashboard = () => {
                       </p>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Temporary Debug Info - Remove after fixing */}
-            {!bookingsLoading && !bookingsError && projectBookings && projectBookings.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug: Data Structure Analysis</h4>
-                <div className="text-xs text-yellow-700 space-y-1">
-                  <p><strong>Current Project ID:</strong> {projectId}</p>
-                  <p><strong>Total Bookings:</strong> {projectBookings.length}</p>
-                  <p><strong>Court Bookings:</strong> {projectBookings.filter(b => b.type === 'court' || b.courtId || b.courtName).length}</p>
-                  <p><strong>Academy Bookings:</strong> {projectBookings.filter(b => b.type === 'academy' || b.academyId || b.academyName).length}</p>
-                  <p><strong>Bookings with type field:</strong> {projectBookings.filter(b => b.type).length}</p>
-                  <p><strong>Bookings with courtName:</strong> {projectBookings.filter(b => b.courtName).length}</p>
-                  <p><strong>Bookings with academyName:</strong> {projectBookings.filter(b => b.academyName).length}</p>
-                  <p><strong>User IDs in Bookings:</strong> {[...new Set(projectBookings.map(b => b.userId))].join(', ') || 'None'}</p>
-                  <p><strong>Sample Booking Data:</strong></p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer">Click to see first booking</summary>
-                    <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-auto">
-                      {JSON.stringify(projectBookings[0], null, 2)}
-                    </pre>
-                  </details>
-                  <p><strong>All Bookings Data:</strong></p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer">Click to see all bookings</summary>
-                    <div className="mt-2 space-y-2">
-                      {projectBookings.map((booking, index) => (
-                        <div key={index} className="bg-white p-2 rounded border">
-                          <p><strong>Booking {index + 1}:</strong></p>
-                          <pre className="text-xs overflow-auto">
-                            {JSON.stringify(booking, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                  <p><strong>Filter Options Available:</strong></p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer">Click to see filter options</summary>
-                    <div className="mt-2 space-y-1">
-                      <p><strong>Court Names:</strong> {[...new Set(projectBookings.filter(b => b.courtName).map(b => b.courtName))].join(', ') || 'None'}</p>
-                      <p><strong>Academy Names:</strong> {[...new Set(projectBookings.filter(b => b.academyName).map(b => b.academyName))].join(', ') || 'None'}</p>
-                      <p><strong>Types:</strong> {[...new Set(projectBookings.map(b => b.type))].join(', ') || 'None'}</p>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            )}
-
-            {/* Comparison: All Bookings vs Store Bookings */}
-            {allBookings.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-blue-800 mb-2">Comparison: Raw Data vs Store Data</h4>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <p><strong>Raw Total Bookings:</strong> {allBookings.length}</p>
-                  <p><strong>Store Total Bookings:</strong> {projectBookings?.length || 0}</p>
-                  <p><strong>Raw Academy Bookings:</strong> {allBookings.filter(b => b.type === 'academy' || b.academyId || b.academyName).length}</p>
-                  <p><strong>Store Academy Bookings:</strong> {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}</p>
-                  <p><strong>Raw User IDs:</strong> {[...new Set(allBookings.map(b => b.userId))].join(', ') || 'None'}</p>
-                  <p><strong>Store User IDs:</strong> {[...new Set(projectBookings?.map(b => b.userId) || [])].join(', ') || 'None'}</p>
-                  <p><strong>Raw Data Sample:</strong></p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer">Click to see raw data</summary>
-                    <div className="mt-2 space-y-2">
-                      {allBookings.map((booking, index) => (
-                        <div key={index} className="bg-white p-2 rounded border">
-                          <p><strong>Raw Booking {index + 1}:</strong></p>
-                          <pre className="text-xs overflow-auto">
-                            {JSON.stringify(booking, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
                 </div>
               </div>
             )}
@@ -1254,6 +1064,16 @@ const ProjectDashboard = () => {
                   <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
                     {getUpcomingBookings().length}
                   </span>
+                  <div className="flex items-center space-x-2 text-xs text-gray-500">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                      <span>Court</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                      <span>Academy</span>
+                    </div>
+                  </div>
                 </div>
 
                 {getUpcomingBookings().length > 0 ? (
@@ -1289,8 +1109,8 @@ const ProjectDashboard = () => {
                           {getUpcomingBookings().map((booking) => (
                             <tr key={booking.id} className={`hover:transition-colors ${
                               booking.type === 'academy' 
-                                ? 'hover:bg-green-50 bg-green-25' 
-                                : 'hover:bg-blue-50'
+                                ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500' 
+                                : 'hover:bg-blue-50 border-l-4 border-l-blue-500'
                             }`}>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -1315,6 +1135,9 @@ const ProjectDashboard = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
+                                  <div className={`w-2 h-2 rounded-full mr-2 ${
+                                    booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
+                                  }`}></div>
                                   <span>
                                     {booking.type === 'court'
                                       ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
@@ -1409,6 +1232,16 @@ const ProjectDashboard = () => {
                   <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
                     {getPastBookings().length}
                   </span>
+                  <div className="flex items-center space-x-2 text-xs text-gray-500">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                      <span>Court</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                      <span>Academy</span>
+                    </div>
+                  </div>
                 </div>
 
                 {getPastBookings().length > 0 ? (
@@ -1444,8 +1277,8 @@ const ProjectDashboard = () => {
                           {getPastBookings().map((booking) => (
                             <tr key={booking.id} className={`hover:transition-colors ${
                               booking.type === 'academy' 
-                                ? 'hover:bg-green-50 bg-green-25' 
-                                : 'hover:bg-gray-50'
+                                ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500' 
+                                : 'hover:bg-gray-50 border-l-4 border-l-blue-500'
                             }`}>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -1469,6 +1302,9 @@ const ProjectDashboard = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
+                                  <div className={`w-2 h-2 rounded-full mr-2 ${
+                                    booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
+                                  }`}></div>
                                   <span>
                                     {booking.type === 'court'
                                       ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
