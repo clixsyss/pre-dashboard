@@ -1287,12 +1287,16 @@ const ProjectDashboard = () => {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {getUpcomingBookings().map((booking) => (
-                            <tr key={booking.id} className="hover:bg-blue-50 transition-colors">
+                            <tr key={booking.id} className={`hover:transition-colors ${
+                              booking.type === 'academy' 
+                                ? 'hover:bg-green-50 bg-green-25' 
+                                : 'hover:bg-blue-50'
+                            }`}>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
                                     <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                      <Users className="h-5 w-5 text-blue-600" />
+                                      <Users className="h-5 w-5 text-gray-600" />
                                     </div>
                                   </div>
                                   <div className="ml-3 min-w-0 flex-1">
@@ -1340,7 +1344,7 @@ const ProjectDashboard = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <span className="font-medium text-green-600">
-                                  ${booking.totalPrice || 0}
+                                  ${booking.totalPrice || booking.totalCost || 0}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
@@ -1438,7 +1442,11 @@ const ProjectDashboard = () => {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {getPastBookings().map((booking) => (
-                            <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
+                            <tr key={booking.id} className={`hover:transition-colors ${
+                              booking.type === 'academy' 
+                                ? 'hover:bg-green-50 bg-green-25' 
+                                : 'hover:bg-gray-50'
+                            }`}>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
@@ -1490,7 +1498,7 @@ const ProjectDashboard = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <span className="font-medium text-green-600">
-                                  ${booking.totalPrice || 0}
+                                  ${booking.totalPrice || booking.totalCost || 0}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
