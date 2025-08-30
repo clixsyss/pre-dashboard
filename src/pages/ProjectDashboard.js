@@ -19,7 +19,7 @@ import {
   BarChart3,
   Settings
 } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -56,6 +56,9 @@ const ProjectDashboard = () => {
   // Modal state
   const [selectedBookingForModal, setSelectedBookingForModal] = useState(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  
+  // Local state for testing all bookings
+  const [allBookings, setAllBookings] = useState([]);
 
   // Service tabs configuration
   const serviceTabs = [
@@ -72,19 +75,13 @@ const ProjectDashboard = () => {
   ];
 
   useEffect(() => {
-    console.log('ProjectDashboard useEffect - projectId:', projectId);
     if (projectId) {
       const loadData = async () => {
         try {
-          console.log('Loading data for project:', projectId);
-
           const projectDoc = await getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId)));
           if (!projectDoc.empty) {
             const projectData = { id: projectId, ...projectDoc.docs[0].data() };
-            console.log('Project data loaded:', projectData);
             setProject(projectData);
-          } else {
-            console.log('No project found with ID:', projectId);
           }
 
           // Fetch users who belong to this project
@@ -103,7 +100,6 @@ const ProjectDashboard = () => {
             return false;
           });
 
-          console.log('Project users loaded:', projectUsersData.length);
           setProjectUsers(projectUsersData);
           setFilteredUsers(projectUsersData);
         } catch (err) {
@@ -114,15 +110,10 @@ const ProjectDashboard = () => {
       };
 
       loadData();
-    } else {
-      console.log('No projectId provided');
     }
   }, [projectId]);
 
-  // Log when activeTab changes
-  useEffect(() => {
-    console.log('Active tab changed to:', activeTab);
-  }, [activeTab]);
+
 
   useEffect(() => {
     if (searchTerm || statusFilter !== 'all') {
@@ -148,34 +139,39 @@ const ProjectDashboard = () => {
 
   // Fetch project bookings when bookings tab is active
   useEffect(() => {
-    console.log('Bookings useEffect triggered:', { activeTab, projectId });
     if (activeTab === 'bookings' && projectId) {
-      console.log('Calling fetchBookings with projectId:', projectId);
+      console.log('Fetching bookings for project:', projectId);
+      // Reset filters when fetching new data
+      setCourtFilter('all');
+      setAcademyFilter('all');
+      setBookingServiceFilter('all');
+      setBookingStatusFilter('all');
+      setBookingSearchTerm('');
       fetchBookings(projectId);
     }
   }, [activeTab, projectId, fetchBookings]);
 
-  // Debug: Log booking data when it changes
+  // Debug: Log when bookings data changes
   useEffect(() => {
     if (projectBookings && projectBookings.length > 0) {
-      console.log('Project bookings updated:', projectBookings);
-      console.log('Sample booking data:', projectBookings[0]);
+      console.log('Bookings data loaded:', projectBookings.length, 'bookings');
+      console.log('First booking sample:', projectBookings[0]);
       
-      // Debug academy data specifically
+      // Check for academy bookings
       const academyBookings = projectBookings.filter(b => 
         b.type === 'academy' || b.academyId || b.academyName
       );
-      console.log('Academy bookings found:', academyBookings);
-      console.log('Academy names:', [...new Set(academyBookings.map(b => b.academyName).filter(Boolean))]);
+      console.log('Academy bookings found:', academyBookings.length);
       
-      // Debug court data specifically
+      // Check for court bookings
       const courtBookings = projectBookings.filter(b => 
         b.type === 'court' || b.courtId || b.courtName
       );
-      console.log('Court bookings found:', courtBookings);
-      console.log('Court names:', [...new Set(courtBookings.map(b => b.courtName).filter(Boolean))]);
+      console.log('Court bookings found:', courtBookings.length);
     }
   }, [projectBookings]);
+
+
 
 
 
@@ -198,24 +194,30 @@ const ProjectDashboard = () => {
     if (bookingServiceFilter !== 'all') {
       filtered = filtered.filter(booking => {
         if (bookingServiceFilter === 'court') {
-          return booking.courtId || booking.type === 'court' || booking.courtName;
+          // Check if it's a court booking
+          return booking.type === 'court' || booking.courtId || booking.courtName;
         } else if (bookingServiceFilter === 'academy') {
-          return booking.academyId || booking.type === 'academy' || booking.academyName;
+          // Check if it's an academy booking
+          return booking.type === 'academy' || booking.academyId || booking.academyName;
         }
         return true;
       });
     }
 
     if (courtFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.courtName === courtFilter);
+      filtered = filtered.filter(booking => {
+        // Only filter court bookings
+        const isCourt = booking.type === 'court' || booking.courtId || booking.courtName;
+        return isCourt && booking.courtName === courtFilter;
+      });
     }
 
     if (academyFilter !== 'all') {
-      filtered = filtered.filter(booking => 
-        booking.academyName === academyFilter || 
-        booking.academyId === academyFilter ||
-        (booking.type === 'academy' && booking.academyName === academyFilter)
-      );
+      filtered = filtered.filter(booking => {
+        // Only filter academy bookings
+        const isAcademy = booking.type === 'academy' || booking.academyId || booking.academyName;
+        return isAcademy && (booking.academyName === academyFilter || booking.academyId === academyFilter);
+      });
     }
 
     if (bookingStatusFilter !== 'all') {
@@ -290,8 +292,6 @@ const ProjectDashboard = () => {
         await completeBooking(projectId, bookingId);
       }
 
-      console.log(`Booking ${bookingId} status changed to ${newStatus}`);
-
       // Refresh bookings to get updated data
       await fetchBookings(projectId);
     } catch (error) {
@@ -320,15 +320,12 @@ const ProjectDashboard = () => {
   const handleUserAction = (action, user) => {
     switch (action) {
       case 'view':
-        console.log('View user:', user.id);
         // TODO: Implement user view modal
         break;
       case 'edit':
-        console.log('Edit user:', user.id);
         // TODO: Implement user edit modal
         break;
       case 'delete':
-        console.log('Delete user:', user.id);
         // TODO: Implement user delete confirmation
         break;
       default:
@@ -361,7 +358,6 @@ const ProjectDashboard = () => {
   const handleConfirmBooking = async (bookingId) => {
     try {
       await confirmBooking(projectId, bookingId);
-      console.log('Booking confirmed:', bookingId);
     } catch (error) {
       console.error('Error confirming booking:', error);
     }
@@ -370,7 +366,6 @@ const ProjectDashboard = () => {
   const handleCancelBooking = async (bookingId) => {
     try {
       await cancelBooking(projectId, bookingId);
-      console.log('Booking cancelled:', bookingId);
     } catch (error) {
       console.error('Error cancelling booking:', error);
     }
@@ -379,9 +374,88 @@ const ProjectDashboard = () => {
   const handleCompleteBooking = async (bookingId) => {
     try {
       await completeBooking(projectId, bookingId);
-      console.log('Booking completed:', bookingId);
     } catch (error) {
       console.error('Error completing booking:', error);
+    }
+  };
+
+  // Function to fetch ALL bookings without user filtering
+  const fetchAllBookings = async (projectId) => {
+    try {
+      console.log('Fetching ALL bookings for project:', projectId);
+      setLoading(true);
+      
+      // Direct Firestore query to get all bookings
+      const collectionPath = `projects/${projectId}/bookings`;
+      const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      console.log('Raw query result:', querySnapshot.size, 'bookings');
+      
+      const allBookings = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      
+      console.log('All bookings data:', allBookings);
+      
+      // Update local state with all bookings
+      // Note: This bypasses the user enrichment, but shows us the raw data
+      setAllBookings(allBookings);
+      
+    } catch (error) {
+      console.error('Error fetching all bookings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to test different project IDs to find academy bookings
+  const testDifferentProjects = async () => {
+    try {
+      console.log('Testing different projects for academy bookings...');
+      setLoading(true);
+      
+      // First, let's see what projects exist
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      const projects = projectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Available projects:', projects);
+      
+      // Test each project for academy bookings
+      for (const project of projects) {
+        console.log(`\n--- Testing Project: ${project.name} (${project.id}) ---`);
+        
+        try {
+          const bookingsRef = collection(db, `projects/${project.id}/bookings`);
+          const q = query(bookingsRef, where('type', '==', 'academy'));
+          const academySnapshot = await getDocs(q);
+          
+          console.log(`Project ${project.name}: ${academySnapshot.size} academy bookings found`);
+          
+          if (academySnapshot.size > 0) {
+            const academyBookings = academySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            console.log('Academy bookings found:', academyBookings);
+            
+            // Show this in the UI
+            setAllBookings(academyBookings);
+            break; // Found academy bookings, stop searching
+          }
+        } catch (error) {
+          console.error(`Error checking project ${project.id}:`, error);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error testing different projects:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -928,6 +1002,18 @@ const ProjectDashboard = () => {
                   </svg>
                   Refresh
                 </button>
+                <button
+                  onClick={() => fetchAllBookings(projectId)}
+                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                >
+                  🔍 Fetch ALL Bookings
+                </button>
+                <button
+                  onClick={() => testDifferentProjects()}
+                  className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                >
+                  🧪 Test Different Projects
+                </button>
                 <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                   <Plus className="h-4 w-4 mr-2 inline" />
                   New Booking
@@ -935,35 +1021,133 @@ const ProjectDashboard = () => {
               </div>
             </div>
 
-            {/* Debug Info - Remove in production */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug Info</h4>
-              <div className="text-xs text-yellow-700">
-                <p>Total Bookings: {projectBookings?.length || 0}</p>
-                <p>Upcoming: {getUpcomingBookings().length}</p>
-                <p>Past: {getPastBookings().length}</p>
-                <p>Academy Bookings: {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}</p>
-                <p>Court Bookings: {projectBookings?.filter(b => b.type === 'court' || b.courtId || b.courtName).length || 0}</p>
-                {projectBookings && projectBookings.length > 0 && (
+            {/* Bookings Summary */}
+            {!bookingsLoading && !bookingsError && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Calendar className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-600">Total Bookings</p>
+                      <p className="text-2xl font-bold text-gray-900">{projectBookings?.length || 0}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Calendar className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-600">Upcoming</p>
+                      <p className="text-2xl font-bold text-gray-900">{getUpcomingBookings().length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <Calendar className="h-6 w-6 text-gray-600" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-600">Past</p>
+                      <p className="text-2xl font-bold text-gray-900">{getPastBookings().length}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <School className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-600">Academy</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Temporary Debug Info - Remove after fixing */}
+            {!bookingsLoading && !bookingsError && projectBookings && projectBookings.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-yellow-800 mb-2">Debug: Data Structure Analysis</h4>
+                <div className="text-xs text-yellow-700 space-y-1">
+                  <p><strong>Current Project ID:</strong> {projectId}</p>
+                  <p><strong>Total Bookings:</strong> {projectBookings.length}</p>
+                  <p><strong>Court Bookings:</strong> {projectBookings.filter(b => b.type === 'court' || b.courtId || b.courtName).length}</p>
+                  <p><strong>Academy Bookings:</strong> {projectBookings.filter(b => b.type === 'academy' || b.academyId || b.academyName).length}</p>
+                  <p><strong>Bookings with type field:</strong> {projectBookings.filter(b => b.type).length}</p>
+                  <p><strong>Bookings with courtName:</strong> {projectBookings.filter(b => b.courtName).length}</p>
+                  <p><strong>Bookings with academyName:</strong> {projectBookings.filter(b => b.academyName).length}</p>
+                  <p><strong>User IDs in Bookings:</strong> {[...new Set(projectBookings.map(b => b.userId))].join(', ') || 'None'}</p>
+                  <p><strong>Sample Booking Data:</strong></p>
                   <details className="mt-2">
-                    <summary className="cursor-pointer">Sample Booking Data</summary>
+                    <summary className="cursor-pointer">Click to see first booking</summary>
                     <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-auto">
                       {JSON.stringify(projectBookings[0], null, 2)}
                     </pre>
                   </details>
-                )}
-                {projectBookings && projectBookings.length > 0 && (
+                  <p><strong>All Bookings Data:</strong></p>
                   <details className="mt-2">
-                    <summary className="cursor-pointer">Academy Names Found</summary>
-                    <div className="mt-2 text-xs bg-white p-2 rounded border">
-                      {[...new Set(projectBookings.filter(b => b.academyName && b.academyName.trim() !== '').map(b => b.academyName))].map(name => (
-                        <div key={name}>• {name}</div>
+                    <summary className="cursor-pointer">Click to see all bookings</summary>
+                    <div className="mt-2 space-y-2">
+                      {projectBookings.map((booking, index) => (
+                        <div key={index} className="bg-white p-2 rounded border">
+                          <p><strong>Booking {index + 1}:</strong></p>
+                          <pre className="text-xs overflow-auto">
+                            {JSON.stringify(booking, null, 2)}
+                          </pre>
+                        </div>
                       ))}
                     </div>
                   </details>
-                  )}
+                  <p><strong>Filter Options Available:</strong></p>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer">Click to see filter options</summary>
+                    <div className="mt-2 space-y-1">
+                      <p><strong>Court Names:</strong> {[...new Set(projectBookings.filter(b => b.courtName).map(b => b.courtName))].join(', ') || 'None'}</p>
+                      <p><strong>Academy Names:</strong> {[...new Set(projectBookings.filter(b => b.academyName).map(b => b.academyName))].join(', ') || 'None'}</p>
+                      <p><strong>Types:</strong> {[...new Set(projectBookings.map(b => b.type))].join(', ') || 'None'}</p>
+                    </div>
+                  </details>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Comparison: All Bookings vs Store Bookings */}
+            {allBookings.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-blue-800 mb-2">Comparison: Raw Data vs Store Data</h4>
+                <div className="text-xs text-blue-700 space-y-1">
+                  <p><strong>Raw Total Bookings:</strong> {allBookings.length}</p>
+                  <p><strong>Store Total Bookings:</strong> {projectBookings?.length || 0}</p>
+                  <p><strong>Raw Academy Bookings:</strong> {allBookings.filter(b => b.type === 'academy' || b.academyId || b.academyName).length}</p>
+                  <p><strong>Store Academy Bookings:</strong> {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}</p>
+                  <p><strong>Raw User IDs:</strong> {[...new Set(allBookings.map(b => b.userId))].join(', ') || 'None'}</p>
+                  <p><strong>Store User IDs:</strong> {[...new Set(projectBookings?.map(b => b.userId) || [])].join(', ') || 'None'}</p>
+                  <p><strong>Raw Data Sample:</strong></p>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer">Click to see raw data</summary>
+                    <div className="mt-2 space-y-2">
+                      {allBookings.map((booking, index) => (
+                        <div key={index} className="bg-white p-2 rounded border">
+                          <p><strong>Raw Booking {index + 1}:</strong></p>
+                          <pre className="text-xs overflow-auto">
+                            {JSON.stringify(booking, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              </div>
+            )}
 
             {/* Search and Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1014,7 +1198,16 @@ const ProjectDashboard = () => {
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Courts</option>
-                  {projectBookings && [...new Set(projectBookings.filter(b => b.courtName).map(b => b.courtName))].map(courtName => (
+                  {projectBookings && [...new Set(
+                    projectBookings
+                      .filter(b => {
+                        // Check if it's a court booking
+                        const isCourt = b.type === 'court' || b.courtId || b.courtName;
+                        return isCourt && b.courtName;
+                      })
+                      .map(b => b.courtName)
+                      .filter(Boolean) // Remove any undefined/null values
+                  )].map(courtName => (
                     <option key={courtName} value={courtName}>{courtName}</option>
                   ))}
                 </select>
@@ -1028,8 +1221,13 @@ const ProjectDashboard = () => {
                   <option value="all">All Academies</option>
                   {projectBookings && [...new Set(
                     projectBookings
-                      .filter(b => (b.academyName && b.academyName.trim() !== '') || b.academyId)
+                      .filter(b => {
+                        // Check if it's an academy booking
+                        const isAcademy = b.type === 'academy' || b.academyId || b.academyName;
+                        return isAcademy && (b.academyName || b.academyId);
+                      })
                       .map(b => b.academyName || b.academyId)
+                      .filter(Boolean) // Remove any undefined/null values
                   )].map(academyName => (
                     <option key={academyName} value={academyName}>{academyName}</option>
                   ))}
@@ -1997,11 +2195,55 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
+              {/* Academy-specific Information Section */}
+              {selectedBookingForModal.type === 'academy' && (
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                    <School className="h-5 w-5 mr-2 text-blue-600" />
+                    Student Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Student Name</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedBookingForModal.studentName || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Student Age</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedBookingForModal.studentAge || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Parent/Guardian</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedBookingForModal.parentName || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedBookingForModal.category || 'N/A'}
+                      </p>
+                    </div>
+                    {selectedBookingForModal.notes && (
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Notes</label>
+                        <p className="text-sm text-gray-900 mt-1">
+                          {selectedBookingForModal.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Booking Details Section */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
                   <MapPin className="h-5 w-5 mr-2 text-green-600" />
-                  Booking Details
+                  {selectedBookingForModal.type === 'court' ? 'Court Details' : 'Program Details'}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {selectedBookingForModal.type === 'court' ? (
@@ -2024,6 +2266,12 @@ const ProjectDashboard = () => {
                           {selectedBookingForModal.courtLocation || 'No location'}
                         </p>
                       </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Court Type</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {selectedBookingForModal.courtType || 'N/A'}
+                        </p>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -2037,6 +2285,18 @@ const ProjectDashboard = () => {
                         <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Program</label>
                         <p className="text-sm text-gray-900 font-medium mt-1">
                           {selectedBookingForModal.programName || 'Unknown Program'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Age Group</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {selectedBookingForModal.ageGroup || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pricing Type</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {selectedBookingForModal.pricingType || 'N/A'}
                         </p>
                       </div>
                     </>
@@ -2065,7 +2325,7 @@ const ProjectDashboard = () => {
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Price</label>
                     <p className="text-sm text-green-600 font-bold mt-1">
-                      ${selectedBookingForModal.totalPrice || 0}
+                      ${selectedBookingForModal.totalPrice || selectedBookingForModal.totalCost || 0}
                     </p>
                   </div>
                 </div>

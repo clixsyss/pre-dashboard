@@ -39,8 +39,10 @@ export const useBookingStore = create((set, get) => ({
         q = query(q, where('date', '==', filters.date));
       }
       
-      // Order by date only (since timeSlots is an array)
-      q = query(q, orderBy('date'));
+      // Order by date for court bookings, createdAt for academy bookings
+      // Note: We can't use orderBy on different fields in the same query
+      // So we'll order by createdAt for all bookings, which both types have
+      q = query(q, orderBy('createdAt', 'desc'));
       
       console.log('Executing query...');
       const querySnapshot = await getDocs(q);
