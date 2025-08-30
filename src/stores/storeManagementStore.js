@@ -75,13 +75,15 @@ export const useStoreManagementStore = create((set, get) => ({
 
       const newStore = {
         name: storeData.name,
-        description: storeData.description,
         location: storeData.location,
-        type: storeData.type, // retail, food, sports, etc.
+        averageDeliveryTime: storeData.averageDeliveryTime,
         image: imageUrl,
         contactInfo: storeData.contactInfo || {},
-        operatingHours: storeData.operatingHours || {},
-        status: storeData.status || 'active',
+        workingDays: storeData.workingDays || {},
+        workingHours: storeData.workingHours || {},
+        specialNotes: storeData.specialNotes || '',
+        rating: 0, // Will be implemented later with user ratings
+        reviewCount: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -103,38 +105,111 @@ export const useStoreManagementStore = create((set, get) => ({
     }
   },
 
-  addProduct: async (projectId, productData) => {
+  updateStore: async (projectId, storeId, storeData) => {
+    try {
+      set({ loading: true, error: null });
+      const storeRef = doc(db, `projects/${projectId}/stores`, storeId);
+      
+      let imageUrl = storeData.image;
+      if (storeData.imageFile) {
+        imageUrl = await get().uploadImage(storeData.imageFile, `projects/${projectId}/stores/${storeData.imageFile.name}`);
+      }
+
+      const updateData = {
+        name: storeData.name,
+        location: storeData.location,
+        averageDeliveryTime: storeData.averageDeliveryTime,
+        contactInfo: storeData.contactInfo || {},
+        workingDays: storeData.workingDays || {},
+        workingHours: storeData.workingHours || {},
+        specialNotes: storeData.specialNotes || '',
+        updatedAt: serverTimestamp()
+      };
+
+      if (imageUrl) {
+        updateData.image = imageUrl;
+      }
+
+      await updateDoc(storeRef, updateData);
+
+      set((state) => ({
+        stores: state.stores.map(store => 
+          store.id === storeId ? { ...store, ...updateData } : store
+        )
+      }));
+
+      return storeId;
+    } catch (error) {
+      console.error("Error updating store:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  deleteStore: async (projectId, storeId) => {
+    try {
+      set({ loading: true, error: null });
+      await deleteDoc(doc(db, `projects/${projectId}/stores`, storeId));
+      
+      set((state) => ({
+        stores: state.stores.filter(store => store.id !== storeId),
+        products: state.products.filter(product => product.storeId !== storeId)
+      }));
+
+      return storeId;
+    } catch (error) {
+      console.error("Error deleting store:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  deleteStoreProduct: async (projectId, storeId, productId) => {
+    try {
+      set({ loading: true, error: null });
+      await deleteDoc(doc(db, `projects/${projectId}/stores/${storeId}/products`, productId));
+      
+      set((state) => ({
+        products: state.products.filter(product => product.id !== productId)
+      }));
+
+      return productId;
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  addProduct: async (projectId, storeId, productData) => {
     try {
       set({ loading: true, error: null });
       let imageUrl = "";
       if (productData.imageFile) {
-        imageUrl = await get().uploadImage(productData.imageFile, `projects/${projectId}/products/${productData.imageFile.name}`);
+        imageUrl = await get().uploadImage(productData.imageFile, `projects/${projectId}/stores/${storeId}/products/${productData.imageFile.name}`);
       }
 
       const newProduct = {
         name: productData.name,
-        description: productData.description,
+        description: productData.description || '',
         category: productData.category,
         price: productData.price,
-        cost: productData.cost || 0,
-        sku: productData.sku,
-        barcode: productData.barcode || '',
         image: imageUrl,
-        stockQuantity: productData.stockQuantity || 0,
-        minStockLevel: productData.minStockLevel || 5,
-        maxStockLevel: productData.maxStockLevel || 100,
-        unit: productData.unit || 'piece',
-        weight: productData.weight || 0,
-        dimensions: productData.dimensions || {},
-        tags: productData.tags || [],
-        status: productData.status || 'active',
+        storeId: storeId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, `projects/${projectId}/products`), newProduct);
+      const docRef = await addDoc(collection(db, `projects/${projectId}/stores/${storeId}/products`), newProduct);
       newProduct.id = docRef.id;
 
+      // Update local state
       set((state) => ({
         products: [...state.products, newProduct]
       }));
@@ -146,6 +221,22 @@ export const useStoreManagementStore = create((set, get) => ({
       throw error;
     } finally {
       set({ loading: false });
+    }
+  },
+
+  fetchStoreProducts: async (projectId, storeId) => {
+    try {
+      const querySnapshot = await getDocs(collection(db, `projects/${projectId}/stores/${storeId}/products`));
+      const productData = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      
+      set((state) => ({
+        products: [...state.products.filter(p => p.storeId !== storeId), ...productData]
+      }));
+
+      return productData;
+    } catch (error) {
+      console.error("Error fetching store products:", error);
+      return [];
     }
   },
 
