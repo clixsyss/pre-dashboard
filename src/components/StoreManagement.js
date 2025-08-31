@@ -146,6 +146,8 @@ const StoreManagement = ({ projectId }) => {
         name: item.name || '',
         location: item.location || '',
         averageDeliveryTime: item.averageDeliveryTime || '',
+        deliveryFee: item.deliveryFee || 0, // Add delivery fee field
+        status: item.status || 'active', // Add status field
         workingDays: {
           monday: item.workingHours?.monday ? true : false,
           tuesday: item.workingHours?.tuesday ? true : false,
@@ -204,6 +206,8 @@ const StoreManagement = ({ projectId }) => {
     name: '',
     location: '',
     averageDeliveryTime: '',
+    deliveryFee: 0, // Add delivery fee field
+    status: 'active', // Add status field
     workingDays: {
       monday: true,
       tuesday: true,
@@ -264,6 +268,8 @@ const StoreManagement = ({ projectId }) => {
       name: '',
       location: '',
       averageDeliveryTime: '',
+      deliveryFee: 0, // Add delivery fee field
+      status: 'active', // Add status field
       workingDays: {
         monday: true,
         tuesday: true,
@@ -399,13 +405,7 @@ const StoreManagement = ({ projectId }) => {
             <Plus className="h-4 w-4 mr-2" />
             Add Store
           </button>
-          <button
-            onClick={() => openAddModal('product')}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center"
-          >
-            <Package className="h-4 w-4 mr-2" />
-            Add Product
-          </button>
+          
         </div>
       </div>
 
@@ -588,6 +588,19 @@ const StoreManagement = ({ projectId }) => {
                           <div className="flex items-center text-sm text-gray-500 mt-1">
                             <Clock className="h-4 w-4 mr-1" />
                             {store.averageDeliveryTime} delivery
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500 mt-1">
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            {store.deliveryFee > 0 ? `$${store.deliveryFee} delivery fee` : 'Free delivery'}
+                          </div>
+                          <div className="flex items-center text-sm text-gray-500 mt-1">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              store.status === 'active' ? 'bg-green-100 text-green-800' :
+                              store.status === 'inactive' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {store.status || 'active'}
+                            </span>
                           </div>
                           <div className="flex items-center text-sm text-gray-500 mt-1">
                             <Star className="h-4 w-4 mr-1" />
@@ -956,6 +969,22 @@ const StoreManagement = ({ projectId }) => {
                        <p className="text-gray-900">{selectedStore?.averageDeliveryTime}</p>
                      </div>
                      <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Fee</label>
+                       <p className="text-gray-900">
+                         {selectedStore?.deliveryFee > 0 ? `$${selectedStore.deliveryFee}` : 'Free delivery'}
+                       </p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                         selectedStore?.status === 'active' ? 'bg-green-100 text-green-800' :
+                         selectedStore?.status === 'inactive' ? 'bg-red-100 text-red-800' :
+                         'bg-yellow-100 text-yellow-800'
+                       }`}>
+                         {selectedStore?.status || 'active'}
+                       </span>
+                     </div>
+                     <div>
                        <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
                        <div className="flex items-center">
                          <div className="flex items-center text-yellow-400">
@@ -1108,6 +1137,25 @@ const StoreManagement = ({ projectId }) => {
                       {storeFormErrors.averageDeliveryTime && (
                         <p className="mt-1 text-sm text-red-600">{storeFormErrors.averageDeliveryTime}</p>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Delivery Fee
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={storeForm.deliveryFee}
+                          onChange={(e) => handleStoreFormChange('deliveryFee', parseFloat(e.target.value) || 0)}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">Set to 0 for free delivery</p>
                     </div>
 
                     <div>

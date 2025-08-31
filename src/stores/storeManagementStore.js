@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { uploadBytes, getDownloadURL, ref as storageRef } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 
@@ -8,6 +8,7 @@ export const useStoreManagementStore = create((set, get) => ({
   products: [],
   categories: [],
   inventory: {},
+  orders: [],
   loading: false,
   error: null,
 
@@ -77,6 +78,7 @@ export const useStoreManagementStore = create((set, get) => ({
         name: storeData.name,
         location: storeData.location,
         averageDeliveryTime: storeData.averageDeliveryTime,
+        deliveryFee: storeData.deliveryFee || 0, // Add delivery fee support
         image: imageUrl,
         contactInfo: storeData.contactInfo || {},
         workingDays: storeData.workingDays || {},
@@ -119,6 +121,7 @@ export const useStoreManagementStore = create((set, get) => ({
         name: storeData.name,
         location: storeData.location,
         averageDeliveryTime: storeData.averageDeliveryTime,
+        deliveryFee: storeData.deliveryFee || 0, // Add delivery fee support
         contactInfo: storeData.contactInfo || {},
         workingDays: storeData.workingDays || {},
         workingHours: storeData.workingHours || {},
@@ -132,10 +135,30 @@ export const useStoreManagementStore = create((set, get) => ({
 
       await updateDoc(storeRef, updateData);
 
+      // Update local stores state
       set((state) => ({
         stores: state.stores.map(store => 
           store.id === storeId ? { ...store, ...updateData } : store
         )
+      }));
+
+      // Update orders that reference this store to reflect the new store information
+      set((state) => ({
+        orders: state.orders.map(order => {
+          // Check if any item in the order references this store
+          const hasStoreReference = order.items?.some(item => item.storeId === storeId);
+          
+          if (hasStoreReference) {
+            return {
+              ...order,
+              storeId: storeId,
+              storeName: storeData.name,
+              location: storeData.location,
+              deliveryFee: storeData.deliveryFee || 0
+            };
+          }
+          return order;
+        })
       }));
 
       return storeId;
@@ -299,6 +322,257 @@ export const useStoreManagementStore = create((set, get) => ({
 
   getOutOfStockProducts: () => {
     return get().products.filter(product => product.stockQuantity === 0);
+  },
+
+  // Order Management Functions
+  fetchOrders: async (projectId) => {
+    try {
+      set({ loading: true, error: null });
+      console.log('Fetching orders for project:', projectId);
+      
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, `projects/${projectId}/orders`),
+          orderBy('createdAt', 'desc')
+        )
+      );
+      const ordersData = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+
+      console.log('Raw orders data:', ordersData);
+
+      // Fetch store information and user information for each order
+      const ordersWithStoreInfo = await Promise.all(
+        ordersData.map(async (order) => {
+          // Get storeId from the first item in the order (since all items should be from the same store)
+          const storeId = order.items?.[0]?.storeId;
+          const storeName = order.items?.[0]?.storeName;
+          
+          console.log(`Processing order ${order.id}:`, { storeId, storeName, items: order.items });
+          
+          let orderWithInfo = { ...order };
+          
+          // Fetch store information
+          if (storeId) {
+            try {
+              const storeDoc = await getDocs(
+                query(
+                  collection(db, `projects/${projectId}/stores`),
+                  where('__name__', '==', storeId)
+                )
+              );
+              
+              if (!storeDoc.empty) {
+                const storeData = storeDoc.docs[0].data();
+                console.log(`Found store data for ${storeId}:`, storeData);
+                orderWithInfo = {
+                  ...orderWithInfo,
+                  storeId: storeId,
+                  storeName: storeData.name || storeName || 'Unknown Store',
+                  location: storeData.location || 'No location',
+                  deliveryFee: storeData.deliveryFee || 0
+                };
+              } else {
+                console.log(`No store found for ID: ${storeId}`);
+                orderWithInfo = {
+                  ...orderWithInfo,
+                  storeId: storeId,
+                  storeName: storeName || 'Unknown Store',
+                  location: 'No location',
+                  deliveryFee: 0
+                };
+              }
+            } catch (error) {
+              console.error(`Error fetching store info for order ${order.id}:`, error);
+              orderWithInfo = {
+                ...orderWithInfo,
+                storeId: storeId,
+                storeName: storeName || 'Unknown Store',
+                location: 'No location',
+                deliveryFee: 0
+              };
+            }
+          } else {
+            console.log(`No storeId found in order ${order.id}`);
+            orderWithInfo = {
+              ...orderWithInfo,
+              storeId: null,
+              storeName: 'Unknown Store',
+              location: 'No location',
+              deliveryFee: 0
+            };
+          }
+          
+          // Fetch user information
+          if (order.userId) {
+            try {
+              const userDoc = await getDocs(
+                query(
+                  collection(db, 'users'),
+                  where('__name__', '==', order.userId)
+                )
+              );
+              
+                             if (!userDoc.empty) {
+                 const userData = userDoc.docs[0].data();
+                 console.log(`Found user data for ${order.userId}:`, userData);
+                 orderWithInfo = {
+                   ...orderWithInfo,
+                   userName: userData.firstName && userData.lastName ? 
+                     `${userData.firstName} ${userData.lastName}` : 
+                     userData.fullName || userData.displayName || 'Unknown User',
+                   userPhone: userData.phone || userData.phoneNumber || 'No phone'
+                 };
+               } else {
+                 console.log(`No user found for ID: ${order.userId}`);
+                 orderWithInfo = {
+                   ...orderWithInfo,
+                   userName: 'Unknown User',
+                   userPhone: 'No phone'
+                 };
+               }
+                         } catch (error) {
+               console.error(`Error fetching user info for order ${order.id}:`, error);
+               orderWithInfo = {
+                 ...orderWithInfo,
+                 userName: 'Unknown User',
+                 userPhone: 'No phone'
+               };
+             }
+                     } else {
+             orderWithInfo = {
+               ...orderWithInfo,
+               userName: 'Unknown User',
+               userPhone: 'No phone'
+             };
+           }
+          
+          return orderWithInfo;
+        })
+      );
+
+      console.log('Orders with store info:', ordersWithStoreInfo);
+      set({ orders: ordersWithStoreInfo });
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchOrdersByStore: async (projectId, storeId) => {
+    try {
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, `projects/${projectId}/orders`),
+          where('storeId', '==', storeId),
+          orderBy('createdAt', 'desc')
+        )
+      );
+      const ordersData = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+
+      // Fetch store information for each order
+      const ordersWithStoreInfo = await Promise.all(
+        ordersData.map(async (order) => {
+          // Get storeId from the first item in the order
+          const storeId = order.items?.[0]?.storeId;
+          const storeName = order.items?.[0]?.storeName;
+          
+          try {
+            const storeDoc = await getDocs(
+              query(
+                collection(db, `projects/${projectId}/stores`),
+                where('__name__', '==', storeId)
+              )
+            );
+            
+            if (!storeDoc.empty) {
+              const storeData = storeDoc.docs[0].data();
+              return {
+                ...order,
+                storeId: storeId,
+                storeName: storeData.name || storeName || 'Unknown Store',
+                location: storeData.location || 'No location',
+                deliveryFee: storeData.deliveryFee || 0
+              };
+            }
+          } catch (error) {
+            console.error(`Error fetching store info for order ${order.id}:`, error);
+          }
+          
+          return {
+            ...order,
+            storeId: storeId || null,
+            storeName: storeName || 'Unknown Store',
+            location: 'No location',
+            deliveryFee: 0
+          };
+        })
+      );
+
+      return ordersWithStoreInfo;
+    } catch (error) {
+      console.error("Error fetching store orders:", error);
+      return [];
+    }
+  },
+
+  updateOrderStatus: async (projectId, orderId, newStatus) => {
+    try {
+      set({ loading: true, error: null });
+      const orderRef = doc(db, `projects/${projectId}/orders`, orderId);
+      
+      await updateDoc(orderRef, { 
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+
+      // Update local state
+      set((state) => ({
+        orders: state.orders.map(order => 
+          order.id === orderId ? { ...order, status: newStatus, updatedAt: new Date() } : order
+        )
+      }));
+
+      return true;
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  getOrderById: (orderId) => {
+    return get().orders.find(order => order.id === orderId);
+  },
+
+  getOrdersByStatus: (status) => {
+    return get().orders.filter(order => order.status === status);
+  },
+
+  getOrdersByDateRange: (startDate, endDate) => {
+    return get().orders.filter(order => {
+      const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+      return orderDate >= startDate && orderDate <= endDate;
+    });
+  },
+
+  // Refresh orders with latest store information
+  refreshOrdersWithStoreInfo: async (projectId) => {
+    try {
+      console.log('Refreshing orders with store info for project:', projectId);
+      await get().fetchOrders(projectId);
+    } catch (error) {
+      console.error('Error refreshing orders:', error);
+    }
   },
 
   clearStoreManagement: () => set({ stores: [], products: [], categories: [], inventory: {} })
