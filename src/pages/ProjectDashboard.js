@@ -1732,16 +1732,6 @@ const ProjectDashboard = () => {
                   </svg>
                   Refresh
                 </button>
-                <button
-                  onClick={() => {
-                    console.log('Current orders state:', projectOrders);
-                    console.log('Store names found:', getUniqueStoreNames());
-                    console.log('Sample order structure:', projectOrders?.[0]);
-                  }}
-                  className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-                >
-                  Debug Info
-                </button>
               </div>
             </div>
 
