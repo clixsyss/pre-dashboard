@@ -6,12 +6,10 @@ import {
   Trash2, 
   Eye, 
   Search, 
-  Filter,
   Package,
   Store,
   DollarSign,
   Tag,
-  Calendar,
   MapPin,
   Star,
   Clock

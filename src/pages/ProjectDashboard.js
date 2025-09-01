@@ -17,7 +17,6 @@ import {
   Package,
   Key,
   BarChart3,
-  DollarSign,
   Clock,
   Truck,
 } from 'lucide-react';
