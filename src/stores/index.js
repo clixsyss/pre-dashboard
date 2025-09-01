@@ -8,3 +8,4 @@ export { useUserStore } from './userStore';
 export { useStoreManagementStore } from './storeManagementStore';
 export { useOrderStore } from './orderStore';
 export { useGatePassStore } from './gatePassStore';
+export { useNotificationStore } from './notificationStore';

@@ -164,11 +164,12 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
-    // Project Notifications - users can read/write their own notifications within project
+    // Project Notifications - allow authenticated users to read notifications within project
+    // Admins can write, users can only read (notifications are created by admins)
     match /projects/{projectId}/notifications/{notificationId} {
-      allow read, write: if request.auth != null && 
-        (resource == null || resource.data.userId == request.auth.uid || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
     // Allow listing project notifications
@@ -304,5 +305,19 @@ service cloud.firestore {
     match /courtBookings {
       allow list: if request.auth != null;
     }
+    
+    // Global Notifications collection - allow authenticated users to read
+    // Admins can write (for backward compatibility)
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing global notifications collection
+    match /notifications {
+      allow list: if request.auth != null;
+    }
   }
 }
+

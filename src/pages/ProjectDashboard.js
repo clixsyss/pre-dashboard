@@ -25,8 +25,10 @@ import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
+import NotificationManagement from '../components/NotificationManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
+import { useNotificationStore } from '../stores/notificationStore';
 
 const ProjectDashboard = () => {
   const { projectId } = useParams();
@@ -57,6 +59,15 @@ const ProjectDashboard = () => {
     loading: ordersLoading,
     error: ordersError
   } = useStoreManagementStore();
+
+  // Notification store integration
+  const {
+    notifications,
+    fetchNotifications,
+    loading: notificationsLoading,
+    error: notificationsError,
+    getNotificationStats
+  } = useNotificationStore();
 
   // Booking search and filters
   const [bookingSearchTerm, setBookingSearchTerm] = useState('');
@@ -89,7 +100,7 @@ const ProjectDashboard = () => {
     { id: 'sports', name: 'Sports', icon: Trophy, color: 'purple' },
     { id: 'courts', name: 'Courts', icon: MapPin, color: 'orange' },
     { id: 'bookings', name: 'Bookings', icon: Calendar, color: 'pink' },
-    { id: 'events', name: 'Events', icon: Target, color: 'red' },
+    { id: 'events', name: 'Notifications', icon: Target, color: 'red' },
     { id: 'store', name: 'Store', icon: ShoppingBag, color: 'teal' },
     { id: 'orders', name: 'Orders', icon: Package, color: 'cyan' },
     { id: 'gatepass', name: 'Gate Pass', icon: Key, color: 'amber' }
@@ -186,6 +197,14 @@ const ProjectDashboard = () => {
       fetchOrders(projectId);
     }
   }, [activeTab, projectId, fetchOrders]);
+
+  // Fetch project notifications when events tab is active
+  useEffect(() => {
+    if (activeTab === 'events' && projectId) {
+      console.log('Fetching notifications for project:', projectId);
+      fetchNotifications(projectId);
+    }
+  }, [activeTab, projectId, fetchNotifications]);
 
   // Debug logging for orders
   useEffect(() => {
@@ -435,8 +454,11 @@ const ProjectDashboard = () => {
     const totalUsers = projectUsers.length;
     const activeUsers = projectUsers.filter(user => user.registrationStatus === 'completed').length;
     const pendingUsers = projectUsers.filter(user => user.registrationStatus === 'pending').length;
+    const notificationStats = getNotificationStats();
+    const totalNotifications = notificationStats.total;
+    const activeNotifications = notificationStats.active;
 
-    return { totalUsers, activeUsers, pendingUsers };
+    return { totalUsers, activeUsers, pendingUsers, totalNotifications, activeNotifications };
   };
 
   const handleBackToProjects = () => {
@@ -650,11 +672,11 @@ const ProjectDashboard = () => {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-center">
                   <div className="p-3 bg-purple-100 rounded-xl">
-                    <BarChart3 className="h-8 w-8 text-purple-600" />
+                    <Target className="h-8 w-8 text-purple-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Services</p>
-                    <p className="text-3xl font-bold text-gray-900">{serviceTabs.length - 1}</p>
+                    <p className="text-sm font-medium text-gray-600">Active Notifications</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.activeNotifications}</p>
                   </div>
                 </div>
               </div>
@@ -680,6 +702,26 @@ const ProjectDashboard = () => {
                   );
                 })}
               </div>
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {serviceTabs.slice(5, 9).map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleTabChange(tab.id)}
+                        className="flex flex-col items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                      >
+                        <div className={`p-2 rounded-lg mb-2 ${getTabColorClasses(tab.color)}`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700">{tab.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Recent Activity */}
@@ -696,6 +738,10 @@ const ProjectDashboard = () => {
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                  <span>{stats.activeNotifications} active notifications</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
                   <span>Ready to manage project services</span>
                 </div>
               </div>
@@ -1313,9 +1359,9 @@ const ProjectDashboard = () => {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
                                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span>{booking.date || 'No date'}</span> <br />
+                                  <span className='flex flex-col'>{booking.date || 'No date'}</span> <br />
                                   {booking.timeSlots && booking.timeSlots.length > 0 && (
-                                    <span className="ml-2 text-xs text-gray-500">
+                                    <span className="ml-2 text-xs text-gray-500 flex flex-col">
                                       ({booking.timeSlots.join(', ')})
                                     </span>
                                   )}
@@ -1565,146 +1611,7 @@ const ProjectDashboard = () => {
         )}
 
         {activeTab === 'events' && (
-          <div className="space-y-6">
-            {/* Events Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Events</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage tournaments, leagues, and sports events
-                </p>
-              </div>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="h-4 w-4 mr-2 inline" />
-                Add Event
-              </button>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search events by name, sport, or location..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Types</option>
-                  <option value="tournament">Tournament</option>
-                  <option value="league">League</option>
-                  <option value="exhibition">Exhibition</option>
-                  <option value="workshop">Workshop</option>
-                </select>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Status</option>
-                  <option value="planning">Planning</option>
-                  <option value="registration">Registration Open</option>
-                  <option value="ongoing">Ongoing</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Events Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Event
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Sport
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Location
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {/* Sample Events Data */}
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                              <Target className="h-5 w-5 text-red-600" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">Summer Football League</div>
-                            <div className="text-sm text-gray-500">Competitive</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
-                          League
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        Football
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>Jun 15 - Aug 30</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>Main Stadium</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          Registration
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Empty State */}
-              <div className="text-center py-12">
-                <Target className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-                <p className="text-gray-600">Get started by creating your first event.</p>
-              </div>
-            </div>
-          </div>
+          <NotificationManagement projectId={projectId} />
         )}
 
         {activeTab === 'store' && (

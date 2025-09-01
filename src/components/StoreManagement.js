@@ -12,10 +12,12 @@ import {
   Tag,
   MapPin,
   Star,
-  Clock
+  Clock,
+  Bell
 } from 'lucide-react';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useDiningStore } from '../stores/diningStore';
+import NotificationManagement from './NotificationManagement';
 
 const StoreManagement = ({ projectId }) => {
   const [activeTab, setActiveTab] = useState('stores');
@@ -506,6 +508,17 @@ const StoreManagement = ({ projectId }) => {
               <Tag className="h-4 w-4 inline mr-2" />
               Inventory
             </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'notifications'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Bell className="h-4 w-4 inline mr-2" />
+              Notifications
+            </button>
           </nav>
         </div>
 
@@ -905,6 +918,11 @@ const StoreManagement = ({ projectId }) => {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <NotificationManagement projectId={projectId} />
           )}
         </div>
       </div>
