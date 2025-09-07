@@ -27,6 +27,7 @@ import {
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
+import AdminSetup from '../components/AdminSetup';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -412,8 +413,13 @@ const Dashboard = () => {
           <div className="text-gray-600 mb-8 leading-relaxed">
             {userInfo?.isAdmin 
               ? "You appear to be an admin, but there might be a permission issue. Check the browser console for details."
-              : "You need admin privileges to access this dashboard. Either add yourself to the admins collection or set your role to 'admin' in the users collection."
+              : "You need admin privileges to access this dashboard. Use the admin setup tool below to add yourself as an admin."
             }
+          </div>
+          
+          {/* Admin Setup Component */}
+          <div className="mb-8">
+            <AdminSetup />
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
