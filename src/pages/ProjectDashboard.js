@@ -19,6 +19,7 @@ import {
   BarChart3,
   Clock,
   Truck,
+  Newspaper,
 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -26,6 +27,7 @@ import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
+import NewsManagementSystem from '../components/NewsManagementSystem';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -101,6 +103,7 @@ const ProjectDashboard = () => {
     { id: 'courts', name: 'Courts', icon: MapPin, color: 'orange' },
     { id: 'bookings', name: 'Bookings', icon: Calendar, color: 'pink' },
     { id: 'events', name: 'Notifications', icon: Target, color: 'red' },
+    { id: 'news', name: 'News', icon: Newspaper, color: 'emerald' },
     { id: 'store', name: 'Store', icon: ShoppingBag, color: 'teal' },
     { id: 'orders', name: 'Orders', icon: Package, color: 'cyan' },
     { id: 'gatepass', name: 'Gate Pass', icon: Key, color: 'amber' }
@@ -497,7 +500,8 @@ const ProjectDashboard = () => {
       red: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
       teal: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
       cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
-      amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+      amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+      emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
     };
     return colorMap[color] || 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100';
   };
@@ -705,7 +709,7 @@ const ProjectDashboard = () => {
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {serviceTabs.slice(5, 9).map((tab) => {
+                  {serviceTabs.slice(5, 10).map((tab) => {
                     const Icon = tab.icon;
                     return (
                       <button
@@ -1612,6 +1616,10 @@ const ProjectDashboard = () => {
 
         {activeTab === 'events' && (
           <NotificationManagement projectId={projectId} />
+        )}
+
+        {activeTab === 'news' && (
+          <NewsManagementSystem projectId={projectId} />
         )}
 
         {activeTab === 'store' && (

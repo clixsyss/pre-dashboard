@@ -30,12 +30,33 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    let timeoutId;
+    
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      setLoading(false);
+      
+      // Clear any existing timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      // Set loading to false with a small delay to prevent flash
+      timeoutId = setTimeout(() => {
+        setLoading(false);
+      }, 100);
     });
 
-    return unsubscribe;
+    // Fallback timeout in case auth state never resolves
+    const fallbackTimeout = setTimeout(() => {
+      console.log('Auth state check timeout - setting loading to false');
+      setLoading(false);
+    }, 3000);
+
+    return () => {
+      unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(fallbackTimeout);
+    };
   }, []);
 
   const value = {

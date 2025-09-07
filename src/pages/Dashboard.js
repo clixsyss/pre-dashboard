@@ -35,7 +35,10 @@ const Dashboard = () => {
   useEffect(() => {
     const selectedProject = localStorage.getItem('adminSelectedProject');
     if (!selectedProject) {
+      console.log('No project selected, redirecting to project selection');
       navigate('/project-selection');
+    } else {
+      console.log('Project selected:', JSON.parse(selectedProject));
     }
   }, [navigate]);
 
@@ -769,6 +772,7 @@ const Dashboard = () => {
               <div className="text-orange-100 text-sm">Manage academy programs</div>
             </div>
           </button>
+
         </div>
       </div>
 
