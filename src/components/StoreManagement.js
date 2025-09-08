@@ -31,7 +31,11 @@ const StoreManagement = ({ projectId }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
+  const [isViewProductModalOpen, setIsViewProductModalOpen] = useState(false);
   const [modalType, setModalType] = useState('store'); // 'store' or 'product'
+  const [storeImagePreview, setStoreImagePreview] = useState(null);
+  const [productImagePreview, setProductImagePreview] = useState(null);
 
   // Store management store
   const {
@@ -47,9 +51,9 @@ const StoreManagement = ({ projectId }) => {
     updateStore,
     deleteStore,
     addProduct,
-    deleteStoreProduct,
+    updateProduct,
+    deleteProduct,
     fetchStoreProducts,
-    updateProductStock,
     clearStoreManagement
   } = useStoreManagementStore();
 
@@ -61,11 +65,7 @@ const StoreManagement = ({ projectId }) => {
     error: diningError,
     fetchShops,
     fetchCategories: fetchDiningCategories,
-    addShop,
-    addProduct: addDiningProduct,
-    updateShop,
-    deleteShop,
-    deleteProduct
+    deleteShop
   } = useDiningStore();
 
   useEffect(() => {
@@ -190,8 +190,12 @@ const StoreManagement = ({ projectId }) => {
     setIsEditModalOpen(false);
     setIsViewModalOpen(false);
     setIsProductModalOpen(false);
+    setIsEditProductModalOpen(false);
+    setIsViewProductModalOpen(false);
     setSelectedStore(null);
     setSelectedProduct(null);
+    setStoreImagePreview(null);
+    setProductImagePreview(null);
   };
 
   const openProductModal = async (store) => {
@@ -199,6 +203,27 @@ const StoreManagement = ({ projectId }) => {
     setIsProductModalOpen(true);
     // Fetch products for this store
     await fetchStoreProducts(projectId, store.id);
+  };
+
+  const openEditProductModal = (product, store) => {
+    setSelectedProduct(product);
+    setSelectedStore(store);
+    setProductForm({
+      name: product.name,
+      price: product.price,
+      category: product.category,
+      description: product.description || '',
+      image: product.image || '',
+      imageFile: null
+    });
+    setProductImagePreview(null);
+    setIsEditProductModalOpen(true);
+  };
+
+  const openViewProductModal = (product, store) => {
+    setSelectedProduct(product);
+    setSelectedStore(store);
+    setIsViewProductModalOpen(true);
   };
 
   // Store form state
@@ -292,6 +317,7 @@ const StoreManagement = ({ projectId }) => {
       imageFile: null
     });
     setStoreFormErrors({});
+    setStoreImagePreview(null);
   };
 
   const resetProductForm = () => {
@@ -303,6 +329,7 @@ const StoreManagement = ({ projectId }) => {
       imageFile: null
     });
     setProductFormErrors({});
+    setProductImagePreview(null);
   };
 
   const handleStoreFormChange = (field, value) => {
@@ -321,6 +348,15 @@ const StoreManagement = ({ projectId }) => {
         [field]: value
       }));
     }
+    
+    // Handle image preview
+    if (field === 'imageFile' && value) {
+      const reader = new FileReader();
+      reader.onload = (e) => setStoreImagePreview(e.target.result);
+      reader.readAsDataURL(value);
+    } else if (field === 'imageFile' && !value) {
+      setStoreImagePreview(null);
+    }
   };
 
   const handleProductFormChange = (field, value) => {
@@ -328,6 +364,15 @@ const StoreManagement = ({ projectId }) => {
       ...prev,
       [field]: value
     }));
+    
+    // Handle image preview
+    if (field === 'imageFile' && value) {
+      const reader = new FileReader();
+      reader.onload = (e) => setProductImagePreview(e.target.result);
+      reader.readAsDataURL(value);
+    } else if (field === 'imageFile' && !value) {
+      setProductImagePreview(null);
+    }
   };
 
   const handleAddProduct = async (storeId) => {
@@ -336,10 +381,43 @@ const StoreManagement = ({ projectId }) => {
     try {
       await addProduct(projectId, storeId, productForm);
       resetProductForm();
+      setProductImagePreview(null);
       // Refresh the products list
       await fetchStoreProducts(projectId, storeId);
     } catch (error) {
       console.error('Error adding product:', error);
+      alert(`Error adding product: ${error.message}`);
+    }
+  };
+
+  const handleEditProduct = async () => {
+    if (!validateProductForm() || !selectedProduct || !selectedStore) return;
+    
+    try {
+      await updateProduct(projectId, selectedStore.id, selectedProduct.id, productForm);
+      resetProductForm();
+      setProductImagePreview(null);
+      setIsEditProductModalOpen(false);
+      // Refresh the products list
+      await fetchStoreProducts(projectId, selectedStore.id);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert(`Error updating product: ${error.message}`);
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (!selectedStore) return;
+    
+    if (window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+      try {
+        await deleteProduct(projectId, selectedStore.id, productId);
+        // Refresh the products list
+        await fetchStoreProducts(projectId, selectedStore.id);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert(`Error deleting product: ${error.message}`);
+      }
     }
   };
 
@@ -350,8 +428,10 @@ const StoreManagement = ({ projectId }) => {
       await addStore(projectId, storeForm);
       resetStoreForm();
       closeModals();
+      setStoreImagePreview(null);
     } catch (error) {
       console.error('Error adding store:', error);
+      alert(`Error adding store: ${error.message}`);
     }
   };
 
@@ -361,8 +441,10 @@ const StoreManagement = ({ projectId }) => {
     try {
       await updateStore(projectId, selectedStore.id, storeForm);
       closeModals();
+      setStoreImagePreview(null);
     } catch (error) {
       console.error('Error updating store:', error);
+      alert(`Error updating store: ${error.message}`);
     }
   };
 
@@ -588,10 +670,32 @@ const StoreManagement = ({ projectId }) => {
               {filteredStores.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredStores.map(store => (
-                    <div key={store.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{store.name}</h4>
+                    <div key={store.id} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start space-x-4">
+                        {/* Store Image */}
+                        <div className="flex-shrink-0">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                            {store.image ? (
+                              <img 
+                                src={store.image} 
+                                alt={store.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div 
+                              className={`w-full h-full flex items-center justify-center text-gray-400 ${store.image ? 'hidden' : 'flex'}`}
+                            >
+                              <Store className="h-8 w-8" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">{store.name}</h4>
                           <div className="flex items-center text-sm text-gray-500 mt-2">
                             <MapPin className="h-4 w-4 mr-1" />
                             {store.location}
@@ -618,7 +722,9 @@ const StoreManagement = ({ projectId }) => {
                             Rating: Coming soon
                           </div>
                         </div>
-                        <div className="flex space-x-1">
+                      
+                      {/* Action Buttons */}
+                      <div className="flex justify-end space-x-1 mt-3 pt-3 border-t border-gray-100">
                           <button
                             onClick={() => openViewModal(store, 'store')}
                             className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
@@ -1303,13 +1409,35 @@ const StoreManagement = ({ projectId }) => {
                   {/* Store Image */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Store Image</label>
+                    
+                    {/* Image Preview */}
+                    {(storeImagePreview || storeForm.image) && (
+                      <div className="mb-3">
+                        <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                          <img 
+                            src={storeImagePreview || storeForm.image} 
+                            alt="Store preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 hidden">
+                            <Store className="h-8 w-8" />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Preview</p>
+                      </div>
+                    )}
+                    
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleStoreFormChange('imageFile', e.target.files[0])}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <p className="mt-1 text-sm text-gray-500">Upload an image for the store (optional)</p>
+                    <p className="mt-1 text-sm text-gray-500">Upload an image for the store (optional, max 5MB)</p>
                   </div>
                 </form>
               )}
@@ -1463,12 +1591,35 @@ const StoreManagement = ({ projectId }) => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                    
+                    {/* Image Preview */}
+                    {(productImagePreview || productForm.image) && (
+                      <div className="mb-3">
+                        <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                          <img 
+                            src={productImagePreview || productForm.image} 
+                            alt="Product preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 hidden">
+                            <Package className="h-6 w-6" />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Preview</p>
+                      </div>
+                    )}
+                    
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleProductFormChange('imageFile', e.target.files[0])}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
+                    <p className="mt-1 text-sm text-gray-500">Upload an image for the product (optional, max 5MB)</p>
                   </div>
 
                   <div className="md:col-span-2">
@@ -1499,30 +1650,63 @@ const StoreManagement = ({ projectId }) => {
                 {products.filter(product => product.storeId === selectedStore.id).length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {products.filter(product => product.storeId === selectedStore.id).map(product => (
-                      <div key={product.id} className="bg-white rounded-lg p-4 border border-gray-200">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                      <div key={product.id} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-start space-x-4">
+                          {/* Product Image */}
+                          <div className="flex-shrink-0">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+                              {product.image ? (
+                                <img 
+                                  src={product.image} 
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div 
+                                className={`w-full h-full flex items-center justify-center text-gray-400 ${product.image ? 'hidden' : 'flex'}`}
+                              >
+                                <Package className="h-8 w-8" />
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-900 truncate">{product.name}</h4>
                             <p className="text-lg font-bold text-green-600">${product.price}</p>
                             <p className="text-sm text-gray-600 mt-1">{product.category}</p>
                             {product.description && (
-                              <p className="text-sm text-gray-500 mt-1">{product.description}</p>
+                              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{product.description}</p>
                             )}
                           </div>
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => openEditModal(product, 'product')}
-                              className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => deleteStoreProduct(projectId, selectedStore.id, product.id)}
-                              className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex justify-end space-x-1 mt-3 pt-3 border-t border-gray-100">
+                          <button
+                            onClick={() => openViewProductModal(product, selectedStore)}
+                            className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
+                            title="View Product"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => openEditProductModal(product, selectedStore)}
+                            className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
+                            title="Edit Product"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
+                            title="Delete Product"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1535,6 +1719,231 @@ const StoreManagement = ({ projectId }) => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {isEditProductModalOpen && selectedProduct && selectedStore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900">Edit Product</h2>
+              <button
+                onClick={closeModals}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <form className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Name</label>
+                    <input
+                      type="text"
+                      value={productForm.name}
+                      onChange={(e) => handleProductFormChange('name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter product name"
+                    />
+                    {productFormErrors.name && (
+                      <p className="mt-1 text-sm text-red-600">{productFormErrors.name}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={productForm.price}
+                      onChange={(e) => handleProductFormChange('price', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter price"
+                    />
+                    {productFormErrors.price && (
+                      <p className="mt-1 text-sm text-red-600">{productFormErrors.price}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <select
+                      value={productForm.category}
+                      onChange={(e) => handleProductFormChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select category</option>
+                      <option value="food">Food</option>
+                      <option value="drinks">Drinks</option>
+                      <option value="desserts">Desserts</option>
+                      <option value="snacks">Snacks</option>
+                      <option value="meals">Meals</option>
+                      <option value="other">Other</option>
+                    </select>
+                    {productFormErrors.category && (
+                      <p className="mt-1 text-sm text-red-600">{productFormErrors.category}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                    
+                    {/* Image Preview */}
+                    {(productImagePreview || productForm.image) && (
+                      <div className="mb-3">
+                        <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                          <img 
+                            src={productImagePreview || productForm.image} 
+                            alt="Product preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 hidden">
+                            <Package className="h-6 w-6" />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Preview</p>
+                      </div>
+                    )}
+                    
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleProductFormChange('imageFile', e.target.files[0])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Upload an image for the product (optional, max 5MB)</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={productForm.description}
+                    onChange={(e) => handleProductFormChange('description', e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter product description (optional)"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-end p-6 border-t border-gray-100 space-x-3">
+              <button
+                onClick={closeModals}
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              
+              <button
+                onClick={handleEditProduct}
+                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Update Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Product Modal */}
+      {isViewProductModalOpen && selectedProduct && selectedStore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
+              <button
+                onClick={closeModals}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-6">
+                {/* Product Image */}
+                <div className="text-center">
+                  <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200 mx-auto">
+                    {selectedProduct.image ? (
+                      <img 
+                        src={selectedProduct.image} 
+                        alt={selectedProduct.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className={`w-full h-full flex items-center justify-center text-gray-400 ${selectedProduct.image ? 'hidden' : 'flex'}`}
+                    >
+                      <Package className="h-12 w-12" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Product Details */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">{selectedProduct.name}</h3>
+                    <p className="text-2xl font-bold text-green-600">${selectedProduct.price}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Category</label>
+                      <p className="text-sm text-gray-900 capitalize">{selectedProduct.category}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Store</label>
+                      <p className="text-sm text-gray-900">{selectedStore.name}</p>
+                    </div>
+                  </div>
+
+                  {selectedProduct.description && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Description</label>
+                      <p className="text-sm text-gray-900">{selectedProduct.description}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end p-6 border-t border-gray-100 space-x-3">
+              <button
+                onClick={closeModals}
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+              
+              <button
+                onClick={() => {
+                  closeModals();
+                  openEditProductModal(selectedProduct, selectedStore);
+                }}
+                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Edit Product
+              </button>
             </div>
           </div>
         </div>

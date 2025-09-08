@@ -263,6 +263,66 @@ export const useStoreManagementStore = create((set, get) => ({
     }
   },
 
+  updateProduct: async (projectId, storeId, productId, productData) => {
+    try {
+      set({ loading: true, error: null });
+      const productRef = doc(db, `projects/${projectId}/stores/${storeId}/products`, productId);
+      
+      let imageUrl = productData.image;
+      if (productData.imageFile) {
+        imageUrl = await get().uploadImage(productData.imageFile, `projects/${projectId}/stores/${storeId}/products/${productData.imageFile.name}`);
+      }
+
+      const updateData = {
+        name: productData.name,
+        description: productData.description || '',
+        category: productData.category,
+        price: productData.price,
+        updatedAt: serverTimestamp()
+      };
+
+      if (imageUrl) {
+        updateData.image = imageUrl;
+      }
+
+      await updateDoc(productRef, updateData);
+
+      // Update local state
+      set((state) => ({
+        products: state.products.map(product => 
+          product.id === productId ? { ...product, ...updateData } : product
+        )
+      }));
+
+      return productId;
+    } catch (error) {
+      console.error("Error updating product:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  deleteProduct: async (projectId, storeId, productId) => {
+    try {
+      set({ loading: true, error: null });
+      await deleteDoc(doc(db, `projects/${projectId}/stores/${storeId}/products`, productId));
+      
+      set((state) => ({
+        products: state.products.filter(product => product.id !== productId)
+      }));
+
+      return productId;
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      set({ error: error.message });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
   updateProductStock: async (projectId, productId, quantity, operation = 'add') => {
     try {
       set({ loading: true, error: null });
@@ -301,12 +361,34 @@ export const useStoreManagementStore = create((set, get) => ({
 
   uploadImage: async (file, path) => {
     try {
-      const storagePath = storageRef(storage, path);
+      // Validate file
+      if (!file) {
+        throw new Error('No file provided');
+      }
+      
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('File must be an image');
+      }
+      
+      // Check file size (5MB limit)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        throw new Error('File size must be less than 5MB');
+      }
+      
+      // Generate unique filename to avoid conflicts
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop();
+      const uniqueFileName = `${timestamp}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const uniquePath = path.replace(file.name, uniqueFileName);
+      
+      const storagePath = storageRef(storage, uniquePath);
       const snapshot = await uploadBytes(storagePath, file);
       return await getDownloadURL(snapshot.ref);
     } catch (error) {
       console.error("Error uploading image:", error);
-      return null;
+      throw error;
     }
   },
 

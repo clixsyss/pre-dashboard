@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Users,
@@ -28,6 +28,7 @@ import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
+import AdminSetup from '../components/AdminSetup';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -55,19 +56,21 @@ const ProjectDashboard = () => {
 
   // Store management store integration
   const {
+    stores,
     orders: projectOrders,
+    fetchStores,
     fetchOrders,
     updateOrderStatus,
     loading: ordersLoading,
-    error: ordersError
+    error: storeError
   } = useStoreManagementStore();
+
+  // Alias for orders error to maintain compatibility
+  const ordersError = storeError;
 
   // Notification store integration
   const {
-    notifications,
     fetchNotifications,
-    loading: notificationsLoading,
-    error: notificationsError,
     getNotificationStats
   } = useNotificationStore();
 
@@ -99,7 +102,6 @@ const ProjectDashboard = () => {
     { id: 'dashboard', name: 'Overview', icon: BarChart3, color: 'blue' },
     { id: 'users', name: 'Users', icon: Users, color: 'indigo' },
     { id: 'academies', name: 'Academies', icon: School, color: 'green' },
-    { id: 'sports', name: 'Sports', icon: Trophy, color: 'purple' },
     { id: 'courts', name: 'Courts', icon: MapPin, color: 'orange' },
     { id: 'bookings', name: 'Bookings', icon: Calendar, color: 'pink' },
     { id: 'events', name: 'Notifications', icon: Target, color: 'red' },
@@ -209,6 +211,18 @@ const ProjectDashboard = () => {
     }
   }, [activeTab, projectId, fetchNotifications]);
 
+  // Get unique store names from orders
+  const getUniqueStoreNames = useCallback(() => {
+    if (!projectOrders) return [];
+    
+    // Get unique store names, filtering out undefined/null values
+    const storeNames = projectOrders
+      .map(order => order.storeName)
+      .filter(storeName => storeName && storeName !== 'Unknown Store');
+    
+    return [...new Set(storeNames)];
+  }, [projectOrders]);
+
   // Debug logging for orders
   useEffect(() => {
     if (projectOrders && projectOrders.length > 0) {
@@ -216,7 +230,7 @@ const ProjectDashboard = () => {
       console.log('Sample order structure:', projectOrders[0]);
       console.log('Store names found:', getUniqueStoreNames());
     }
-  }, [projectOrders]);
+  }, [projectOrders, getUniqueStoreNames]);
 
   // Filter bookings based on search and filters
   const getFilteredBookings = () => {
@@ -442,16 +456,6 @@ const ProjectDashboard = () => {
     return { total, pending, processing, delivered, cancelled };
   };
 
-  const getUniqueStoreNames = () => {
-    if (!projectOrders) return [];
-    
-    // Get unique store names, filtering out undefined/null values
-    const storeNames = projectOrders
-      .map(order => order.storeName)
-      .filter(storeName => storeName && storeName !== 'Unknown Store');
-    
-    return [...new Set(storeNames)];
-  };
 
   const getProjectStats = () => {
     const totalUsers = projectUsers.length;
@@ -549,6 +553,17 @@ const ProjectDashboard = () => {
     );
   }
 
+  // Show admin setup if there are permission errors
+  if (storeError && (storeError.includes('permission') || storeError.includes('unauthorized'))) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <AdminSetup />
+        </div>
+      </div>
+    );
+  }
+
   if (!project) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -606,7 +621,7 @@ const ProjectDashboard = () => {
 
       {/* Fixed Service Tabs Navigation */}
       <div className="bg-white border-b border-gray-200 sticky top-20 z-40 pt-4 pb-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-7 lg:px-8">
           <nav className="flex space-x-1 overflow-x-auto scrollbar-hide">
             {serviceTabs.map((tab) => {
               const Icon = tab.icon;
