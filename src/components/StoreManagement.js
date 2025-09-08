@@ -719,7 +719,24 @@ const StoreManagement = ({ projectId }) => {
                           </div>
                           <div className="flex items-center text-sm text-gray-500 mt-1">
                             <Star className="h-4 w-4 mr-1" />
-                            Rating: Coming soon
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">{store.rating ? store.rating.toFixed(1) : '0.0'}</span>
+                              <div className="flex">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`h-3 w-3 ${
+                                      star <= (store.rating || 0) 
+                                        ? 'text-yellow-400 fill-current' 
+                                        : 'text-gray-300'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-xs text-gray-400">
+                                {(store.reviewCount || 0) === 0 ? 'No reviews yet' : `(${store.reviewCount} reviews)`}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       

@@ -19,11 +19,42 @@ export const useStoreManagementStore = create((set, get) => ({
     try {
       set({ loading: true, error: null });
       const querySnapshot = await getDocs(collection(db, `projects/${projectId}/stores`));
-      const storesData = querySnapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data()
-      }));
-      set({ stores: storesData });
+      
+      // Fetch stores with their rating data
+      const storesWithRatings = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const storeData = docSnap.data();
+          
+          // Fetch ratings for this store
+          try {
+            const ratingsRef = collection(db, `projects/${projectId}/ratings`);
+            const ratingsQuery = query(ratingsRef, where('storeId', '==', docSnap.id));
+            const ratingsSnapshot = await getDocs(ratingsQuery);
+            
+            const ratings = ratingsSnapshot.docs.map(ratingDoc => ratingDoc.data().rating);
+            const averageRating = ratings.length > 0 
+              ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length 
+              : 0;
+            
+            return {
+              id: docSnap.id,
+              ...storeData,
+              rating: parseFloat(averageRating.toFixed(1)),
+              reviewCount: ratings.length
+            };
+          } catch (ratingError) {
+            console.error('Error fetching ratings for store:', docSnap.id, ratingError);
+            return {
+              id: docSnap.id,
+              ...storeData,
+              rating: 0,
+              reviewCount: 0
+            };
+          }
+        })
+      );
+      
+      set({ stores: storesWithRatings });
     } catch (error) {
       console.error("Error fetching stores:", error);
       set({ error: error.message });
@@ -79,6 +110,7 @@ export const useStoreManagementStore = create((set, get) => ({
         location: storeData.location,
         averageDeliveryTime: storeData.averageDeliveryTime,
         deliveryFee: storeData.deliveryFee || 0, // Add delivery fee support
+        status: storeData.status || 'active', // Add status field
         image: imageUrl,
         contactInfo: storeData.contactInfo || {},
         workingDays: storeData.workingDays || {},
@@ -122,6 +154,7 @@ export const useStoreManagementStore = create((set, get) => ({
         location: storeData.location,
         averageDeliveryTime: storeData.averageDeliveryTime,
         deliveryFee: storeData.deliveryFee || 0, // Add delivery fee support
+        status: storeData.status || 'active', // Add status field
         contactInfo: storeData.contactInfo || {},
         workingDays: storeData.workingDays || {},
         workingHours: storeData.workingHours || {},
