@@ -2640,6 +2640,55 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
+              {/* Cancellation Details - Only show if order is cancelled */}
+              {selectedOrderForModal.status === 'cancelled' && (
+                <div className="bg-red-50 rounded-xl p-4 border border-red-200">
+                  <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  Cancellation Details
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Cancellation Reason</label>
+                        <p className="text-sm text-red-900 font-medium mt-1">
+                          {selectedOrderForModal.cancellationReason || 'Not specified'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Cancelled By</label>
+                        <p className="text-sm text-red-900 font-medium mt-1">
+                          {selectedOrderForModal.cancelledBy === 'customer' ? 'Customer' : 
+                           selectedOrderForModal.cancelledBy === 'admin' ? 'Admin' : 
+                           selectedOrderForModal.cancelledBy || 'Unknown'}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedOrderForModal.customCancellationReason && (
+                      <div>
+                        <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Custom Reason</label>
+                        <p className="text-sm text-red-900 mt-1 p-2 bg-red-100 rounded-lg">
+                          {selectedOrderForModal.customCancellationReason}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Cancelled At</label>
+                      <p className="text-sm text-red-900 font-medium mt-1">
+                        {selectedOrderForModal.cancelledAt ? 
+                          (selectedOrderForModal.cancelledAt.toDate ? 
+                            selectedOrderForModal.cancelledAt.toDate().toLocaleString() : 
+                            new Date(selectedOrderForModal.cancelledAt).toLocaleString()
+                          ) : 'Unknown date'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Order Timeline */}
               <div className="bg-purple-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-purple-900 mb-3 flex items-center">
@@ -2669,6 +2718,27 @@ const ProjectDashboard = () => {
                       <div>
                         <p className="text-sm font-medium text-purple-900">Estimated Delivery</p>
                         <p className="text-xs text-purple-600">{selectedOrderForModal.estimatedDelivery}</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedOrderForModal.status === 'cancelled' && (
+                    <div className="flex items-center space-x-3">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <div>
+                        <p className="text-sm font-medium text-purple-900">Order Cancelled</p>
+                        <p className="text-xs text-purple-600">
+                          {selectedOrderForModal.cancelledAt ? 
+                            (selectedOrderForModal.cancelledAt.toDate ? 
+                              selectedOrderForModal.cancelledAt.toDate().toLocaleString() : 
+                              new Date(selectedOrderForModal.cancelledAt).toLocaleString()
+                            ) : 'Unknown date'
+                          }
+                        </p>
+                        {selectedOrderForModal.cancellationReason && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Reason: {selectedOrderForModal.cancellationReason}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
