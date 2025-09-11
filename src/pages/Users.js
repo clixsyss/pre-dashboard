@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useUINotificationStore } from '../stores/uiNotificationStore';
 
 const Users = () => {
   const navigate = useNavigate();
+  const { success, error: showError, warning, info } = useUINotificationStore();
   
   // Check if a project is selected, if not redirect to project selection
   useEffect(() => {
@@ -127,7 +129,7 @@ const Users = () => {
       setUserToDelete(null);
     } catch (err) {
       console.error('Error deleting user:', err);
-      alert('Failed to delete user');
+      showError('Failed to delete user');
     }
   };
 

@@ -16,8 +16,10 @@ import {
 } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useUINotificationStore } from '../stores/uiNotificationStore';
 
 const Bookings = () => {
+  const { success, error: showError, warning, info } = useUINotificationStore();
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +99,7 @@ const Bookings = () => {
       }
     } catch (err) {
       console.error('Error updating booking status:', err);
-      alert('Failed to update booking status');
+      showError('Failed to update booking status');
     }
   };
 

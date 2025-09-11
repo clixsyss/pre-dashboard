@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useDiningStore } from '../stores/diningStore';
+import { useUINotificationStore } from '../stores/uiNotificationStore';
 import NotificationManagement from './NotificationManagement';
 
-const StoreManagement = ({ projectId }) => {
+const StoreManagement = ({ projectId, onViewStore }) => {
   const [activeTab, setActiveTab] = useState('stores');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -56,6 +57,9 @@ const StoreManagement = ({ projectId }) => {
     fetchStoreProducts,
     clearStoreManagement
   } = useStoreManagementStore();
+
+  // UI Notification store
+  const { error: showError } = useUINotificationStore();
 
   // Dining store for shops and products
   const {
@@ -179,6 +183,11 @@ const StoreManagement = ({ projectId }) => {
     setModalType(type);
     if (type === 'store') {
       setSelectedStore(item);
+      // Use the onViewStore prop if available, otherwise use the existing modal
+      if (onViewStore) {
+        onViewStore(item);
+        return;
+      }
     } else {
       setSelectedProduct(item);
     }
@@ -386,7 +395,7 @@ const StoreManagement = ({ projectId }) => {
       await fetchStoreProducts(projectId, storeId);
     } catch (error) {
       console.error('Error adding product:', error);
-      alert(`Error adding product: ${error.message}`);
+      showError(`Error adding product: ${error.message}`);
     }
   };
 
@@ -402,7 +411,7 @@ const StoreManagement = ({ projectId }) => {
       await fetchStoreProducts(projectId, selectedStore.id);
     } catch (error) {
       console.error('Error updating product:', error);
-      alert(`Error updating product: ${error.message}`);
+      showError(`Error updating product: ${error.message}`);
     }
   };
 
@@ -416,7 +425,7 @@ const StoreManagement = ({ projectId }) => {
         await fetchStoreProducts(projectId, selectedStore.id);
       } catch (error) {
         console.error('Error deleting product:', error);
-        alert(`Error deleting product: ${error.message}`);
+        showError(`Error deleting product: ${error.message}`);
       }
     }
   };
@@ -431,7 +440,7 @@ const StoreManagement = ({ projectId }) => {
       setStoreImagePreview(null);
     } catch (error) {
       console.error('Error adding store:', error);
-      alert(`Error adding store: ${error.message}`);
+      showError(`Error adding store: ${error.message}`);
     }
   };
 
@@ -444,7 +453,7 @@ const StoreManagement = ({ projectId }) => {
       setStoreImagePreview(null);
     } catch (error) {
       console.error('Error updating store:', error);
-      alert(`Error updating store: ${error.message}`);
+      showError(`Error updating store: ${error.message}`);
     }
   };
 

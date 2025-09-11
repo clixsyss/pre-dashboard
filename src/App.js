@@ -9,6 +9,7 @@ import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Layout from './components/Layout';
+import NotificationContainer from './components/NotificationContainer';
 import './App.css';
 
 // Protected Route Component
@@ -70,6 +71,7 @@ function App() {
               </ProtectedRoute>
             } />
           </Routes>
+          <NotificationContainer />
         </div>
       </Router>
     </AuthProvider>

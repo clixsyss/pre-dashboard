@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCourtStore } from '../stores/courtStore';
+import { useUINotificationStore } from '../stores/uiNotificationStore';
 import { useSportsStore } from '../stores/sportsStore';
 import AddSampleSports from './AddSampleSports';
 import { initializeSportsForProject } from '../utils/projectInitializer';
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 const CourtsManagement = ({ projectId }) => {
+  const { success, error: showError, warning, info } = useUINotificationStore();
   const {
     courts,
     loading,
@@ -124,7 +126,7 @@ const CourtsManagement = ({ projectId }) => {
     } catch (error) {
       console.error('Error saving court:', error);
       // Show user-friendly error message
-      alert(`Failed to ${editingCourt ? 'update' : 'add'} court: ${error.message}`);
+      showError(`Failed to ${editingCourt ? 'update' : 'add'} court: ${error.message}`);
     }
   };
 
@@ -149,7 +151,7 @@ const CourtsManagement = ({ projectId }) => {
         await deleteCourt(projectId, courtId);
       } catch (error) {
         console.error('Error deleting court:', error);
-        alert(`Failed to delete court: ${error.message}`);
+        showError(`Failed to delete court: ${error.message}`);
       }
     }
   };
@@ -159,7 +161,7 @@ const CourtsManagement = ({ projectId }) => {
       await updateCourtStatus(projectId, courtId, newStatus);
     } catch (error) {
       console.error('Error updating court status:', error);
-      alert(`Failed to update court status: ${error.message}`);
+      showError(`Failed to update court status: ${error.message}`);
     }
   };
 

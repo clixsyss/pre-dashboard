@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Edit, 
@@ -32,8 +32,10 @@ import {
   deleteObject 
 } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
+import { useUINotificationStore } from '../stores/uiNotificationStore';
 
 const NewsManagementSystem = ({ projectId }) => {
+  const { success, error: showError, warning, info } = useUINotificationStore();
   const [newsItems, setNewsItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -161,7 +163,7 @@ const NewsManagementSystem = ({ projectId }) => {
       fetchNews();
     } catch (error) {
       console.error('Error saving news:', error);
-      alert('Error saving news item. Please try again.');
+      showError('Error saving news item. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -186,7 +188,7 @@ const NewsManagementSystem = ({ projectId }) => {
       fetchNews();
     } catch (error) {
       console.error('Error deleting news:', error);
-      alert('Error deleting news item. Please try again.');
+      showError('Error deleting news item. Please try again.');
     }
   };
 
@@ -223,7 +225,7 @@ const NewsManagementSystem = ({ projectId }) => {
       fetchNews();
     } catch (error) {
       console.error('Error toggling visibility:', error);
-      alert('Error updating news visibility. Please try again.');
+      showError('Error updating news visibility. Please try again.');
     }
   };
 
@@ -238,7 +240,7 @@ const NewsManagementSystem = ({ projectId }) => {
       fetchNews();
     } catch (error) {
       console.error('Error toggling featured status:', error);
-      alert('Error updating featured status. Please try again.');
+      showError('Error updating featured status. Please try again.');
     }
   };
 

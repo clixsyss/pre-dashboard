@@ -20,8 +20,14 @@ import {
   Clock,
   Truck,
   Newspaper,
+  Star,
+  DollarSign,
+  ShoppingCart,
+  X,
+  ExternalLink,
+  MessageCircle,
 } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -56,9 +62,7 @@ const ProjectDashboard = () => {
 
   // Store management store integration
   const {
-    stores,
     orders: projectOrders,
-    fetchStores,
     fetchOrders,
     updateOrderStatus,
     loading: ordersLoading,
@@ -94,6 +98,19 @@ const ProjectDashboard = () => {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedOrderForModal, setSelectedOrderForModal] = useState(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [selectedStoreForModal, setSelectedStoreForModal] = useState(null);
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
+  const [storeOrders, setStoreOrders] = useState([]);
+  const [storeReviews, setStoreReviews] = useState([]);
+  const [storeProducts, setStoreProducts] = useState([]);
+  const [loadingStoreData, setLoadingStoreData] = useState(false);
+  
+  // Store modal order filtering
+  const [storeOrderSearchTerm, setStoreOrderSearchTerm] = useState('');
+  const [storeOrderStatusFilter, setStoreOrderStatusFilter] = useState('all');
+  const [storeOrderPaymentFilter, setStoreOrderPaymentFilter] = useState('all');
+  const [storeOrderDateFilter, setStoreOrderDateFilter] = useState('all');
+  const [storeOrderDateRange, setStoreOrderDateRange] = useState({ start: '', end: '' });
   
 
 
@@ -223,7 +240,7 @@ const ProjectDashboard = () => {
     return [...new Set(storeNames)];
   }, [projectOrders]);
 
-  // Debug logging for orders
+
   useEffect(() => {
     if (projectOrders && projectOrders.length > 0) {
       console.log('Orders loaded:', projectOrders);
@@ -371,6 +388,262 @@ const ProjectDashboard = () => {
   const handleViewOrder = (order) => {
     setSelectedOrderForModal(order);
     setIsOrderModalOpen(true);
+  };
+
+  // Store modal order filtering functions
+  const getFilteredStoreOrders = () => {
+    if (!storeOrders || storeOrders.length === 0) return [];
+
+    let filtered = [...storeOrders];
+
+    if (storeOrderSearchTerm) {
+      filtered = filtered.filter(order =>
+        (order.orderNumber && order.orderNumber.toLowerCase().includes(storeOrderSearchTerm.toLowerCase())) ||
+        (order.userEmail && order.userEmail.toLowerCase().includes(storeOrderSearchTerm.toLowerCase())) ||
+        (order.userName && order.userName.toLowerCase().includes(storeOrderSearchTerm.toLowerCase()))
+      );
+    }
+
+    if (storeOrderStatusFilter !== 'all') {
+      filtered = filtered.filter(order => order.status === storeOrderStatusFilter);
+    }
+
+    if (storeOrderPaymentFilter !== 'all') {
+      filtered = filtered.filter(order => order.paymentMethod === storeOrderPaymentFilter);
+    }
+
+    // Date filtering
+    if (storeOrderDateFilter === 'today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      filtered = filtered.filter(order => {
+        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+        return orderDate >= today && orderDate < tomorrow;
+      });
+    } else if (storeOrderDateFilter === 'week') {
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      weekAgo.setHours(0, 0, 0, 0);
+      
+      filtered = filtered.filter(order => {
+        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+        return orderDate >= weekAgo;
+      });
+    } else if (storeOrderDateFilter === 'month') {
+      const today = new Date();
+      const monthAgo = new Date(today);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      monthAgo.setHours(0, 0, 0, 0);
+      
+      filtered = filtered.filter(order => {
+        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+        return orderDate >= monthAgo;
+      });
+    } else if (storeOrderDateFilter === 'custom' && storeOrderDateRange.start && storeOrderDateRange.end) {
+      const startDate = new Date(storeOrderDateRange.start);
+      const endDate = new Date(storeOrderDateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+      
+      filtered = filtered.filter(order => {
+        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+    }
+
+    return filtered;
+  };
+
+  const getStoreOrderStats = () => {
+    if (!storeOrders) return { total: 0, pending: 0, processing: 0, delivered: 0, cancelled: 0 };
+    
+    const total = storeOrders.length;
+    const pending = storeOrders.filter(order => order.status === 'pending').length;
+    const processing = storeOrders.filter(order => order.status === 'processing').length;
+    const delivered = storeOrders.filter(order => order.status === 'delivered').length;
+    const cancelled = storeOrders.filter(order => order.status === 'cancelled').length;
+
+    return { total, pending, processing, delivered, cancelled };
+  };
+
+  // Store modal functions
+  const handleViewStore = async (store) => {
+    console.log('Opening store modal for:', store);
+    console.log('Store data:', store);
+    console.log('Store keys:', Object.keys(store));
+    console.log('Store status value:', store.status);
+    console.log('Store status type:', typeof store.status);
+    setSelectedStoreForModal(store);
+    setIsStoreModalOpen(true);
+    setLoadingStoreData(true);
+    
+    // Reset filters when opening modal
+    setStoreOrderSearchTerm('');
+    setStoreOrderStatusFilter('all');
+    setStoreOrderPaymentFilter('all');
+    setStoreOrderDateFilter('all');
+    setStoreOrderDateRange({ start: '', end: '' });
+    
+    try {
+      // Fetch store orders using the same approach as the main orders section
+      console.log(`Fetching orders for store: ${store.id}`);
+      
+      // Get all orders and filter by storeId in items (same as main fetchOrders)
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, `projects/${projectId}/orders`),
+          orderBy('createdAt', 'desc')
+        )
+      );
+      
+      const allOrders = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      
+      console.log(`Total orders in project: ${allOrders.length}`);
+      console.log('Sample order structure:', allOrders[0]);
+      
+      // Filter orders that have items from this store
+      const ordersData = allOrders.filter(order => {
+        const hasStoreItem = order.items && order.items.some(item => item.storeId === store.id);
+        if (hasStoreItem) {
+          console.log('Found order with store item:', order);
+        }
+        return hasStoreItem;
+      });
+      
+      console.log(`Found ${ordersData.length} orders for store ${store.id}`);
+      
+      // Enrich orders with user information (same as main fetchOrders)
+      const ordersWithUserInfo = await Promise.all(
+        ordersData.map(async (order) => {
+          let orderWithInfo = { ...order };
+          
+          // Fetch user information (same as main orders section)
+          if (order.userId) {
+            try {
+              const userDoc = await getDocs(
+                query(
+                  collection(db, `projects/${projectId}/users`),
+                  where('__name__', '==', order.userId)
+                )
+              );
+              
+              if (!userDoc.empty) {
+                const userData = userDoc.docs[0].data();
+                console.log(`Found user data for ${order.userId}:`, userData);
+                orderWithInfo = {
+                  ...orderWithInfo,
+                  customerName: userData.firstName && userData.lastName ? 
+                    `${userData.firstName} ${userData.lastName}` : 
+                    userData.fullName || userData.displayName || 'Unknown User',
+                  customerEmail: userData.email || 'No email',
+                  customerPhone: userData.phone || userData.phoneNumber || 'No phone'
+                };
+              } else {
+                console.log(`No user found for ID: ${order.userId}`);
+                orderWithInfo = {
+                  ...orderWithInfo,
+                  customerName: 'Unknown User',
+                  customerEmail: 'No email',
+                  customerPhone: 'No phone'
+                };
+              }
+            } catch (userError) {
+              console.error(`Error fetching user info for order ${order.id}:`, userError);
+              orderWithInfo = {
+                ...orderWithInfo,
+                customerName: 'Unknown User',
+                customerEmail: 'No email',
+                customerPhone: 'No phone'
+              };
+            }
+          }
+          
+          return orderWithInfo;
+        })
+      );
+      
+      setStoreOrders(ordersWithUserInfo);
+
+      // Fetch store reviews with user information
+      const reviewsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/ratings`), where('storeId', '==', store.id))
+      );
+      const reviewsData = reviewsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Found ${reviewsData.length} reviews for store ${store.id}`);
+      console.log('Sample review data:', reviewsData[0]);
+      
+      // Fetch user information for each review
+      const reviewsWithUserInfo = await Promise.all(
+        reviewsData.map(async (review) => {
+          try {
+            // Try to get user info from the main users collection
+            const userSnapshot = await getDocs(
+              query(collection(db, 'users'), where('authUid', '==', review.userId))
+            );
+            
+            if (!userSnapshot.empty) {
+              const userData = userSnapshot.docs[0].data();
+              const userName = userData.fullName || 
+                              `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 
+                              userData.email?.split('@')[0] || 
+                              'Unknown User';
+              
+              return {
+                ...review,
+                userName: userName,
+                userEmail: review.userEmail || userData.email || 'No email',
+                userId: review.userId
+              };
+            } else {
+              // Fallback to review data - try to extract name from email
+              const emailName = review.userEmail ? review.userEmail.split('@')[0] : 'Unknown User';
+              return {
+                ...review,
+                userName: emailName,
+                userEmail: review.userEmail || 'No email',
+                userId: review.userId
+              };
+            }
+          } catch (error) {
+            console.error('Error fetching user info for review:', error);
+            const emailName = review.userEmail ? review.userEmail.split('@')[0] : 'Unknown User';
+            return {
+              ...review,
+              userName: emailName,
+              userEmail: review.userEmail || 'No email',
+              userId: review.userId
+            };
+          }
+        })
+      );
+      
+      console.log('Reviews with user info:', reviewsWithUserInfo);
+      setStoreReviews(reviewsWithUserInfo);
+
+      // Fetch store products
+      const productsSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/stores/${store.id}/products`)
+      );
+      const productsData = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStoreProducts(productsData);
+    } catch (error) {
+      console.error('Error loading store data:', error);
+    } finally {
+      setLoadingStoreData(false);
+    }
   };
 
   // Filter orders based on search and filters
@@ -1638,7 +1911,20 @@ const ProjectDashboard = () => {
         )}
 
         {activeTab === 'store' && (
-          <StoreManagement projectId={projectId} />
+          <div className="space-y-6">
+            {/* Store Management Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Store Management</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Manage stores, products, and orders
+                </p>
+              </div>
+            </div>
+
+            {/* Store Management Component */}
+            <StoreManagement projectId={projectId} onViewStore={handleViewStore} />
+          </div>
         )}
 
         {activeTab === 'orders' && (
@@ -2754,6 +3040,548 @@ const ProjectDashboard = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Store Details Modal */}
+      {isStoreModalOpen && selectedStoreForModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-blue-100 rounded-xl">
+                    <ShoppingBag className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedStoreForModal.name}</h2>
+                    <div className="flex items-center space-x-4 mt-1">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        {selectedStoreForModal.location || 'No location'}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <DollarSign className="h-4 w-4 mr-1" />
+                        Delivery: ${selectedStoreForModal.deliveryFee || 0}
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        (selectedStoreForModal.status === 'active' || 
+                         selectedStoreForModal.status === 'Active' || 
+                         selectedStoreForModal.status === 'ACTIVE' ||
+                         selectedStoreForModal.status === true) 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedStoreForModal.status || selectedStoreForModal.isActive || 'Unknown'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsStoreModalOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {loadingStoreData ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Loading store data...</span>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Store Overview Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6">
+                      <div className="flex items-center">
+                        <div className="p-3 bg-blue-200 rounded-lg">
+                          <Package className="h-6 w-6 text-blue-700" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-blue-700">Total Orders</p>
+                          <p className="text-2xl font-bold text-blue-900">{storeOrders.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-6">
+                      <div className="flex items-center">
+                        <div className="p-3 bg-green-200 rounded-lg">
+                          <ShoppingCart className="h-6 w-6 text-green-700" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-green-700">Products</p>
+                          <p className="text-2xl font-bold text-green-900">{storeProducts.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl p-6">
+                      <div className="flex items-center">
+                        <div className="p-3 bg-yellow-200 rounded-lg">
+                          <Star className="h-6 w-6 text-yellow-700" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-yellow-700">Average Rating</p>
+                          <p className="text-2xl font-bold text-yellow-900">
+                            {storeReviews.length > 0 
+                              ? (storeReviews.reduce((sum, review) => sum + (review.rating || 0), 0) / storeReviews.length).toFixed(1)
+                              : 'N/A'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-6">
+                      <div className="flex items-center">
+                        <div className="p-3 bg-purple-200 rounded-lg">
+                          <MessageCircle className="h-6 w-6 text-purple-700" />
+                        </div>
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-purple-700">Reviews</p>
+                          <p className="text-2xl font-bold text-purple-900">{storeReviews.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Store Information */}
+                  <div className="bg-gray-50 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <ShoppingBag className="h-5 w-5 mr-2 text-blue-600" />
+                      Store Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Store Name</label>
+                        <p className="text-lg font-semibold text-gray-900 mt-1">{selectedStoreForModal.name}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Location</label>
+                        <p className="text-lg font-semibold text-gray-900 mt-1">{selectedStoreForModal.location || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Delivery Fee</label>
+                        <p className="text-lg font-semibold text-gray-900 mt-1">${selectedStoreForModal.deliveryFee || 0}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Status</label>
+                        <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
+                          (selectedStoreForModal.status === 'active' || 
+                           selectedStoreForModal.status === 'Active' || 
+                           selectedStoreForModal.status === 'ACTIVE' ||
+                           selectedStoreForModal.status === true) 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {selectedStoreForModal.status || selectedStoreForModal.isActive || 'Unknown'}
+                        </span>
+                      </div>
+                      {selectedStoreForModal.description && (
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-medium text-gray-500">Description</label>
+                          <p className="text-gray-900 mt-1">{selectedStoreForModal.description}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Products Section */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <ShoppingCart className="h-5 w-5 mr-2 text-green-600" />
+                        Products ({storeProducts.length})
+                      </h3>
+                      <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Product
+                      </button>
+                    </div>
+                    
+                    {storeProducts.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {storeProducts.map((product) => (
+                          <div key={product.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                                <p className="text-sm text-gray-600 mt-1">{product.description || 'No description'}</p>
+                                <div className="flex items-center justify-between mt-3">
+                                  <span className="text-lg font-bold text-green-600">${product.price || 0}</span>
+                                  <span className="text-sm text-gray-500">Stock: {product.stock || 0}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+                        <p className="text-gray-600">This store doesn't have any products yet.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Store Orders Management Section */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <Package className="h-5 w-5 mr-2 text-blue-600" />
+                        Store Orders ({storeOrders.length})
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setStoreOrderSearchTerm('');
+                            setStoreOrderStatusFilter('all');
+                            setStoreOrderPaymentFilter('all');
+                            setStoreOrderDateFilter('all');
+                            setStoreOrderDateRange({ start: '', end: '' });
+                          }}
+                          className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          Clear Filters
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Order Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                      <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-blue-900">{getStoreOrderStats().total}</p>
+                        <p className="text-xs text-blue-700">Total</p>
+                      </div>
+                      <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-yellow-900">{getStoreOrderStats().pending}</p>
+                        <p className="text-xs text-yellow-700">Pending</p>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-purple-900">{getStoreOrderStats().processing}</p>
+                        <p className="text-xs text-purple-700">Processing</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-900">{getStoreOrderStats().delivered}</p>
+                        <p className="text-xs text-green-700">Delivered</p>
+                      </div>
+                      <div className="bg-red-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-red-900">{getStoreOrderStats().cancelled}</p>
+                        <p className="text-xs text-red-700">Cancelled</p>
+                      </div>
+                    </div>
+
+                    {/* Order Filters */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search orders..."
+                          value={storeOrderSearchTerm}
+                          onChange={(e) => setStoreOrderSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
+                      <select
+                        value={storeOrderStatusFilter}
+                        onChange={(e) => setStoreOrderStatusFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+
+                      <select
+                        value={storeOrderPaymentFilter}
+                        onChange={(e) => setStoreOrderPaymentFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Payment</option>
+                        <option value="cash">Cash on Delivery</option>
+                        <option value="online">Online Payment</option>
+                      </select>
+
+                      <select
+                        value={storeOrderDateFilter}
+                        onChange={(e) => setStoreOrderDateFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="week">Last 7 Days</option>
+                        <option value="month">Last 30 Days</option>
+                        <option value="custom">Custom Range</option>
+                      </select>
+                    </div>
+
+                    {/* Custom Date Range */}
+                    {storeOrderDateFilter === 'custom' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <input
+                          type="date"
+                          value={storeOrderDateRange.start}
+                          onChange={(e) => setStoreOrderDateRange(prev => ({ ...prev, start: e.target.value }))}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Start Date"
+                        />
+                        <input
+                          type="date"
+                          value={storeOrderDateRange.end}
+                          onChange={(e) => setStoreOrderDateRange(prev => ({ ...prev, end: e.target.value }))}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="End Date"
+                        />
+                      </div>
+                    )}
+
+                    {/* Orders Table */}
+                    {getFilteredStoreOrders().length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Order Details
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date & Time
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Total
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {getFilteredStoreOrders().map((order) => (
+                              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <Package className="h-5 w-5 text-blue-600" />
+                                      </div>
+                                    </div>
+                                    <div className="ml-3">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {order.orderNumber || 'N/A'}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {order.items?.length || 0} items
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {order.userName || 'Unknown User'}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {order.userPhone || 'No phone'}
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    {order.userEmail || 'No email'}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="flex items-center">
+                                    <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                                    <span>
+                                      {order.createdAt ? 
+                                        (order.createdAt.toDate ? 
+                                          order.createdAt.toDate().toLocaleDateString() : 
+                                          new Date(order.createdAt).toLocaleDateString()
+                                        ) : 'No date'
+                                      }
+                                    </span>
+                                  </div>
+                                  {order.estimatedDelivery && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Est: {order.estimatedDelivery}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    <div className="text-green-600 font-medium">
+                                      ${(order.total || 0).toFixed(2)}
+                                    </div>
+                                    {order.deliveryFee && (
+                                      <div className="text-xs text-gray-500">
+                                        +${(order.deliveryFee || 0).toFixed(2)} delivery
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                    order.status === 'delivered'
+                                      ? 'bg-green-100 text-green-800'
+                                      : order.status === 'processing'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : order.status === 'shipped'
+                                          ? 'bg-purple-100 text-purple-800'
+                                          : order.status === 'cancelled'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {order.status || 'pending'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      onClick={() => handleViewOrder(order)}
+                                      className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                      title="View Details"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </button>
+                                    <select
+                                      value={order.status || 'pending'}
+                                      onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
+                                      className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                      <option value="pending">Pending</option>
+                                      <option value="processing">Processing</option>
+                                      <option value="shipped">Shipped</option>
+                                      <option value="delivered">Delivered</option>
+                                      <option value="cancelled">Cancelled</option>
+                                    </select>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+                        <p className="text-gray-600">
+                          {storeOrders.length > 0
+                            ? 'No orders match your search criteria.'
+                            : 'This store hasn\'t received any orders yet.'
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Reviews Section */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                      <Star className="h-5 w-5 mr-2 text-yellow-600" />
+                      Customer Reviews ({storeReviews.length})
+                    </h3>
+                    
+                    {storeReviews.length > 0 ? (
+                      <div className="space-y-4">
+                        {storeReviews.map((review) => (
+                          <div key={review.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-sm font-semibold text-blue-600">
+                                    {(review.userName || 'U').charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-gray-900">{review.userName || 'Anonymous'}</p>
+                                  <p className="text-xs text-gray-500">{review.userEmail || 'No email'}</p>
+                                  <p className="text-xs text-gray-400">ID: {review.userId || 'N/A'}</p>
+                                  <div className="flex items-center mt-1">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={`h-4 w-4 ${
+                                          i < (review.rating || 0) 
+                                            ? 'text-yellow-400 fill-current' 
+                                            : 'text-gray-300'
+                                        }`}
+                                      />
+                                    ))}
+                                    <span className="ml-2 text-sm text-gray-600">({review.rating || 0}/5)</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs text-gray-500">
+                                  {review.createdAt ? 
+                                    (review.createdAt.toDate ? 
+                                      review.createdAt.toDate().toLocaleDateString() : 
+                                      new Date(review.createdAt).toLocaleDateString()
+                                    ) : 'Unknown date'
+                                  }
+                                </span>
+                                {review.orderNumber && (
+                                  <p className="text-xs text-gray-400 mt-1">Order: {review.orderNumber}</p>
+                                )}
+                              </div>
+                            </div>
+                            {review.comment && (
+                              <p className="text-gray-700">{review.comment}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Star className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No reviews yet</h3>
+                        <p className="text-gray-600">This store hasn't received any reviews yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+              <div className="flex items-center justify-between">
+                {/* <div className="flex items-center space-x-4">
+                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Store
+                  </button>
+                  <button className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View in App
+                  </button>
+                </div> */}
+                <button
+                  onClick={() => setIsStoreModalOpen(false)}
+                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

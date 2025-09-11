@@ -525,7 +525,7 @@ export const useStoreManagementStore = create((set, get) => ({
             try {
               const userDoc = await getDocs(
                 query(
-                  collection(db, 'users'),
+                  collection(db, `projects/${projectId}/users`),
                   where('__name__', '==', order.userId)
                 )
               );
