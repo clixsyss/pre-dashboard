@@ -11,10 +11,10 @@ const Projects = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-pre-white flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Redirecting to project selection...</p>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
+        <p className="text-pre-black">Redirecting to project selection...</p>
       </div>
     </div>
   );

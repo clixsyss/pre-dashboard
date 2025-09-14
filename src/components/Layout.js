@@ -62,7 +62,8 @@ const Layout = () => {
           <div className="space-y-3">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href || 
-                (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
+                (item.href !== '/dashboard' && location.pathname.startsWith(item.href)) ||
+                (item.name === 'Projects' && location.pathname === '/project-selection');
               return (
                 <a
                   key={item.name}
@@ -141,13 +142,15 @@ const Layout = () => {
                 <h2 className="text-2xl font-bold text-gray-900">
                   {navigation.find(item => 
                     item.href === location.pathname || 
-                    (item.href !== '/dashboard' && location.pathname.startsWith(item.href))
+                    (item.href !== '/dashboard' && location.pathname.startsWith(item.href)) ||
+                    (item.name === 'Projects' && location.pathname === '/project-selection')
                   )?.name || 'Dashboard'}
                 </h2>
                 <p className="text-base text-gray-500 mt-1">
                   {navigation.find(item => 
                     item.href === location.pathname || 
-                    (item.href !== '/dashboard' && location.pathname.startsWith(item.href))
+                    (item.href !== '/dashboard' && location.pathname.startsWith(item.href)) ||
+                    (item.name === 'Projects' && location.pathname === '/project-selection')
                   )?.description || 'Manage your sports platform'}
                 </p>
               </div>
