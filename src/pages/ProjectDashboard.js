@@ -24,7 +24,6 @@ import {
   DollarSign,
   ShoppingCart,
   X,
-  ExternalLink,
   MessageCircle,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
@@ -34,6 +33,7 @@ import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
+import ComplaintsManagement from '../components/ComplaintsManagement';
 import AdminSetup from '../components/AdminSetup';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
@@ -123,6 +123,7 @@ const ProjectDashboard = () => {
     { id: 'bookings', name: 'Bookings', icon: Calendar, color: 'pink' },
     { id: 'events', name: 'Notifications', icon: Target, color: 'red' },
     { id: 'news', name: 'News', icon: Newspaper, color: 'emerald' },
+    { id: 'complaints', name: 'Complaints', icon: MessageCircle, color: 'purple' },
     { id: 'store', name: 'Store', icon: ShoppingBag, color: 'teal' },
     { id: 'orders', name: 'Orders', icon: Package, color: 'cyan' },
     { id: 'gatepass', name: 'Gate Pass', icon: Key, color: 'amber' }
@@ -1908,6 +1909,10 @@ const ProjectDashboard = () => {
 
         {activeTab === 'news' && (
           <NewsManagementSystem projectId={projectId} />
+        )}
+
+        {activeTab === 'complaints' && (
+          <ComplaintsManagement projectId={projectId} />
         )}
 
         {activeTab === 'store' && (
