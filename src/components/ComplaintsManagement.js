@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, 
   Filter, 
@@ -412,15 +412,52 @@ const ComplaintsManagement = ({ projectId }) => {
 
 // Complaint Detail Modal Component
 const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
-  const { updateComplaintStatus, addMessage, uploadComplaintImage } = useComplaintStore();
+  const { updateComplaintStatus, addMessage, uploadComplaintImage, subscribeToComplaint, currentComplaint } = useComplaintStore();
   
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [unsubscribe, setUnsubscribe] = useState(null);
+  const messagesEndRef = useRef(null);
+  
+  // Use real-time complaint data if available, otherwise fallback to prop
+  const currentComplaintData = currentComplaint || complaint;
+  const isComplaintClosed = currentComplaintData?.status === 'Closed';
+
+  // Scroll to bottom when messages change
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    // Add a small delay to ensure DOM is updated
+    const timer = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [currentComplaintData.messages]);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    if (projectId && complaint.id) {
+      const unsubscribeFn = subscribeToComplaint(projectId, complaint.id);
+      setUnsubscribe(() => unsubscribeFn);
+    }
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [projectId, complaint.id, subscribeToComplaint, unsubscribe]);
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await updateComplaintStatus(projectId, complaint.id, newStatus);
+      await updateComplaintStatus(projectId, currentComplaintData.id, newStatus);
     } catch (error) {
       console.error('Error updating status:', error);
     }
@@ -429,15 +466,16 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() && !selectedFile) return;
+    if (isComplaintClosed) return;
 
     try {
       let imageData = null;
       if (selectedFile) {
         setUploading(true);
-        imageData = await uploadComplaintImage(selectedFile, complaint.id);
+        imageData = await uploadComplaintImage(selectedFile, currentComplaintData.id);
       }
 
-      await addMessage(projectId, complaint.id, {
+      await addMessage(projectId, currentComplaintData.id, {
         senderType: 'admin',
         senderId: 'admin', // You can get this from auth context if needed
         text: newMessage.trim() || 'Image message',
@@ -463,21 +501,21 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg max-w-6xl w-full h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
           <div className="flex items-center gap-4">
             <div>
-              <h3 className="text-lg font-medium text-gray-900">{complaint.title}</h3>
+              <h3 className="text-lg font-medium text-gray-900">{currentComplaintData.title}</h3>
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-500">Complaint #{complaint.id}</span>
+                <span className="text-sm text-gray-500">Complaint #{currentComplaintData.id}</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  complaint.status === 'Open' ? 'bg-blue-100 text-blue-800' :
-                  complaint.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                  complaint.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                  currentComplaintData.status === 'Open' ? 'bg-blue-100 text-blue-800' :
+                  currentComplaintData.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                  currentComplaintData.status === 'Resolved' ? 'bg-green-100 text-green-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
-                  {complaint.status}
+                  {currentComplaintData.status}
                 </span>
               </div>
             </div>
@@ -493,7 +531,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4 bg-gradient-to-b from-gray-50 to-gray-100">
           <div className="max-w-4xl mx-auto space-y-4">
-            {complaint.messages?.map((message) => (
+            {currentComplaintData.messages?.map((message) => (
               <div
                 key={message.id}
                 className={`flex items-end gap-3 ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
@@ -532,17 +570,32 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
                 </div>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         </div>
 
         {/* Status and Actions */}
         <div className="px-6 py-4 border-t border-gray-200 bg-white">
+          {/* Closed Complaint Notice */}
+          {isComplaintClosed && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                  <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="text-sm font-medium">This complaint has been closed. You can view the conversation but cannot send new messages.</span>
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-700">Status:</span>
                 <select
-                  value={complaint.status}
+                  value={currentComplaintData.status}
                   onChange={(e) => handleStatusChange(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 >
@@ -556,18 +609,19 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
           </div>
 
           {/* Message Input */}
-          <form onSubmit={handleSendMessage} className="flex items-end gap-3">
+          <form onSubmit={handleSendMessage} className={`flex items-end gap-3 ${isComplaintClosed ? 'opacity-50' : ''}`}>
             <input
               type="file"
               accept="image/*,video/*"
               onChange={handleFileSelect}
               className="hidden"
               id="file-input"
+              disabled={isComplaintClosed}
             />
             <label
               htmlFor="file-input"
-              className="p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-              title="Attach Image/Video"
+              className={`p-3 border border-gray-300 rounded-lg transition-colors ${isComplaintClosed ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}
+              title={isComplaintClosed ? "Cannot attach files to closed complaints" : "Attach Image/Video"}
             >
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -578,14 +632,15 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
               <textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                placeholder={isComplaintClosed ? "This complaint is closed" : "Type your message..."}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                 rows="1"
                 style={{ minHeight: '48px', maxHeight: '120px' }}
                 onInput={(e) => {
                   e.target.style.height = 'auto';
                   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
                 }}
+                disabled={isComplaintClosed}
               />
               {uploading && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -596,8 +651,9 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
             
             <button
               type="submit"
-              disabled={uploading || (!newMessage.trim() && !selectedFile)}
+              disabled={uploading || (!newMessage.trim() && !selectedFile) || isComplaintClosed}
               className="px-6 py-3 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              title={isComplaintClosed ? "Cannot send messages to closed complaints" : "Send Message"}
             >
               {uploading ? (
                 <>
