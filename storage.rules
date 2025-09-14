@@ -1,0 +1,91 @@
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to read all files
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+    }
+    
+    // Allow admins to upload and manage files
+    match /{allPaths=**} {
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow news media uploads for admins
+    match /news/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+        // Allow project-specific news media uploads for admins
+    match /projects/{projectId}/news/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow store image uploads for admins
+    match /projects/{projectId}/stores/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+      // Temporary: Allow authenticated users to upload store images (for testing)
+    match /projects/{projectId}/stores/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Temporary: Allow authenticated users to upload product images (for testing)
+    match /projects/{projectId}/stores/{storeId}/products/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow product image uploads for admins
+    match /projects/{projectId}/stores/{storeId}/products/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Temporary: Allow authenticated users to upload news media (for testing)
+    // TODO: Remove this rule once admin authentication is properly set up
+    match /news/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow court image uploads for admins
+    match /courts/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Temporary: Allow authenticated users to upload court images (for testing)
+    match /courts/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow academy image uploads for admins
+    match /academies/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Temporary: Allow authenticated users to upload academy images (for testing)
+    match /academies/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow logo and other public assets to be read by anyone
+    match /logo.png {
+      allow read: if true;
+    }
+    
+    match /public/{allPaths=**} {
+      allow read: if true;
+    }
+  }
+}

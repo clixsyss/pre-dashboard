@@ -20,6 +20,16 @@ export const useCourtStore = create((set, get) => ({
         id: docSnap.id,
         ...docSnap.data()
       }));
+      
+      console.log('Fetched courts data:', courtsData);
+      courtsData.forEach(court => {
+        console.log(`Court ${court.name}:`, {
+          imageUrl: court.imageUrl,
+          imageFileName: court.imageFileName,
+          image: court.image
+        });
+      });
+      
       set({ courts: courtsData });
     } catch (error) {
       console.error("Error fetching courts:", error);
@@ -45,6 +55,8 @@ export const useCourtStore = create((set, get) => ({
         hourlyRate: courtData.hourlyRate || 0,
         status: courtData.status || 'available', // available, maintenance, booked
         image: courtData.image || '',
+        imageUrl: courtData.imageUrl || '',
+        imageFileName: courtData.imageFileName || '',
         description: courtData.description || '',
         active: courtData.active !== undefined ? courtData.active : true,
         createdAt: serverTimestamp(),
@@ -73,6 +85,8 @@ export const useCourtStore = create((set, get) => ({
       set({ loading: true, error: null });
       const courtRef = doc(db, `projects/${projectId}/courts`, courtId);
       
+      console.log('Updating court with data:', courtData);
+      
       const updateData = {
         name: courtData.name,
         type: courtData.type,
@@ -86,10 +100,14 @@ export const useCourtStore = create((set, get) => ({
         hourlyRate: courtData.hourlyRate || 0,
         status: courtData.status,
         image: courtData.image || '',
+        imageUrl: courtData.imageUrl || '',
+        imageFileName: courtData.imageFileName || '',
         description: courtData.description || '',
         active: courtData.active,
         updatedAt: serverTimestamp()
       };
+      
+      console.log('Update data being sent to Firestore:', updateData);
 
       await updateDoc(courtRef, updateData);
 

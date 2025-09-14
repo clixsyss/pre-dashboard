@@ -56,6 +56,8 @@ export const useAcademyStore = create((set, get) => ({
         operatingHours: academy.operatingHours,
         facilities: academy.facilities,
         programs: [],
+        imageUrl: academy.imageUrl || '',
+        imageFileName: academy.imageFileName || '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -74,7 +76,9 @@ export const useAcademyStore = create((set, get) => ({
         capacity: academy.capacity,
         operatingHours: academy.operatingHours,
         facilities: academy.facilities,
-        programs: []
+        programs: [],
+        imageUrl: academy.imageUrl || '',
+        imageFileName: academy.imageFileName || ''
       };
 
       set((state) => ({
@@ -107,6 +111,8 @@ export const useAcademyStore = create((set, get) => ({
         capacity: academy.capacity,
         operatingHours: academy.operatingHours,
         facilities: academy.facilities,
+        imageUrl: academy.imageUrl || '',
+        imageFileName: academy.imageFileName || '',
         updatedAt: serverTimestamp()
       });
 

@@ -10,9 +10,14 @@ import {
   School,
   Phone,
   Mail,
-  Award
+  Award,
+  Upload,
+  Image,
+  Camera
 } from 'lucide-react';
 import { useAcademyStore } from '../stores/academyStore';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../config/firebase';
 
 const AcademiesManagement = ({ projectId }) => {
   // Helper function to safely get coach name
@@ -76,8 +81,12 @@ const AcademiesManagement = ({ projectId }) => {
     website: '',
     capacity: 0,
     operatingHours: '',
-    facilities: ''
+    facilities: '',
+    imageFile: null,
+    imageUrl: ''
   });
+
+  const [uploading, setUploading] = useState(false);
 
   // Form state for program creation/editing
   const [programFormData, setProgramFormData] = useState({
@@ -167,7 +176,9 @@ const AcademiesManagement = ({ projectId }) => {
       website: academy.website || '',
       capacity: academy.capacity || 0,
       operatingHours: academy.operatingHours || '',
-      facilities: academy.facilities ? academy.facilities.join(', ') : ''
+      facilities: academy.facilities ? academy.facilities.join(', ') : '',
+      imageFile: null,
+      imageUrl: academy.imageUrl || ''
     };
     
     console.log('Setting form data:', formData);
@@ -190,10 +201,36 @@ const AcademiesManagement = ({ projectId }) => {
       website: '',
       capacity: 0,
       operatingHours: '',
-      facilities: ''
+      facilities: '',
+      imageFile: null,
+      imageUrl: ''
     });
     setFormErrors({});
     setIsAddAcademyModalOpen(true);
+  };
+
+  const handleImageUpload = async (file) => {
+    if (!file || !projectId) return null;
+    
+    setUploading(true);
+    try {
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `academies/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+      const fileRef = storageRef(storage, fileName);
+      
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
+      
+      return {
+        url: downloadURL,
+        fileName: fileName
+      };
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleManagePrograms = (academy) => {
@@ -397,11 +434,28 @@ const AcademiesManagement = ({ projectId }) => {
 
     setIsSubmitting(true);
     try {
+      let imageData = null;
+      
+      // Handle image upload if there's a new file
+      if (academyFormData.imageFile) {
+        imageData = await handleImageUpload(academyFormData.imageFile);
+      }
+      
       const academyData = {
         ...academyFormData,
         facilities: academyFormData.facilities ? academyFormData.facilities.split(',').map(f => f.trim()).filter(f => f) : [],
         programs: selectedAcademyForModal?.programs || []
       };
+      
+      // Add image data if available
+      if (imageData) {
+        academyData.imageUrl = imageData.url;
+        academyData.imageFileName = imageData.fileName;
+      } else if (selectedAcademyForModal && selectedAcademyForModal.imageUrl) {
+        // Keep existing image if no new file uploaded
+        academyData.imageUrl = selectedAcademyForModal.imageUrl;
+        academyData.imageFileName = selectedAcademyForModal.imageFileName;
+      }
 
       console.log('Submitting academy data:', academyData);
       console.log('Form data before submission:', academyFormData);
@@ -431,7 +485,9 @@ const AcademiesManagement = ({ projectId }) => {
         website: '',
         capacity: 0,
         operatingHours: '',
-        facilities: ''
+        facilities: '',
+        imageFile: null,
+        imageUrl: ''
       });
       setFormErrors({});
       
@@ -1323,6 +1379,66 @@ const AcademiesManagement = ({ projectId }) => {
                   />
                 </div>
 
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Academy Image
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setAcademyFormData({ 
+                            ...academyFormData, 
+                            imageFile: file,
+                            imageUrl: URL.createObjectURL(file) // Preview
+                          });
+                        }
+                      }}
+                      className="hidden"
+                      id="academy-image-upload"
+                    />
+                    <label htmlFor="academy-image-upload" className="cursor-pointer">
+                      {academyFormData.imageUrl ? (
+                        <div className="space-y-2">
+                          <img 
+                            src={academyFormData.imageUrl} 
+                            alt="Academy preview" 
+                            className="mx-auto h-32 w-48 object-cover rounded-lg"
+                          />
+                          <p className="text-sm text-gray-600">
+                            {academyFormData.imageFile ? academyFormData.imageFile.name : 'Current image'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setAcademyFormData({ ...academyFormData, imageFile: null, imageUrl: '' });
+                              document.getElementById('academy-image-upload').value = '';
+                            }}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Remove image
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Camera className="h-8 w-8 text-gray-400 mx-auto" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload academy image
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Supports JPG, PNG, WebP (Max 5MB)
+                          </p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
                 {/* Submit Error Display */}
                 {formErrors.submit && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -1343,20 +1459,24 @@ const AcademiesManagement = ({ projectId }) => {
               >
                 Cancel
               </button>
-                              <button
-                  type="submit"
-                  form="academyForm"
-                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  disabled={isSubmitting}
-                >
-                  {selectedAcademyForModal ? 'Update Academy' : 'Create Academy'}
-                  {isSubmitting && (
+              <button
+                type="submit"
+                form="academyForm"
+                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                disabled={isSubmitting || uploading}
+              >
+                {isSubmitting || uploading ? (
+                  <>
+                    {uploading ? 'Uploading...' : 'Saving...'}
                     <svg className="animate-spin h-4 w-4 ml-2 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                  )}
-                </button>
+                  </>
+                ) : (
+                  selectedAcademyForModal ? 'Update Academy' : 'Create Academy'
+                )}
+              </button>
             </div>
           </div>
         </div>

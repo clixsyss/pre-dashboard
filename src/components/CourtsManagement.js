@@ -15,8 +15,13 @@ import {
   Trophy,
   X,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  Image,
+  Camera
 } from 'lucide-react';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../config/firebase';
 
 const CourtsManagement = ({ projectId }) => {
   const { success, error: showError, warning, info } = useUINotificationStore();
@@ -52,8 +57,12 @@ const CourtsManagement = ({ projectId }) => {
     type: 'outdoor',
     sportId: '',
     surface: 'hard',
-    description: ''
+    description: '',
+    imageFile: null,
+    imageUrl: ''
   });
+
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (projectId) {
@@ -91,15 +100,49 @@ const CourtsManagement = ({ projectId }) => {
       type: 'outdoor',
       sportId: '',
       surface: 'hard',
-      description: ''
+      description: '',
+      imageFile: null,
+      imageUrl: ''
     });
     setEditingCourt(null);
+  };
+
+  const handleImageUpload = async (file) => {
+    if (!file || !projectId) return null;
+    
+    setUploading(true);
+    try {
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `courts/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+      const fileRef = storageRef(storage, fileName);
+      
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
+      
+      return {
+        url: downloadURL,
+        fileName: fileName
+      };
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      showError('Error uploading image. Please try again.');
+      throw error;
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
+      let imageData = null;
+      
+      // Handle image upload if there's a new file
+      if (formData.imageFile) {
+        imageData = await handleImageUpload(formData.imageFile);
+      }
+      
       const courtData = {
         name: formData.name.trim(),
         location: formData.location.trim(),
@@ -112,6 +155,22 @@ const CourtsManagement = ({ projectId }) => {
         status: 'available',
         active: true
       };
+      
+      // Add image data if available
+      if (imageData) {
+        courtData.imageUrl = imageData.url;
+        courtData.imageFileName = imageData.fileName;
+        console.log('New image uploaded:', imageData);
+      } else if (editingCourt && editingCourt.imageUrl) {
+        // Keep existing image if no new file uploaded
+        courtData.imageUrl = editingCourt.imageUrl;
+        courtData.imageFileName = editingCourt.imageFileName;
+        console.log('Keeping existing image:', editingCourt.imageUrl);
+      } else {
+        console.log('No image data available');
+      }
+      
+      console.log('Court data being saved:', courtData);
 
       if (editingCourt) {
         await updateCourt(projectId, editingCourt.id, courtData);
@@ -131,6 +190,10 @@ const CourtsManagement = ({ projectId }) => {
   };
 
   const handleEdit = (court) => {
+    console.log('Editing court:', court);
+    console.log('Court imageUrl:', court.imageUrl);
+    console.log('Court imageFileName:', court.imageFileName);
+    
     setEditingCourt(court);
     setFormData({
       name: court.name || '',
@@ -140,7 +203,9 @@ const CourtsManagement = ({ projectId }) => {
       type: court.type || 'outdoor',
       sportId: court.sport || '',
       surface: court.surface || 'hard',
-      description: court.description || ''
+      description: court.description || '',
+      imageFile: null,
+      imageUrl: court.imageUrl || ''
     });
     setShowModal(true);
   };
@@ -293,6 +358,9 @@ const CourtsManagement = ({ projectId }) => {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Image
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -345,6 +413,19 @@ const CourtsManagement = ({ projectId }) => {
                         <option value="maintenance">Maintenance</option>
                         <option value="booked">Booked</option>
                       </select>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {court.imageUrl ? (
+                        <img 
+                          src={court.imageUrl} 
+                          alt={court.name} 
+                          className="h-12 w-16 object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="h-12 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Image className="h-6 w-6 text-gray-400" />
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
@@ -546,6 +627,66 @@ const CourtsManagement = ({ projectId }) => {
                   />
                 </div>
 
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Court Image
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setFormData({ 
+                            ...formData, 
+                            imageFile: file,
+                            imageUrl: URL.createObjectURL(file) // Preview
+                          });
+                        }
+                      }}
+                      className="hidden"
+                      id="court-image-upload"
+                    />
+                    <label htmlFor="court-image-upload" className="cursor-pointer">
+                      {formData.imageUrl ? (
+                        <div className="space-y-2">
+                          <img 
+                            src={formData.imageUrl} 
+                            alt="Court preview" 
+                            className="mx-auto h-32 w-48 object-cover rounded-lg"
+                          />
+                          <p className="text-sm text-gray-600">
+                            {formData.imageFile ? formData.imageFile.name : 'Current image'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setFormData({ ...formData, imageFile: null, imageUrl: '' });
+                              document.getElementById('court-image-upload').value = '';
+                            }}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Remove image
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Camera className="h-8 w-8 text-gray-400 mx-auto" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload court image
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Supports JPG, PNG, WebP (Max 5MB)
+                          </p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
@@ -559,17 +700,17 @@ const CourtsManagement = ({ projectId }) => {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || uploading}
                     className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      isSubmitting
+                      isSubmitting || uploading
                         ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {isSubmitting ? (
+                    {isSubmitting || uploading ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline"></div>
-                        {editingCourt ? 'Updating...' : 'Adding...'}
+                        {uploading ? 'Uploading...' : (editingCourt ? 'Updating...' : 'Adding...')}
                       </>
                     ) : (
                       editingCourt ? 'Update Court' : 'Add Court'

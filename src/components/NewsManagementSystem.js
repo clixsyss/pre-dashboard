@@ -109,6 +109,18 @@ const NewsManagementSystem = ({ projectId }) => {
     e.preventDefault();
     if (!projectId) return;
     
+    // Check featured limit for new items or when marking as featured
+    if (formData.featured && formData.isPublished) {
+      const currentFeaturedCount = newsItems.filter(news => news.featured && news.isPublished).length;
+      // If editing, don't count the current item
+      const excludeCurrent = editingItem && editingItem.featured ? 1 : 0;
+      
+      if (currentFeaturedCount - excludeCurrent >= 3) {
+        warning('You can only have 3 featured news items at a time. Please unfeature another item first.');
+        return;
+      }
+    }
+    
     setLoading(true);
     try {
       let mediaData = null;
@@ -232,12 +244,27 @@ const NewsManagementSystem = ({ projectId }) => {
   const toggleFeatured = async (item) => {
     if (!projectId) return;
     
+    // Check if we're trying to mark as featured and already have 3 featured items
+    if (!item.featured) {
+      const currentFeaturedCount = newsItems.filter(news => news.featured && news.isPublished).length;
+      if (currentFeaturedCount >= 3) {
+        warning('You can only have 3 featured news items at a time. Please unfeature another item first.');
+        return;
+      }
+    }
+    
     try {
       await updateDoc(doc(db, `projects/${projectId}/news`, item.id), {
         featured: !item.featured,
         updatedAt: serverTimestamp()
       });
       fetchNews();
+      
+      if (!item.featured) {
+        success('News item marked as featured!');
+      } else {
+        info('News item removed from featured.');
+      }
     } catch (error) {
       console.error('Error toggling featured status:', error);
       showError('Error updating featured status. Please try again.');
@@ -342,16 +369,35 @@ const NewsManagementSystem = ({ projectId }) => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
+        <div className={`rounded-xl p-4 border ${
+          newsItems.filter(item => item.featured && item.isPublished).length >= 3 
+            ? 'bg-yellow-50 border-yellow-200' 
+            : 'bg-white border-gray-200'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Featured</p>
-              <p className="text-2xl font-bold text-purple-600">
-                {newsItems.filter(item => item.featured).length}
+              <p className={`text-2xl font-bold ${
+                newsItems.filter(item => item.featured && item.isPublished).length >= 3 
+                  ? 'text-yellow-600' 
+                  : 'text-purple-600'
+              }`}>
+                {newsItems.filter(item => item.featured && item.isPublished).length}/3
               </p>
+              {newsItems.filter(item => item.featured && item.isPublished).length >= 3 && (
+                <p className="text-xs text-yellow-600 mt-1">Limit reached</p>
+              )}
             </div>
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Star className="h-5 w-5 text-purple-600" />
+            <div className={`p-2 rounded-lg ${
+              newsItems.filter(item => item.featured && item.isPublished).length >= 3 
+                ? 'bg-yellow-100' 
+                : 'bg-purple-100'
+            }`}>
+              <Star className={`h-5 w-5 ${
+                newsItems.filter(item => item.featured && item.isPublished).length >= 3 
+                  ? 'text-yellow-600' 
+                  : 'text-purple-600'
+              }`} />
             </div>
           </div>
         </div>
@@ -479,12 +525,21 @@ const NewsManagementSystem = ({ projectId }) => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => toggleFeatured(item)}
+                          disabled={!item.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3}
                           className={`p-1 rounded transition-colors ${
                             item.featured 
                               ? 'text-yellow-600 hover:text-yellow-700' 
-                              : 'text-gray-400 hover:text-yellow-600'
+                              : !item.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-gray-400 hover:text-yellow-600'
                           }`}
-                          title={item.featured ? 'Remove from featured' : 'Mark as featured'}
+                          title={
+                            item.featured 
+                              ? 'Remove from featured' 
+                              : !item.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3
+                                ? 'Featured limit reached (3/3)'
+                                : 'Mark as featured'
+                          }
                         >
                           <Star className={`h-4 w-4 ${item.featured ? 'fill-current' : ''}`} />
                         </button>
@@ -638,11 +693,19 @@ const NewsManagementSystem = ({ projectId }) => {
                     type="checkbox"
                     id="featured"
                     checked={formData.featured}
+                    disabled={!formData.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3}
                     onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <label htmlFor="featured" className="ml-2 text-sm font-medium text-gray-700">
+                  <label htmlFor="featured" className={`ml-2 text-sm font-medium ${
+                    !formData.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3
+                      ? 'text-gray-400'
+                      : 'text-gray-700'
+                  }`}>
                     Mark as featured
+                    {!formData.featured && newsItems.filter(news => news.featured && news.isPublished).length >= 3 && (
+                      <span className="text-xs text-yellow-600 ml-1">(Limit reached: 3/3)</span>
+                    )}
                   </label>
                 </div>
                 
