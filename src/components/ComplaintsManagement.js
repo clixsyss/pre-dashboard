@@ -463,46 +463,71 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900">{complaint.title}</h3>
-            <p className="text-sm text-gray-500">Complaint #{complaint.id}</p>
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
+          <div className="flex items-center gap-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">{complaint.title}</h3>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-gray-500">Complaint #{complaint.id}</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  complaint.status === 'Open' ? 'bg-blue-100 text-blue-800' :
+                  complaint.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                  complaint.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {complaint.status}
+                </span>
+              </div>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
           >
             <XCircle className="w-6 h-6" />
           </button>
         </div>
 
         {/* Messages */}
-        <div className="px-6 py-4 max-h-96 overflow-y-auto">
-          <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 bg-gradient-to-b from-gray-50 to-gray-100">
+          <div className="max-w-4xl mx-auto space-y-4">
             {complaint.messages?.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
+                className={`flex items-end gap-3 ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
               >
+                {/* Avatar */}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+                  message.senderType === 'admin' ? 'bg-gray-600' : 'bg-red-600'
+                }`}>
+                  {message.senderType === 'admin' ? 'A' : 'U'}
+                </div>
+                
+                {/* Message */}
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                  className={`max-w-md px-4 py-3 rounded-2xl shadow-sm ${
                     message.senderType === 'admin'
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'bg-blue-600 text-white'
+                      ? 'bg-white text-gray-900 border border-gray-200'
+                      : 'bg-red-600 text-white'
                   }`}
                 >
                   {message.imageUrl && (
-                    <img
-                      src={message.imageUrl}
-                      alt="Message attachment"
-                      className="w-full h-32 object-cover rounded mb-2"
-                    />
+                    <div className="mb-2">
+                      <img
+                        src={message.imageUrl}
+                        alt="Message attachment"
+                        className="w-full max-w-xs h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => window.open(message.imageUrl, '_blank')}
+                      />
+                    </div>
                   )}
-                  {message.text && <p className="text-sm">{message.text}</p>}
-                  <p className="text-xs opacity-70 mt-1">
-                    {message.timestamp?.toDate?.()?.toLocaleString() || 'Unknown time'}
+                  {message.text && <p className="text-sm leading-relaxed">{message.text}</p>}
+                  <p className={`text-xs mt-2 ${
+                    message.senderType === 'admin' ? 'text-gray-500' : 'text-red-100'
+                  }`}>
+                    {message.timestamp?.toDate?.()?.toLocaleString() || new Date(message.timestamp).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -511,52 +536,101 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
         </div>
 
         {/* Status and Actions */}
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="px-6 py-4 border-t border-gray-200 bg-white">
           <div className="flex justify-between items-center mb-4">
-            <div className="flex space-x-2">
-              <select
-                value={complaint.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-              >
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
-              </select>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Status:</span>
+                <select
+                  value={complaint.status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                >
+                  <option value="Open">Open</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Resolved">Resolved</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Message Input */}
-          <form onSubmit={handleSendMessage} className="flex space-x-2">
+          <form onSubmit={handleSendMessage} className="flex items-end gap-3">
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               onChange={handleFileSelect}
               className="hidden"
               id="file-input"
             />
             <label
               htmlFor="file-input"
-              className="px-3 py-2 border border-gray-300 rounded text-sm cursor-pointer hover:bg-gray-50"
+              className="p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+              title="Attach Image/Video"
             >
-              📎
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
             </label>
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            
+            <div className="flex-1 relative">
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type your message..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                rows="1"
+                style={{ minHeight: '48px', maxHeight: '120px' }}
+                onInput={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }}
+              />
+              {uploading && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
+                </div>
+              )}
+            </div>
+            
             <button
               type="submit"
               disabled={uploading || (!newMessage.trim() && !selectedFile)}
-              className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
-              {uploading ? 'Sending...' : 'Send'}
+              {uploading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  Send
+                </>
+              )}
             </button>
           </form>
+          
+          {selectedFile && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm text-gray-700">{selectedFile.name}</span>
+              </div>
+              <button
+                onClick={() => setSelectedFile(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

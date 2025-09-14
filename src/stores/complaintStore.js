@@ -11,8 +11,7 @@ import {
   where, 
   orderBy, 
   limit, 
-  onSnapshot,
-  serverTimestamp
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { storage } from '../config/firebase';
@@ -127,6 +126,7 @@ const useComplaintStore = create((set, get) => ({
       set({ loading: true, error: null });
       
       const complaintRef = collection(db, `projects/${projectId}/complaints`);
+      const now = new Date();
       const complaint = {
         userId,
         adminId: null,
@@ -139,13 +139,13 @@ const useComplaintStore = create((set, get) => ({
           senderType: 'user',
           senderId: userId,
           text: complaintData.initialMessage,
-          timestamp: serverTimestamp(),
-          imageUrl: null,
-          imageFileName: null
+          timestamp: now,
+          imageUrl: complaintData.imageUrl || null,
+          imageFileName: complaintData.imageFileName || null
         }],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastMessageAt: serverTimestamp()
+        createdAt: now,
+        updatedAt: now,
+        lastMessageAt: now
       };
 
       const docRef = await addDoc(complaintRef, complaint);
@@ -172,12 +172,13 @@ const useComplaintStore = create((set, get) => ({
       
       const complaintRef = doc(db, `projects/${projectId}/complaints`, complaintId);
       
+      const now = new Date();
       const message = {
         id: Date.now().toString(),
         senderType: messageData.senderType,
         senderId: messageData.senderId,
         text: messageData.text,
-        timestamp: serverTimestamp(),
+        timestamp: now,
         imageUrl: messageData.imageUrl || null,
         imageFileName: messageData.imageFileName || null
       };
@@ -193,8 +194,8 @@ const useComplaintStore = create((set, get) => ({
 
       await updateDoc(complaintRef, {
         messages: updatedMessages,
-        updatedAt: serverTimestamp(),
-        lastMessageAt: serverTimestamp()
+        updatedAt: now,
+        lastMessageAt: now
       });
 
       // Update local state
@@ -227,7 +228,7 @@ const useComplaintStore = create((set, get) => ({
       const complaintRef = doc(db, `projects/${projectId}/complaints`, complaintId);
       const updateData = {
         status,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date()
       };
 
       if (adminId) {
@@ -266,7 +267,7 @@ const useComplaintStore = create((set, get) => ({
       const complaintRef = doc(db, `projects/${projectId}/complaints`, complaintId);
       await updateDoc(complaintRef, {
         adminId,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date()
       });
 
       // Update local state
