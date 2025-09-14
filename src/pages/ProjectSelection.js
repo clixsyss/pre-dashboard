@@ -112,7 +112,7 @@ const ProjectSelection = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
           <p className="text-gray-600">Loading projects...</p>
         </div>
       </div>
@@ -176,21 +176,21 @@ const ProjectSelection = () => {
                         </div>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           project.type === 'residential' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-red-100 text-red-800' 
+                            : 'bg-red-100 text-red-800'
                         }`}>
                           {project.type}
                         </span>
                       </div>
-                      <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-200" />
+                      <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-pre-red group-hover:translate-x-1 transition-all duration-200" />
                     </div>
 
                     {/* Project Stats */}
                     <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-2xl font-bold text-pre-red">
                           {loading ? (
-                            <div className="animate-pulse bg-blue-200 h-8 w-12 rounded mx-auto"></div>
+                            <div className="animate-pulse bg-red-200 h-8 w-12 rounded mx-auto"></div>
                           ) : (
                             stats.users
                           )}
@@ -198,9 +198,9 @@ const ProjectSelection = () => {
                         <div className="text-xs text-gray-500">Users</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
+                        <div className="text-2xl font-bold text-pre-red">
                           {loading ? (
-                            <div className="animate-pulse bg-green-200 h-8 w-12 rounded mx-auto"></div>
+                            <div className="animate-pulse bg-red-200 h-8 w-12 rounded mx-auto"></div>
                           ) : (
                             stats.bookings
                           )}
@@ -223,7 +223,7 @@ const ProjectSelection = () => {
                     <div className="mt-4 pt-4 border-t border-gray-100">
                       <div className="flex items-center justify-between text-sm text-gray-600">
                         <span>Last updated: {project.updatedAt ? new Date(project.updatedAt.toDate()).toLocaleDateString() : 'N/A'}</span>
-                        <span className="text-blue-600 font-medium">Manage →</span>
+                        <span className="text-pre-red font-medium">Manage →</span>
                       </div>
                     </div>
                   </div>

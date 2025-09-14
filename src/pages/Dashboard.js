@@ -304,7 +304,7 @@ const Dashboard = () => {
       case 'completed':
       case 'confirmed':
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'bg-red-100 text-red-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'cancelled':
@@ -333,14 +333,14 @@ const Dashboard = () => {
 
   const StatCard = ({ title, value, icon: Icon, change, changeType = 'up', color = 'blue' }) => {
     const colorClasses = {
-      blue: 'bg-blue-50 text-blue-600',
-      green: 'bg-green-50 text-green-600',
+      blue: 'bg-red-50 text-pre-red',
+      green: 'bg-red-50 text-pre-red',
       purple: 'bg-purple-50 text-purple-600',
       orange: 'bg-orange-50 text-orange-600'
     };
 
     const changeColorClasses = {
-      up: 'text-green-600',
+      up: 'text-pre-red',
       down: 'text-red-600'
     };
 
@@ -371,7 +371,7 @@ const Dashboard = () => {
     return (
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
           <p className="text-gray-600 text-lg">Loading dashboard data...</p>
         </div>
       </div>
@@ -399,7 +399,7 @@ const Dashboard = () => {
                 <div><strong>UID:</strong> {userInfo.uid}</div>
                 <div><strong>Is Admin:</strong> 
                   <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                    userInfo.isAdmin ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    userInfo.isAdmin ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
                   }`}>
                     {userInfo.isAdmin ? 'Yes' : 'No'}
                   </span>
@@ -425,7 +425,7 @@ const Dashboard = () => {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button 
               onClick={fetchDashboardData}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
+              className="px-6 py-3 bg-pre-red text-white rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium"
             >
               Retry
             </button>
@@ -484,8 +484,8 @@ const Dashboard = () => {
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-8 py-6 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
-                          <span className="text-sm font-medium text-green-600">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                          <span className="text-sm font-medium text-pre-red">
                             {user.name?.charAt(0)?.toUpperCase() || 'U'}
                           </span>
                         </div>
@@ -511,7 +511,7 @@ const Dashboard = () => {
                       </span>
                     </td>
                     <td className="px-8 py-6 whitespace-nowrap">
-                      <button className="text-blue-600 hover:text-blue-800 transition-colors duration-150">
+                      <button className="text-pre-red hover:text-red-800 transition-colors duration-150">
                         <Eye className="h-5 w-5" />
                       </button>
                     </td>
@@ -534,23 +534,6 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-3xl p-8 text-white shadow-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
-            <p className="text-blue-100 text-lg">
-              Here's what's happening with your sports platform today.
-            </p>
-          </div>
-          <div className="hidden sm:block">
-            <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl px-4 py-2 text-center">
-              <div className="text-xs text-blue-100 mb-1">Current Status</div>
-              <div className="text-sm font-semibold">Active Platform</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Enhanced Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -615,26 +598,26 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+        <div className="bg-gradient-to-r from-red-50 to-red-50 rounded-2xl p-6 border border-red-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-800">Active Bookings</p>
-              <p className="text-2xl font-bold text-green-900">{stats.activeBookings}</p>
+              <p className="text-sm font-medium text-red-800">Active Bookings</p>
+              <p className="text-2xl font-bold text-red-900">{stats.activeBookings}</p>
             </div>
-            <div className="p-3 bg-green-100 rounded-xl">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="p-3 bg-red-100 rounded-xl">
+              <CheckCircle className="h-6 w-6 text-pre-red" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
+        <div className="bg-gradient-to-r from-red-50 to-red-50 rounded-2xl p-6 border border-red-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-800">Total Events</p>
-              <p className="text-2xl font-bold text-blue-900">{stats.totalEvents}</p>
+              <p className="text-sm font-medium text-red-800">Total Events</p>
+              <p className="text-2xl font-bold text-red-900">{stats.totalEvents}</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <Calendar className="h-6 w-6 text-blue-600" />
+            <div className="p-3 bg-red-100 rounded-xl">
+              <Calendar className="h-6 w-6 text-pre-red" />
             </div>
           </div>
         </div>
@@ -649,7 +632,7 @@ const Dashboard = () => {
               <h3 className="text-2xl font-bold text-gray-900">Monthly Bookings</h3>
               <p className="text-gray-500 mt-1">Track booking trends over time</p>
             </div>
-            <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+            <div className="w-4 h-4 bg-pre-red rounded-full"></div>
           </div>
           <ResponsiveContainer width="100%" height={350}>
             <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -692,7 +675,7 @@ const Dashboard = () => {
               <h3 className="text-2xl font-bold text-gray-900">Monthly Revenue</h3>
               <p className="text-gray-500 mt-1">Monitor financial performance</p>
             </div>
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+            <div className="w-4 h-4 bg-pre-red rounded-full"></div>
           </div>
           <ResponsiveContainer width="100%" height={350}>
             <BarChart data={monthlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -742,18 +725,18 @@ const Dashboard = () => {
             </div>
             <div className="text-left">
               <div className="text-lg font-semibold">Manage Users</div>
-              <div className="text-blue-100 text-sm">Review and manage user accounts</div>
+              <div className="text-pre-red text-sm">Review and manage user accounts</div>
             </div>
           </button>
 
-          <button className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl hover:from-green-600 hover:to-green-700 transition-all duration-200 transform hover:scale-105">
+          <button className="bg-gradient-to-r from-pre-red to-red-600 text-white p-6 rounded-2xl hover:from-red-600 hover:to-red-700 transition-all duration-200 transform hover:scale-105">
             <div className="flex items-center justify-between mb-4">
               <Calendar className="h-8 w-8" />
               <span className="text-sm font-medium">View All</span>
             </div>
             <div className="text-left">
               <div className="text-lg font-semibold">Bookings</div>
-              <div className="text-green-100 text-sm">Monitor and manage reservations</div>
+              <div className="text-red-100 text-sm">Monitor and manage reservations</div>
             </div>
           </button>
 
@@ -822,8 +805,8 @@ const Dashboard = () => {
                   <tr key={booking.id} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-8 py-6 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                          <span className="text-sm font-medium text-blue-600">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                          <span className="text-sm font-medium text-pre-red">
                             {booking.userName?.charAt(0)?.toUpperCase() || 'U'}
                           </span>
                         </div>
