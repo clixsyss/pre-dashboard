@@ -1,4 +1,4 @@
-import { collection, query, where, orderBy, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 
 class NewsService {
@@ -54,6 +54,9 @@ class NewsService {
                 case 'angry':
                 case '😡':
                   reactionCounts.angryCount++
+                  break
+                default:
+                  // Unknown reaction type, skip
                   break
               }
             })
@@ -135,4 +138,5 @@ class NewsService {
   }
 }
 
-export default new NewsService()
+const newsService = new NewsService()
+export default newsService

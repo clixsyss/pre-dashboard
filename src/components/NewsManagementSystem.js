@@ -28,7 +28,6 @@ import {
   query, 
   orderBy, 
   serverTimestamp,
-  where,
   onSnapshot
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -74,7 +73,7 @@ const NewsManagementSystem = ({ projectId }) => {
     if (projectId) {
       fetchNews();
     }
-  }, [projectId]);
+  }, [projectId, fetchNews]);
 
   // Cleanup comments subscription on unmount
   useEffect(() => {
@@ -571,7 +570,7 @@ const NewsManagementSystem = ({ projectId }) => {
             {!comment.isDeleted && isCurrentUserComment(comment) && (
               <button
                 onClick={() => {
-                  if (confirm('Are you sure you want to delete this comment? This will also delete all replies to this comment.')) {
+                  if (window.confirm('Are you sure you want to delete this comment? This will also delete all replies to this comment.')) {
                     deleteCommentWithReplies(comment.id);
                   }
                 }}
