@@ -31,6 +31,7 @@ import {
   where,
   onSnapshot
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { 
   ref as storageRef, 
   uploadBytes, 
@@ -52,6 +53,12 @@ const NewsManagementSystem = ({ projectId }) => {
   const [selectedNewsItem, setSelectedNewsItem] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [groupedComments, setGroupedComments] = useState([]);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [currentSortOption, setCurrentSortOption] = useState('Most relevant');
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -327,6 +334,21 @@ const NewsManagementSystem = ({ projectId }) => {
     setShowCommentsModal(false);
     setSelectedNewsItem(null);
     setComments([]);
+    setGroupedComments([]);
+    setReplyingTo(null);
+    setReplyText('');
+    setShowSortDropdown(false);
+  };
+
+  const toggleSortDropdown = () => {
+    setShowSortDropdown(!showSortDropdown);
+  };
+
+  const setSortOption = (option) => {
+    setCurrentSortOption(option);
+    setShowSortDropdown(false);
+    // Re-group and sort comments with new option
+    setGroupedComments(groupComments(comments));
   };
 
   const fetchComments = async (newsId) => {
@@ -343,6 +365,7 @@ const NewsManagementSystem = ({ projectId }) => {
           ...doc.data()
         }));
         setComments(commentsData);
+        setGroupedComments(groupComments(commentsData));
         setCommentsLoading(false);
       });
 
@@ -372,6 +395,271 @@ const NewsManagementSystem = ({ projectId }) => {
     if (!timestamp) return 'Unknown date';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleString();
+  };
+
+  // Group comments by parent-child relationships
+  const groupComments = (commentsList) => {
+    const commentMap = new Map();
+    const rootComments = [];
+
+    // First pass: create a map of all comments
+    commentsList.forEach(comment => {
+      commentMap.set(comment.id, { ...comment, replies: [] });
+    });
+
+    // Second pass: build the tree structure
+    commentsList.forEach(comment => {
+      if (comment.parentCommentId) {
+        // This is a reply, add it to its parent's replies
+        const parent = commentMap.get(comment.parentCommentId);
+        if (parent) {
+          parent.replies.push(commentMap.get(comment.id));
+        }
+      } else {
+        // This is a root comment
+        rootComments.push(commentMap.get(comment.id));
+      }
+    });
+
+    // Apply sorting based on current sort option
+    const sortComments = (commentList) => {
+      switch (currentSortOption) {
+        case 'Most relevant':
+          // Sort by total interactions (reactions + replies)
+          return commentList.sort((a, b) => {
+            const aInteractions = (a.reactions ? Object.keys(a.reactions).length : 0) + (a.replies ? a.replies.length : 0);
+            const bInteractions = (b.reactions ? Object.keys(b.reactions).length : 0) + (b.replies ? b.replies.length : 0);
+            return bInteractions - aInteractions;
+          });
+        case 'Latest':
+          return commentList.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+            return dateB - dateA;
+          });
+        case 'Oldest':
+          return commentList.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+            return dateA - dateB;
+          });
+        case 'Most liked':
+          return commentList.sort((a, b) => {
+            const aLikes = a.reactions ? Object.keys(a.reactions).length : 0;
+            const bLikes = b.reactions ? Object.keys(b.reactions).length : 0;
+            return bLikes - aLikes;
+          });
+        default:
+          return commentList;
+      }
+    };
+
+    // Sort root comments
+    const sortedRootComments = sortComments(rootComments);
+
+    // Sort replies by creation date (oldest first) for all sorting options
+    sortedRootComments.forEach(comment => {
+      if (comment.replies && comment.replies.length > 0) {
+        comment.replies.sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateA - dateB;
+        });
+      }
+    });
+
+    return sortedRootComments;
+  };
+
+  // Render a single comment with its replies
+  const renderComment = (comment, isReply = false) => (
+    <div key={comment.id} className={`${isReply ? 'ml-6 mt-2' : ''}`}>
+      <div
+        className={`p-3 rounded-lg border ${
+          comment.isDeleted 
+            ? 'bg-gray-50 border-gray-200 opacity-60' 
+            : comment.isAdminReply
+              ? 'bg-red-50 border-red-200 shadow-sm'
+              : 'bg-white border-gray-200 shadow-sm'
+        }`}
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-1">
+              <div className="flex items-center space-x-1">
+                <User className="h-3 w-3 text-gray-500" />
+                <span className={`text-sm font-medium ${
+                  comment.isAdminReply ? 'text-red-900' : 'text-gray-900'
+                }`}>
+                  {comment.userName || 'Anonymous'}
+                </span>
+                {comment.isAdminReply && (
+                  <span className="text-xs bg-red-600 text-white px-1.5 py-0.5 rounded-full font-medium">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-gray-500">
+                {formatCommentDate(comment.createdAt)}
+              </span>
+              {comment.userUnit && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  comment.isAdminReply 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {comment.userUnit}
+                </span>
+              )}
+              {comment.userProject && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  comment.isAdminReply 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {comment.userProject}
+                </span>
+              )}
+            </div>
+            
+            {comment.isDeleted ? (
+              <div className="text-gray-500 italic text-sm">
+                <p className="mb-1">This comment has been deleted by an admin.</p>
+                {comment.deletionReason && (
+                  <p className="text-xs">Reason: {comment.deletionReason}</p>
+                )}
+              </div>
+            ) : (
+              <div className="text-gray-800 text-sm">
+                <p className="whitespace-pre-wrap">{comment.text}</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center space-x-1">
+            {!comment.isDeleted && !comment.isAdminReply && (
+              <button
+                onClick={() => startReply(comment)}
+                className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
+                title="Reply to comment"
+              >
+                <MessageCircle className="h-3 w-3" />
+              </button>
+            )}
+            {!comment.isDeleted && (
+              <button
+                onClick={() => deleteComment(comment.id)}
+                className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
+                title="Delete comment"
+              >
+                <Trash className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reply Input */}
+      {replyingTo && replyingTo.id === comment.id && (
+        <div className="ml-6 p-3 bg-gray-50 rounded-lg border border-gray-200 mt-2">
+          <div className="space-y-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Reply to {comment.userName}:
+              </label>
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write your reply..."
+                className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={submitReply}
+                disabled={!replyText.trim() || submittingReply}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {submittingReply ? 'Posting...' : 'Post Reply'}
+              </button>
+              <button
+                onClick={cancelReply}
+                className="px-3 py-1.5 text-sm bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Render replies */}
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {comment.replies.map(reply => renderComment(reply, true))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Admin reply functions
+  const startReply = (comment) => {
+    setReplyingTo(comment);
+    setReplyText('');
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+    setReplyText('');
+  };
+
+  const submitReply = async () => {
+    if (!replyText.trim() || !replyingTo || !selectedNewsItem || !projectId) return;
+    
+    setSubmittingReply(true);
+    try {
+      // Get the current admin's authentication info
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        showError('Admin not authenticated. Please log in again.');
+        return;
+      }
+
+      const commentsRef = collection(db, `projects/${projectId}/news/${selectedNewsItem.id}/comments`);
+      const replyData = {
+        id: '', // Will be set after creation
+        userId: user.uid, // Use actual admin UID
+        userName: user.displayName || 'Admin',
+        userEmail: user.email || 'admin@pre.com',
+        text: replyText.trim(),
+        parentCommentId: replyingTo.id,
+        reactions: {},
+        isDeleted: false,
+        deletedBy: null,
+        deletedAt: null,
+        deletionReason: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        isAdminReply: true, // Mark as admin reply
+        userUnit: 'Administration',
+        userProject: 'PRE Management',
+      };
+
+      const docRef = await addDoc(commentsRef, replyData);
+      await updateDoc(docRef, { id: docRef.id });
+      
+      success('Reply posted successfully.');
+      setReplyingTo(null);
+      setReplyText('');
+    } catch (error) {
+      console.error('Error posting reply:', error);
+      showError('Error posting reply. Please try again.');
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
   const formatDate = (timestamp) => {
@@ -878,26 +1166,70 @@ const NewsManagementSystem = ({ projectId }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 bg-gray-50">
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
                     Comments for "{selectedNewsItem.title}"
                   </h3>
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
-                    <span className="flex items-center">
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                      {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
-                    </span>
-                    <span className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {formatDate(selectedNewsItem.createdAt)}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <span className="flex items-center">
+                        <MessageCircle className="h-4 w-4 mr-1" />
+                        {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+                      </span>
+                      <span className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {formatDate(selectedNewsItem.createdAt)}
+                      </span>
+                    </div>
+                    
+                    {/* Sort Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={toggleSortDropdown}
+                        className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                      >
+                        {currentSortOption}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M6 9L12 15L18 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      
+                      {showSortDropdown && (
+                        <div className="absolute top-full right-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-10 min-w-[120px]">
+                          <button
+                            onClick={() => setSortOption('Most relevant')}
+                            className="block w-full px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors"
+                          >
+                            Most relevant
+                          </button>
+                          <button
+                            onClick={() => setSortOption('Latest')}
+                            className="block w-full px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors"
+                          >
+                            Latest
+                          </button>
+                          <button
+                            onClick={() => setSortOption('Oldest')}
+                            className="block w-full px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors"
+                          >
+                            Oldest
+                          </button>
+                          <button
+                            onClick={() => setSortOption('Most liked')}
+                            className="block w-full px-3 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors"
+                          >
+                            Most liked
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={closeCommentsModal}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100 ml-4"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -905,89 +1237,31 @@ const NewsManagementSystem = ({ projectId }) => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4">
               {commentsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
                   <span className="ml-3 text-gray-600">Loading comments...</span>
                 </div>
-              ) : comments.length === 0 ? (
-                <div className="text-center py-12">
-                  <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">No comments yet</h4>
-                  <p className="text-gray-500">This news item doesn't have any comments yet.</p>
+              ) : groupedComments.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageCircle className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                  <h4 className="text-base font-medium text-gray-900 mb-1">No comments yet</h4>
+                  <p className="text-sm text-gray-500">This news item doesn't have any comments yet.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className={`p-4 rounded-lg border ${
-                        comment.isDeleted 
-                          ? 'bg-gray-50 border-gray-200 opacity-60' 
-                          : 'bg-white border-gray-200 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <div className="flex items-center space-x-2">
-                              <User className="h-4 w-4 text-gray-500" />
-                              <span className="font-medium text-gray-900">
-                                {comment.userName || 'Anonymous'}
-                              </span>
-                            </div>
-                            <span className="text-sm text-gray-500">
-                              {formatCommentDate(comment.createdAt)}
-                            </span>
-                            {comment.userUnit && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                {comment.userUnit}
-                              </span>
-                            )}
-                            {comment.userProject && (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                {comment.userProject}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {comment.isDeleted ? (
-                            <div className="text-gray-500 italic">
-                              <p className="mb-2">This comment has been deleted by an admin.</p>
-                              {comment.deletionReason && (
-                                <p className="text-sm">Reason: {comment.deletionReason}</p>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-gray-800">
-                              <p className="whitespace-pre-wrap">{comment.text}</p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {!comment.isDeleted && (
-                          <button
-                            onClick={() => deleteComment(comment.id)}
-                            className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
-                            title="Delete comment"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  {groupedComments.map((comment) => renderComment(comment))}
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-gray-200 bg-gray-50">
+            <div className="p-4 border-t border-gray-200 bg-gray-50">
               <div className="flex justify-end">
                 <button
                   onClick={closeCommentsModal}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Close
                 </button>
