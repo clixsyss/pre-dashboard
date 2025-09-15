@@ -318,6 +318,56 @@ service cloud.firestore {
     match /notifications {
       allow list: if request.auth != null;
     }
+    
+    // Project News - allow authenticated users to read published news within project
+    // Admins can write, users can only read published news
+    match /projects/{projectId}/news/{newsId} {
+      allow read: if request.auth != null && 
+        (resource.data.isPublished == true || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project news (only published for users, all for admins)
+    match /projects/{projectId}/news {
+      allow list: if request.auth != null;
+    }
+    
+    // Project News Comments - allow authenticated users to read/write comments within project
+    match /projects/{projectId}/news/{newsId}/comments/{commentId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project news comments
+    match /projects/{projectId}/news/{newsId}/comments {
+      allow list: if request.auth != null;
+    }
+    
+    // Project News Reactions - allow authenticated users to read/write reactions within project
+    match /projects/{projectId}/news/{newsId}/reactions/{reactionId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      allow delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project news reactions
+    match /projects/{projectId}/news/{newsId}/reactions {
+      allow list: if request.auth != null;
+    }
   }
 }
 

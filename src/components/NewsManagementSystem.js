@@ -12,7 +12,11 @@ import {
   X,
   Save,
   Globe,
-  Star
+  Star,
+  MessageCircle,
+  User,
+  Calendar,
+  Trash
 } from 'lucide-react';
 import { 
   collection, 
@@ -23,7 +27,9 @@ import {
   getDocs, 
   query, 
   orderBy, 
-  serverTimestamp 
+  serverTimestamp,
+  where,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   ref as storageRef, 
@@ -33,6 +39,7 @@ import {
 } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
+import newsService from '../services/newsService';
 
 const NewsManagementSystem = ({ projectId }) => {
   const { success, error: showError, warning, info } = useUINotificationStore();
@@ -41,6 +48,10 @@ const NewsManagementSystem = ({ projectId }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
+  const [selectedNewsItem, setSelectedNewsItem] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -58,6 +69,13 @@ const NewsManagementSystem = ({ projectId }) => {
     }
   }, [projectId]);
 
+  // Cleanup comments subscription on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup will be handled by the onSnapshot unsubscribe
+    };
+  }, []);
+
   const fetchNews = async () => {
     if (!projectId) return;
     
@@ -72,7 +90,10 @@ const NewsManagementSystem = ({ projectId }) => {
         id: doc.id,
         ...doc.data()
       }));
-      setNewsItems(news);
+      
+      // Get news with reaction counts
+      const newsWithCounts = await newsService.getNewsWithReactionCounts(projectId, news);
+      setNewsItems(newsWithCounts);
     } catch (error) {
       console.error('Error fetching news:', error);
     } finally {
@@ -295,6 +316,64 @@ const NewsManagementSystem = ({ projectId }) => {
     }
   };
 
+  // Comments functions
+  const openCommentsModal = async (newsItem) => {
+    setSelectedNewsItem(newsItem);
+    setShowCommentsModal(true);
+    await fetchComments(newsItem.id);
+  };
+
+  const closeCommentsModal = () => {
+    setShowCommentsModal(false);
+    setSelectedNewsItem(null);
+    setComments([]);
+  };
+
+  const fetchComments = async (newsId) => {
+    if (!projectId || !newsId) return;
+    
+    setCommentsLoading(true);
+    try {
+      const commentsRef = collection(db, `projects/${projectId}/news/${newsId}/comments`);
+      const q = query(commentsRef, orderBy('createdAt', 'desc'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const commentsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setComments(commentsData);
+        setCommentsLoading(false);
+      });
+
+      // Store unsubscribe function for cleanup
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      showError('Error loading comments. Please try again.');
+      setCommentsLoading(false);
+    }
+  };
+
+  const deleteComment = async (commentId) => {
+    if (!projectId || !selectedNewsItem || !window.confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+      const commentRef = doc(db, `projects/${projectId}/news/${selectedNewsItem.id}/comments`, commentId);
+      await deleteDoc(commentRef);
+      success('Comment deleted successfully.');
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      showError('Error deleting comment. Please try again.');
+    }
+  };
+
+  const formatCommentDate = (timestamp) => {
+    if (!timestamp) return 'Unknown date';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString();
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -448,6 +527,9 @@ const NewsManagementSystem = ({ projectId }) => {
                     Created
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Interactions
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -522,6 +604,35 @@ const NewsManagementSystem = ({ projectId }) => {
                       {formatDate(item.createdAt)}
                     </td>
                     <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-full">
+                          <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M7 10V19H4C3.46957 19 2.96086 18.7893 2.58579 18.4142C2.21071 18.0391 2 17.5304 2 17V12C2 11.4696 2.21071 10.9609 2.58579 10.5858C2.96086 10.2107 3.46957 10 4 10H7ZM7 10V5C7 4.20435 7.31607 3.44129 7.87868 2.87868C8.44129 2.31607 9.20435 2 10 2C10.7956 2 11.5587 2.31607 12.1213 2.87868C12.6839 3.44129 13 4.20435 13 5V8H20C20.5304 8 21.0391 8.21071 21.4142 8.58579C21.7893 8.96086 22 9.46957 22 10V17C22 17.5304 21.7893 18.0391 21.4142 18.4142C21.0391 18.7893 20.5304 19 20 19H9L7 10Z"/>
+                          </svg>
+                          <span className="text-xs font-medium text-gray-700">{item.likeCount || 0}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-full">
+                          <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20.84 4.61C20.3292 4.099 19.7228 3.69364 19.0554 3.41708C18.3879 3.14052 17.6725 2.99817 16.95 2.99817C16.2275 2.99817 15.5121 3.14052 14.8446 3.41708C14.1772 3.69364 13.5708 4.099 13.06 4.61L12 5.67L10.94 4.61C9.9083 3.5783 8.50903 2.9987 7.05 2.9987C5.59096 2.9987 4.19169 3.5783 3.16 4.61C2.1283 5.6417 1.5487 7.04097 1.5487 8.5C1.5487 9.95903 2.1283 11.3583 3.16 12.39L12 21.23L20.84 12.39C21.351 11.8792 21.7563 11.2728 22.0329 10.6053C22.3095 9.93789 22.4518 9.22248 22.4518 8.5C22.4518 7.77752 22.3095 7.06211 22.0329 6.39467C21.7563 5.72723 21.351 5.1208 20.84 4.61V4.61Z"/>
+                          </svg>
+                          <span className="text-xs font-medium text-gray-700">{item.loveCount || 0}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-full">
+                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 9H9.01M15 9H15.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"/>
+                            <path d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14"/>
+                          </svg>
+                          <span className="text-xs font-medium text-gray-700">{item.laughCount || 0}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-full">
+                          <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"/>
+                          </svg>
+                          <span className="text-xs font-medium text-gray-700">{item.commentCount || 0}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => toggleFeatured(item)}
@@ -542,6 +653,13 @@ const NewsManagementSystem = ({ projectId }) => {
                           }
                         >
                           <Star className={`h-4 w-4 ${item.featured ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => openCommentsModal(item)}
+                          className="text-green-600 hover:text-green-800 transition-colors p-1 rounded"
+                          title="View Comments"
+                        >
+                          <MessageCircle className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleEdit(item)}
@@ -751,6 +869,130 @@ const NewsManagementSystem = ({ projectId }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Comments Modal */}
+      {showCommentsModal && selectedNewsItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 bg-gray-50">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    Comments for "{selectedNewsItem.title}"
+                  </h3>
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                    <span className="flex items-center">
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+                    </span>
+                    <span className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      {formatDate(selectedNewsItem.createdAt)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={closeCommentsModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {commentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Loading comments...</span>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">No comments yet</h4>
+                  <p className="text-gray-500">This news item doesn't have any comments yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className={`p-4 rounded-lg border ${
+                        comment.isDeleted 
+                          ? 'bg-gray-50 border-gray-200 opacity-60' 
+                          : 'bg-white border-gray-200 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <div className="flex items-center space-x-2">
+                              <User className="h-4 w-4 text-gray-500" />
+                              <span className="font-medium text-gray-900">
+                                {comment.userName || 'Anonymous'}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-500">
+                              {formatCommentDate(comment.createdAt)}
+                            </span>
+                            {comment.userUnit && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                {comment.userUnit}
+                              </span>
+                            )}
+                            {comment.userProject && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                {comment.userProject}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {comment.isDeleted ? (
+                            <div className="text-gray-500 italic">
+                              <p className="mb-2">This comment has been deleted by an admin.</p>
+                              {comment.deletionReason && (
+                                <p className="text-sm">Reason: {comment.deletionReason}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-gray-800">
+                              <p className="whitespace-pre-wrap">{comment.text}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {!comment.isDeleted && (
+                          <button
+                            onClick={() => deleteComment(comment.id)}
+                            className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
+                            title="Delete comment"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end">
+                <button
+                  onClick={closeCommentsModal}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
