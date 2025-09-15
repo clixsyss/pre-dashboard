@@ -84,6 +84,55 @@ class NewsService {
       return newsItems
     }
   }
+
+  /**
+   * Delete a comment and all its replies (cascade delete)
+   * @param {string} projectId - Project ID
+   * @param {string} newsId - The news item ID
+   * @param {string} commentId - The comment ID to delete
+   * @returns {Promise<void>}
+   */
+  async deleteCommentWithReplies(projectId, newsId, commentId) {
+    try {
+      const commentsRef = collection(db, `projects/${projectId}/news/${newsId}/comments`);
+      
+      // Get all comments to find replies
+      const allCommentsSnapshot = await getDocs(commentsRef);
+      const allComments = allCommentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Find all replies to this comment (recursively)
+      const repliesToDelete = [];
+      const findReplies = (parentId) => {
+        const replies = allComments.filter(comment => comment.parentCommentId === parentId);
+        replies.forEach(reply => {
+          repliesToDelete.push(reply.id);
+          findReplies(reply.id); // Recursively find replies to replies
+        });
+      };
+      
+      findReplies(commentId);
+      
+      // Delete the main comment
+      const commentDoc = doc(commentsRef, commentId);
+      await deleteDoc(commentDoc);
+      
+      // Delete all replies
+      const deletePromises = repliesToDelete.map(replyId => {
+        const replyDoc = doc(commentsRef, replyId);
+        return deleteDoc(replyDoc);
+      });
+      
+      await Promise.all(deletePromises);
+      
+      console.log(`Deleted comment ${commentId} and ${repliesToDelete.length} replies`);
+    } catch (error) {
+      console.error('Error deleting comment with replies:', error);
+      throw error;
+    }
+  }
 }
 
 export default new NewsService()

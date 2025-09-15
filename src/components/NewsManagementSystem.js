@@ -351,6 +351,28 @@ const NewsManagementSystem = ({ projectId }) => {
     setGroupedComments(groupComments(comments));
   };
 
+  const isCurrentUserComment = (comment) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    return user && comment.userId === user.uid;
+  };
+
+  const deleteCommentWithReplies = async (commentId) => {
+    if (!selectedNewsItem) return;
+    
+    try {
+      await newsService.deleteCommentWithReplies(projectId, selectedNewsItem.id, commentId);
+      success('Comment and replies deleted successfully.');
+      
+      // Remove from local state
+      setComments(comments.filter(c => c.id !== commentId));
+      setGroupedComments(groupComments(comments.filter(c => c.id !== commentId)));
+    } catch (error) {
+      console.error('Error deleting comment with replies:', error);
+      showError('Error deleting comment. Please try again.');
+    }
+  };
+
   const fetchComments = async (newsId) => {
     if (!projectId || !newsId) return;
     
@@ -546,11 +568,24 @@ const NewsManagementSystem = ({ projectId }) => {
                 <MessageCircle className="h-3 w-3" />
               </button>
             )}
-            {!comment.isDeleted && (
+            {!comment.isDeleted && isCurrentUserComment(comment) && (
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to delete this comment? This will also delete all replies to this comment.')) {
+                    deleteCommentWithReplies(comment.id);
+                  }
+                }}
+                className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
+                title="Delete your comment"
+              >
+                <Trash className="h-3 w-3" />
+              </button>
+            )}
+            {!comment.isDeleted && !isCurrentUserComment(comment) && (
               <button
                 onClick={() => deleteComment(comment.id)}
                 className="text-red-500 hover:text-red-700 transition-colors p-1 rounded"
-                title="Delete comment"
+                title="Delete comment (Admin)"
               >
                 <Trash className="h-3 w-3" />
               </button>
