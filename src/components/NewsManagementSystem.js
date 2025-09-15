@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, 
   Edit, 
@@ -69,20 +69,7 @@ const NewsManagementSystem = ({ projectId }) => {
     mediaType: 'image'
   });
 
-  useEffect(() => {
-    if (projectId) {
-      fetchNews();
-    }
-  }, [projectId, fetchNews]);
-
-  // Cleanup comments subscription on unmount
-  useEffect(() => {
-    return () => {
-      // Cleanup will be handled by the onSnapshot unsubscribe
-    };
-  }, []);
-
-  const fetchNews = async () => {
+  const fetchNews = useCallback(async () => {
     if (!projectId) return;
     
     setLoading(true);
@@ -105,7 +92,20 @@ const NewsManagementSystem = ({ projectId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) {
+      fetchNews();
+    }
+  }, [projectId, fetchNews]);
+
+  // Cleanup comments subscription on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup will be handled by the onSnapshot unsubscribe
+    };
+  }, []);
 
   const handleFileUpload = async (file) => {
     if (!file || !projectId) return null;

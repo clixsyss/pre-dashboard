@@ -25,6 +25,10 @@ import {
   ShoppingCart,
   X,
   MessageCircle,
+  Wrench,
+  Menu,
+  Bell,
+  Settings,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -34,10 +38,13 @@ import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
+import ServicesManagement from '../components/ServicesManagement';
 import AdminSetup from '../components/AdminSetup';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import '../styles/servicesManagement.css';
+import '../styles/projectSidebar.css';
 
 const ProjectDashboard = () => {
   const { projectId } = useParams();
@@ -104,30 +111,77 @@ const ProjectDashboard = () => {
   const [storeReviews, setStoreReviews] = useState([]);
   const [storeProducts, setStoreProducts] = useState([]);
   const [loadingStoreData, setLoadingStoreData] = useState(false);
-  
+
   // Store modal order filtering
   const [storeOrderSearchTerm, setStoreOrderSearchTerm] = useState('');
   const [storeOrderStatusFilter, setStoreOrderStatusFilter] = useState('all');
   const [storeOrderPaymentFilter, setStoreOrderPaymentFilter] = useState('all');
   const [storeOrderDateFilter, setStoreOrderDateFilter] = useState('all');
   const [storeOrderDateRange, setStoreOrderDateRange] = useState({ start: '', end: '' });
-  
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
 
-  // Service tabs configuration
-  const serviceTabs = [
-    { id: 'dashboard', name: 'Overview', icon: BarChart3, color: 'blue' },
-    { id: 'users', name: 'Users', icon: Users, color: 'indigo' },
-    { id: 'academies', name: 'Academies', icon: School, color: 'green' },
-    { id: 'courts', name: 'Courts', icon: MapPin, color: 'orange' },
-    { id: 'bookings', name: 'Bookings', icon: Calendar, color: 'pink' },
-    { id: 'events', name: 'Notifications', icon: Target, color: 'red' },
-    { id: 'news', name: 'News', icon: Newspaper, color: 'emerald' },
-    { id: 'complaints', name: 'Complaints', icon: MessageCircle, color: 'purple' },
-    { id: 'store', name: 'Store', icon: ShoppingBag, color: 'teal' },
-    { id: 'orders', name: 'Orders', icon: Package, color: 'cyan' },
-    { id: 'gatepass', name: 'Gate Pass', icon: Key, color: 'amber' }
+
+  // Sidebar navigation configuration with categories
+  const sidebarNavigation = [
+    {
+      category: 'Overview',
+      items: [
+        { id: 'dashboard', name: 'Dashboard', icon: BarChart3, description: 'Project overview & analytics' }
+      ]
+    },
+    {
+      category: 'User Management',
+      items: [
+        { id: 'users', name: 'Users', icon: Users, description: 'Manage user accounts' }
+      ]
+    },
+    {
+      category: 'Facilities & Services',
+      items: [
+        { id: 'services', name: 'Services', icon: Wrench, description: 'Service categories & bookings' },
+        { id: 'academies', name: 'Academies', icon: School, description: 'Academy programs' },
+        { id: 'courts', name: 'Courts', icon: MapPin, description: 'Court bookings' },
+        { id: 'bookings', name: 'Bookings', icon: Calendar, description: 'All bookings overview' }
+      ]
+    },
+    {
+      category: 'Communication',
+      items: [
+        { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications' },
+        { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements' },
+        { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints' }
+      ]
+    },
+    {
+      category: 'E-commerce',
+      items: [
+        { id: 'store', name: 'Store', icon: ShoppingBag, description: 'Store management' },
+        { id: 'orders', name: 'Orders', icon: Package, description: 'Order management' }
+      ]
+    },
+    {
+      category: 'Security',
+      items: [
+        { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management' }
+      ]
+    }
   ];
+
+  // Flattened tabs for backward compatibility
+  const serviceTabs = sidebarNavigation.flatMap(category => category.items);
+
+  // Handle escape key to close sidebar
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (projectId) {
@@ -232,12 +286,12 @@ const ProjectDashboard = () => {
   // Get unique store names from orders
   const getUniqueStoreNames = useCallback(() => {
     if (!projectOrders) return [];
-    
+
     // Get unique store names, filtering out undefined/null values
     const storeNames = projectOrders
       .map(order => order.storeName)
       .filter(storeName => storeName && storeName !== 'Unknown Store');
-    
+
     return [...new Set(storeNames)];
   }, [projectOrders]);
 
@@ -419,7 +473,7 @@ const ProjectDashboard = () => {
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= today && orderDate < tomorrow;
@@ -429,7 +483,7 @@ const ProjectDashboard = () => {
       const weekAgo = new Date(today);
       weekAgo.setDate(weekAgo.getDate() - 7);
       weekAgo.setHours(0, 0, 0, 0);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= weekAgo;
@@ -439,7 +493,7 @@ const ProjectDashboard = () => {
       const monthAgo = new Date(today);
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       monthAgo.setHours(0, 0, 0, 0);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= monthAgo;
@@ -448,7 +502,7 @@ const ProjectDashboard = () => {
       const startDate = new Date(storeOrderDateRange.start);
       const endDate = new Date(storeOrderDateRange.end);
       endDate.setHours(23, 59, 59, 999);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= startDate && orderDate <= endDate;
@@ -460,7 +514,7 @@ const ProjectDashboard = () => {
 
   const getStoreOrderStats = () => {
     if (!storeOrders) return { total: 0, pending: 0, processing: 0, delivered: 0, cancelled: 0 };
-    
+
     const total = storeOrders.length;
     const pending = storeOrders.filter(order => order.status === 'pending').length;
     const processing = storeOrders.filter(order => order.status === 'processing').length;
@@ -480,18 +534,18 @@ const ProjectDashboard = () => {
     setSelectedStoreForModal(store);
     setIsStoreModalOpen(true);
     setLoadingStoreData(true);
-    
+
     // Reset filters when opening modal
     setStoreOrderSearchTerm('');
     setStoreOrderStatusFilter('all');
     setStoreOrderPaymentFilter('all');
     setStoreOrderDateFilter('all');
     setStoreOrderDateRange({ start: '', end: '' });
-    
+
     try {
       // Fetch store orders using the same approach as the main orders section
       console.log(`Fetching orders for store: ${store.id}`);
-      
+
       // Get all orders and filter by storeId in items (same as main fetchOrders)
       const querySnapshot = await getDocs(
         query(
@@ -499,15 +553,15 @@ const ProjectDashboard = () => {
           orderBy('createdAt', 'desc')
         )
       );
-      
+
       const allOrders = querySnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
       }));
-      
+
       console.log(`Total orders in project: ${allOrders.length}`);
       console.log('Sample order structure:', allOrders[0]);
-      
+
       // Filter orders that have items from this store
       const ordersData = allOrders.filter(order => {
         const hasStoreItem = order.items && order.items.some(item => item.storeId === store.id);
@@ -516,14 +570,14 @@ const ProjectDashboard = () => {
         }
         return hasStoreItem;
       });
-      
+
       console.log(`Found ${ordersData.length} orders for store ${store.id}`);
-      
+
       // Enrich orders with user information (same as main fetchOrders)
       const ordersWithUserInfo = await Promise.all(
         ordersData.map(async (order) => {
           let orderWithInfo = { ...order };
-          
+
           // Fetch user information (same as main orders section)
           if (order.userId) {
             try {
@@ -533,14 +587,14 @@ const ProjectDashboard = () => {
                   where('__name__', '==', order.userId)
                 )
               );
-              
+
               if (!userDoc.empty) {
                 const userData = userDoc.docs[0].data();
                 console.log(`Found user data for ${order.userId}:`, userData);
                 orderWithInfo = {
                   ...orderWithInfo,
-                  customerName: userData.firstName && userData.lastName ? 
-                    `${userData.firstName} ${userData.lastName}` : 
+                  customerName: userData.firstName && userData.lastName ?
+                    `${userData.firstName} ${userData.lastName}` :
                     userData.fullName || userData.displayName || 'Unknown User',
                   customerEmail: userData.email || 'No email',
                   customerPhone: userData.phone || userData.phoneNumber || 'No phone'
@@ -564,11 +618,11 @@ const ProjectDashboard = () => {
               };
             }
           }
-          
+
           return orderWithInfo;
         })
       );
-      
+
       setStoreOrders(ordersWithUserInfo);
 
       // Fetch store reviews with user information
@@ -579,10 +633,10 @@ const ProjectDashboard = () => {
         id: doc.id,
         ...doc.data()
       }));
-      
+
       console.log(`Found ${reviewsData.length} reviews for store ${store.id}`);
       console.log('Sample review data:', reviewsData[0]);
-      
+
       // Fetch user information for each review
       const reviewsWithUserInfo = await Promise.all(
         reviewsData.map(async (review) => {
@@ -591,14 +645,14 @@ const ProjectDashboard = () => {
             const userSnapshot = await getDocs(
               query(collection(db, 'users'), where('authUid', '==', review.userId))
             );
-            
+
             if (!userSnapshot.empty) {
               const userData = userSnapshot.docs[0].data();
-              const userName = userData.fullName || 
-                              `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 
-                              userData.email?.split('@')[0] || 
-                              'Unknown User';
-              
+              const userName = userData.fullName ||
+                `${userData.firstName || ''} ${userData.lastName || ''}`.trim() ||
+                userData.email?.split('@')[0] ||
+                'Unknown User';
+
               return {
                 ...review,
                 userName: userName,
@@ -627,7 +681,7 @@ const ProjectDashboard = () => {
           }
         })
       );
-      
+
       console.log('Reviews with user info:', reviewsWithUserInfo);
       setStoreReviews(reviewsWithUserInfo);
 
@@ -679,7 +733,7 @@ const ProjectDashboard = () => {
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= today && orderDate < tomorrow;
@@ -689,7 +743,7 @@ const ProjectDashboard = () => {
       const weekAgo = new Date(today);
       weekAgo.setDate(weekAgo.getDate() - 7);
       weekAgo.setHours(0, 0, 0, 0);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= weekAgo;
@@ -699,7 +753,7 @@ const ProjectDashboard = () => {
       const monthAgo = new Date(today);
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       monthAgo.setHours(0, 0, 0, 0);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= monthAgo;
@@ -708,7 +762,7 @@ const ProjectDashboard = () => {
       const startDate = new Date(orderDateRange.start);
       const endDate = new Date(orderDateRange.end);
       endDate.setHours(23, 59, 59, 999);
-      
+
       filtered = filtered.filter(order => {
         const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
         return orderDate >= startDate && orderDate <= endDate;
@@ -720,7 +774,7 @@ const ProjectDashboard = () => {
 
   const getOrderStats = () => {
     if (!projectOrders) return { total: 0, pending: 0, processing: 0, delivered: 0, cancelled: 0 };
-    
+
     const total = projectOrders.length;
     const pending = projectOrders.filter(order => order.status === 'pending').length;
     const processing = projectOrders.filter(order => order.status === 'processing').length;
@@ -858,907 +912,1355 @@ const ProjectDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Fixed Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50 pt-8 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleBackToProjects}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-gray-600" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-                <div className="flex items-center text-gray-600 mt-1">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  <span>{project.location}</span>
-                  <span className="mx-2">•</span>
-                  <span className="capitalize">{project.type}</span>
-                </div>
-              </div>
+
+      {/* Sidebar Navigation */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+        <div className="flex items-center justify-between h-24 px-8 border-b border-gray-100 bg-gradient-to-r from-pre-red via-pre-red to-pre-red">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleBackToProjects}
+              className="p-2 rounded-lg"
+            >
+              <ArrowLeft className="h-5 w-5 text-white" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-white">{project?.name || 'Loading...'}</h1>
             </div>
-            {/* <div className="flex items-center space-x-4">
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                <Settings className="h-4 w-4 mr-2 inline" />
-                Settings
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="h-4 w-4 mr-2 inline" />
-                Quick Add
-              </button>
-            </div> */}
           </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-2 rounded-xl text-white hover:bg-white hover:bg-opacity-20 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
         </div>
-      </div>
 
-      {/* Fixed Service Tabs Navigation */}
-      <div className="bg-white border-b border-gray-200 sticky top-20 z-40 pt-4 pb-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-7 lg:px-8">
-          <nav className="flex space-x-1 overflow-x-auto scrollbar-hide">
-            {serviceTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              const colorClasses = getTabColorClasses(tab.color);
-
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg border transition-all duration-200 whitespace-nowrap ${isActive
-                    ? `${colorClasses} border-current shadow-sm`
-                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <Icon className={`h-4 w-4 mr-2 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-                  {tab.name}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Dynamic Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && (
-          <div className="space-y-8">
-            {/* Overview Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center">
-                  <div className="p-3 bg-blue-100 rounded-xl">
-                    <Users className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center">
-                  <div className="p-3 bg-green-100 rounded-xl">
-                    <Users className="h-8 w-8 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.activeUsers}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center">
-                  <div className="p-3 bg-yellow-100 rounded-xl">
-                    <Users className="h-8 w-8 text-yellow-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Pending Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.pendingUsers}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-center">
-                  <div className="p-3 bg-purple-100 rounded-xl">
-                    <Target className="h-8 w-8 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Notifications</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.activeNotifications}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {serviceTabs.slice(1, 5).map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleTabChange(tab.id)}
-                      className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
-                    >
-                      <div className={`p-3 rounded-xl mb-3 ${getTabColorClasses(tab.color)}`}>
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">{tab.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {serviceTabs.slice(5, 10).map((tab) => {
-                    const Icon = tab.icon;
+        <nav className="mt-10 px-6 overflow-y-auto h-full pb-32">
+          <div className="space-y-6">
+            {sidebarNavigation.map((category) => (
+              <div key={category.category}>
+                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  {category.category}
+                </h3>
+                <div className="space-y-1">
+                  {category.items.map((item) => {
+                    const isActive = activeTab === item.id;
                     return (
                       <button
-                        key={tab.id}
-                        onClick={() => handleTabChange(tab.id)}
-                        className="flex flex-col items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                        key={item.id}
+                        onClick={() => {
+                          handleTabChange(item.id);
+                          setSidebarOpen(false);
+                        }}
+                        className={`group flex items-center px-5 py-4 text-sm font-medium rounded-2xl transition-all duration-200 w-full text-left ${isActive
+                          ? 'bg-red-50 text-pre-red border-r-4 border-pre-red shadow-lg shadow-red-100'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-md'
+                          }`}
                       >
-                        <div className={`p-2 rounded-lg mb-2 ${getTabColorClasses(tab.color)}`}>
-                          <Icon className="h-5 w-5" />
+                        <item.icon className={`mr-4 h-6 w-6 ${isActive ? 'text-pre-red' : 'text-gray-400 group-hover:text-gray-500'
+                          }`} />
+                        <div className="flex-1">
+                          <div className="font-semibold text-base">{item.name}</div>
+                          <div className={`text-sm mt-1 ${isActive ? 'text-pre-red' : 'text-gray-400'
+                            }`}>
+                            {item.description}
+                          </div>
                         </div>
-                        <span className="text-xs font-medium text-gray-700">{tab.name}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-              <div className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                  <span>Project dashboard loaded successfully</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  <span>{stats.totalUsers} users found in project</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                  <span>{stats.activeNotifications} active notifications</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
-                  <span>Ready to manage project services</span>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
-        )}
+        </nav>
+      </div>
 
-        {activeTab === 'users' && (
-          <div className="space-y-6">
-            {/* Users Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Users</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage users and their project access
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-gray-900 bg-opacity-50 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main Content Area */}
+      <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'lg:pl-80' : 'lg:pl-0'
+        }`}>
+        {/* Top Header */}
+        <div className="sticky top-0 z-40 bg-white shadow-lg border-b border-gray-200">
+          <div className="flex items-center justify-between h-24 px-8 lg:px-10">
+            <div className="flex items-center space-x-6">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <Menu className="h-7 w-7" />
+              </button>
+
+              <div className="hidden sm:block">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {serviceTabs.find(tab => tab.id === activeTab)?.name || 'Dashboard'}
+                </h2>
+                <p className="text-base text-gray-500 mt-1">
+                  {serviceTabs.find(tab => tab.id === activeTab)?.description || 'Manage your project'}
                 </p>
               </div>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="h-4 w-4 mr-2 inline" />
-                Add User
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors relative">
+                <Bell className="h-6 w-6" />
+                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+              </button>
+              <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <Settings className="h-6 w-6" />
               </button>
             </div>
+          </div>
+        </div>
 
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+        {/* Page Content */}
+        <main className="py-8">
+          <div className="max-w-7xl mx-auto px-8 lg:px-10">
+            {activeTab === 'dashboard' && (
+              <div className="space-y-8">
+                {/* Overview Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-blue-100 rounded-xl">
+                        <Users className="h-8 w-8 text-blue-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Total Users</p>
+                        <p className="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-green-100 rounded-xl">
+                        <Users className="h-8 w-8 text-green-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Active Users</p>
+                        <p className="text-3xl font-bold text-gray-900">{stats.activeUsers}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-yellow-100 rounded-xl">
+                        <Users className="h-8 w-8 text-yellow-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Pending Users</p>
+                        <p className="text-3xl font-bold text-gray-900">{stats.pendingUsers}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-purple-100 rounded-xl">
+                        <Target className="h-8 w-8 text-purple-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Active Notifications</p>
+                        <p className="text-3xl font-bold text-gray-900">{stats.activeNotifications}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="pending">Pending</option>
-                  <option value="incomplete">Incomplete</option>
-                </select>
-              </div>
-            </div>
 
-            {/* Users Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        User
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Unit
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Role
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsers.map((user) => {
-                      const userProject = user.projects?.find(p => p.projectId === projectId);
+                {/* Quick Actions */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {serviceTabs.slice(1, 5).map((tab) => {
+                      const Icon = tab.icon;
                       return (
-                        <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {user.firstName?.[0]}{user.lastName?.[0]}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {user.firstName} {user.lastName}
-                                </div>
-                                <div className="text-sm text-gray-500">{user.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {userProject?.unit || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <span className="capitalize">{userProject?.role || 'N/A'}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.registrationStatus === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : user.registrationStatus === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                              }`}>
-                              {user.registrationStatus}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleUserAction('view', user)}
-                                className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleUserAction('edit', user)}
-                                className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleUserAction('delete', user)}
-                                className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        <button
+                          key={tab.id}
+                          onClick={() => handleTabChange(tab.id)}
+                          className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                        >
+                          <div className={`p-3 rounded-xl mb-3 ${getTabColorClasses(tab.color)}`}>
+                            <Icon className="h-6 w-6" />
+                          </div>
+                          <span className="text-sm font-medium text-gray-700">{tab.name}</span>
+                        </button>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-12">
-                  <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-                  <p className="text-gray-600">No users match your search criteria in this project.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'academies' && (
-          <AcademiesManagement projectId={projectId} />
-        )}
-
-        {activeTab === 'sports' && (
-          <div className="space-y-6">
-            {/* Sports Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Sports</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage sports and activities available for booking
-                </p>
-              </div>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="h-4 w-4 mr-2 inline" />
-                Add Sport
-              </button>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search sports by name, description, or category..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Categories</option>
-                  <option value="team">Team Sports</option>
-                  <option value="individual">Individual Sports</option>
-                  <option value="water">Water Sports</option>
-                  <option value="indoor">Indoor Sports</option>
-                  <option value="outdoor">Outdoor Sports</option>
-                </select>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Sports Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Sport
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Players
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Equipment
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {/* Sample Sports Data */}
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                              <Trophy className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {serviceTabs.slice(5, 10).map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className="flex flex-col items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                          >
+                            <div className={`p-2 rounded-lg mb-2 ${getTabColorClasses(tab.color)}`}>
+                              <Icon className="h-5 w-5" />
                             </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">Football</div>
-                            <div className="text-sm text-gray-500">Soccer</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                          Team Sport
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>11 players</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        Ball, Goals, Field
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
-                            <Eye className="h-4 w-4" />
+                            <span className="text-xs font-medium text-gray-700">{tab.name}</span>
                           </button>
-                          <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                              <Trophy className="h-5 w-5 text-green-600" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">Tennis</div>
-                            <div className="text-sm text-gray-500">Individual</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Individual
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>1-4 players</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        Rackets, Balls, Court
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Empty State */}
-              <div className="text-center py-12">
-                <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No sports found</h3>
-                <p className="text-gray-600">Get started by adding your first sport.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'courts' && (
-          <CourtsManagement projectId={projectId} />
-        )}
-
-        {activeTab === 'bookings' && (
-          <div className="space-y-6">
-
-            {/* Bookings Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Bookings</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage court and academy bookings
-                </p>
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => fetchBookings(projectId)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </button>
-
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <Plus className="h-4 w-4 mr-2 inline" />
-                  New Booking
-                </button>
-              </div>
-            </div>
-
-            {/* Bookings Summary */}
-            {!bookingsLoading && !bookingsError && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Calendar className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Total Bookings</p>
-                      <p className="text-2xl font-bold text-gray-900">{projectBookings?.length || 0}</p>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <Calendar className="h-6 w-6 text-green-600" />
+
+                {/* Recent Activity */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                      <span>Project dashboard loaded successfully</span>
                     </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Upcoming</p>
-                      <p className="text-2xl font-bold text-gray-900">{getUpcomingBookings().length}</p>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                      <span>{stats.totalUsers} users found in project</span>
                     </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                      <Calendar className="h-6 w-6 text-gray-600" />
+                    <div className="flex items-center text-sm text-gray-600">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                      <span>{stats.activeNotifications} active notifications</span>
                     </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Past</p>
-                      <p className="text-2xl font-bold text-gray-900">{getPastBookings().length}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <School className="h-6 w-6 text-purple-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Academy</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}
-                      </p>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                      <span>Ready to manage project services</span>
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Search Input */}
-                <div className="relative lg:col-span-2">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search bookings by user, service, or date..."
-                    value={bookingSearchTerm}
-                    onChange={(e) => setBookingSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                {/* Users Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Project Users</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage users and their project access
+                    </p>
+                  </div>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <Plus className="h-4 w-4 mr-2 inline" />
+                    Add User
+                  </button>
                 </div>
 
-                {/* Service Type Filter */}
-                <select
-                  value={bookingServiceFilter}
-                  onChange={(e) => setBookingServiceFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Services</option>
-                  <option value="court">Court Booking</option>
-                  <option value="academy">Academy Program</option>
-                </select>
-
-                {/* Status Filter */}
-                <select
-                  value={bookingStatusFilter}
-                  onChange={(e) => setBookingStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Status</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="pending">Pending</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-
-              {/* Additional Filters Row */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Court Filter */}
-                <select
-                  value={courtFilter}
-                  onChange={(e) => setCourtFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Courts</option>
-                  {projectBookings && [...new Set(
-                    projectBookings
-                      .filter(b => {
-                        // Check if it's a court booking
-                        const isCourt = b.type === 'court' || b.courtId || b.courtName;
-                        return isCourt && b.courtName;
-                      })
-                      .map(b => b.courtName)
-                      .filter(Boolean) // Remove any undefined/null values
-                  )].map(courtName => (
-                    <option key={courtName} value={courtName}>{courtName}</option>
-                  ))}
-                </select>
-
-                {/* Academy Filter */}
-                <select
-                  value={academyFilter || 'all'}
-                  onChange={(e) => setAcademyFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Academies</option>
-                  {projectBookings && [...new Set(
-                    projectBookings
-                      .filter(b => {
-                        // Check if it's an academy booking
-                        const isAcademy = b.type === 'academy' || b.academyId || b.academyName;
-                        return isAcademy && (b.academyName || b.academyId);
-                      })
-                      .map(b => b.academyName || b.academyId)
-                      .filter(Boolean) // Remove any undefined/null values
-                  )].map(academyName => (
-                    <option key={academyName} value={academyName}>{academyName}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Loading State */}
-            {bookingsLoading && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading bookings...</p>
-                </div>
-              </div>
-            )}
-
-            {/* Upcoming Bookings Section */}
-            {!bookingsLoading && !bookingsError && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-xl font-semibold text-gray-900">Upcoming Bookings</h3>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                    {getUpcomingBookings().length}
-                  </span>
-                  <div className="flex items-center space-x-2 text-xs text-gray-500">
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
-                      <span>Court</span>
+                {/* Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search users..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-                      <span>Academy</span>
-                    </div>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="completed">Completed</option>
+                      <option value="pending">Pending</option>
+                      <option value="incomplete">Incomplete</option>
+                    </select>
                   </div>
                 </div>
 
-                {getUpcomingBookings().length > 0 ? (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-blue-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              User
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Service
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Location
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Date & Time
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Price
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Status
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {getUpcomingBookings().map((booking) => (
-                            <tr key={booking.id} className={`hover:transition-colors ${
-                              booking.type === 'academy' 
-                                ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500' 
-                                : 'hover:bg-blue-50 border-l-4 border-l-blue-500'
-                            }`}>
+                {/* Users Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            User
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unit
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Role
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredUsers.map((user) => {
+                          const userProject = user.projects?.find(p => p.projectId === projectId);
+                          return (
+                            <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
                                     <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                      <Users className="h-5 w-5 text-gray-600" />
+                                      <span className="text-sm font-medium text-blue-600">
+                                        {user.firstName?.[0]}{user.lastName?.[0]}
+                                      </span>
                                     </div>
                                   </div>
-                                  <div className="ml-3 min-w-0 flex-1">
-                                    <div className="text-sm font-semibold text-gray-900 truncate">
-                                      {booking.userName || 'Unknown User'}
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {user.firstName} {user.lastName}
                                     </div>
-                                    <div className="text-xs text-gray-500 truncate">
-                                      {booking.userEmail || 'No email'}
-                                    </div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      {booking.userPhone || 'No phone'}
-                                    </div>
-
+                                    <div className="text-sm text-gray-500">{user.email}</div>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center">
-                                  <div className={`w-2 h-2 rounded-full mr-2 ${
-                                    booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
-                                  }`}></div>
-                                  <span>
-                                    {booking.type === 'court'
-                                      ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
-                                      : booking.type === 'academy'
-                                        ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
-                                        : 'Unknown Service'
-                                    }
-                                  </span>
-                                </div>
+                                {userProject?.unit || 'N/A'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center">
-                                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span>{booking.courtLocation || 'No location'}</span>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center">
-                                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className='flex flex-col'>{booking.date || 'No date'}</span> <br />
-                                  {booking.timeSlots && booking.timeSlots.length > 0 && (
-                                    <span className="ml-2 text-xs text-gray-500 flex flex-col">
-                                      ({booking.timeSlots.join(', ')})
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className="font-medium text-green-600">
-                                  ${booking.totalPrice || booking.totalCost || 0}
-                                </span>
+                                <span className="capitalize">{userProject?.role || 'N/A'}</span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.registrationStatus === 'completed'
                                   ? 'bg-green-100 text-green-800'
-                                  : booking.status === 'pending'
+                                  : user.registrationStatus === 'pending'
                                     ? 'bg-yellow-100 text-yellow-800'
-                                    : booking.status === 'cancelled'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-gray-100 text-gray-800'
+                                    : 'bg-red-100 text-red-800'
                                   }`}>
-                                  {booking.status || 'Unknown'}
+                                  {user.registrationStatus}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center space-x-2">
                                   <button
-                                    onClick={() => handleViewBooking(booking)}
+                                    onClick={() => handleUserAction('view', user)}
                                     className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                    title="View Details"
                                   >
                                     <Eye className="h-4 w-4" />
                                   </button>
-
-                                  {/* Status Change Dropdown */}
-                                  <select
-                                    value={booking.status || 'pending'}
-                                    onChange={(e) => handleStatusChange(booking.id, e.target.value)}
-                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  <button
+                                    onClick={() => handleUserAction('edit', user)}
+                                    className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
                                   >
-                                    <option value="pending">Pending</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                    <option value="completed">Completed</option>
-                                  </select>
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleUserAction('delete', user)}
+                                    className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
                                 </div>
                               </td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-12">
+                      <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                      <p className="text-gray-600">No users match your search criteria in this project.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'academies' && (
+              <AcademiesManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'sports' && (
+              <div className="space-y-6">
+                {/* Sports Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Project Sports</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage sports and activities available for booking
+                    </p>
+                  </div>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <Plus className="h-4 w-4 mr-2 inline" />
+                    Add Sport
+                  </button>
+                </div>
+
+                {/* Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search sports by name, description, or category..."
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">All Categories</option>
+                      <option value="team">Team Sports</option>
+                      <option value="individual">Individual Sports</option>
+                      <option value="water">Water Sports</option>
+                      <option value="indoor">Indoor Sports</option>
+                      <option value="outdoor">Outdoor Sports</option>
+                    </select>
+                    <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Sports Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Sport
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Category
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Players
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Equipment
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {/* Sample Sports Data */}
+                        <tr className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                  <Trophy className="h-5 w-5 text-purple-600" />
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">Football</div>
+                                <div className="text-sm text-gray-500">Soccer</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                              Team Sport
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-2 text-gray-400" />
+                              <span>11 players</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            Ball, Goals, Field
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                              Active
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        <tr className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                                  <Trophy className="h-5 w-5 text-green-600" />
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">Tennis</div>
+                                <div className="text-sm text-gray-500">Individual</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                              Individual
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 mr-2 text-gray-400" />
+                              <span>1-4 players</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            Rackets, Balls, Court
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                              Active
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Empty State */}
+                  <div className="text-center py-12">
+                    <Trophy className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No sports found</h3>
+                    <p className="text-gray-600">Get started by adding your first sport.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'courts' && (
+              <CourtsManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'bookings' && (
+              <div className="space-y-6">
+
+                {/* Bookings Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Project Bookings</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage court and academy bookings
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => fetchBookings(projectId)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+
+                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                      <Plus className="h-4 w-4 mr-2 inline" />
+                      New Booking
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bookings Summary */}
+                {!bookingsLoading && !bookingsError && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Calendar className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Total Bookings</p>
+                          <p className="text-2xl font-bold text-gray-900">{projectBookings?.length || 0}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <Calendar className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Upcoming</p>
+                          <p className="text-2xl font-bold text-gray-900">{getUpcomingBookings().length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-gray-100 rounded-lg">
+                          <Calendar className="h-6 w-6 text-gray-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Past</p>
+                          <p className="text-2xl font-bold text-gray-900">{getPastBookings().length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <School className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Academy</p>
+                          <p className="text-2xl font-bold text-gray-900">
+                            {projectBookings?.filter(b => b.type === 'academy' || b.academyId || b.academyName).length || 0}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                )}
+
+                {/* Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Search Input */}
+                    <div className="relative lg:col-span-2">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search bookings by user, service, or date..."
+                        value={bookingSearchTerm}
+                        onChange={(e) => setBookingSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Service Type Filter */}
+                    <select
+                      value={bookingServiceFilter}
+                      onChange={(e) => setBookingServiceFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Services</option>
+                      <option value="court">Court Booking</option>
+                      <option value="academy">Academy Program</option>
+                    </select>
+
+                    {/* Status Filter */}
+                    <select
+                      value={bookingStatusFilter}
+                      onChange={(e) => setBookingStatusFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+
+                  {/* Additional Filters Row */}
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Court Filter */}
+                    <select
+                      value={courtFilter}
+                      onChange={(e) => setCourtFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Courts</option>
+                      {projectBookings && [...new Set(
+                        projectBookings
+                          .filter(b => {
+                            // Check if it's a court booking
+                            const isCourt = b.type === 'court' || b.courtId || b.courtName;
+                            return isCourt && b.courtName;
+                          })
+                          .map(b => b.courtName)
+                          .filter(Boolean) // Remove any undefined/null values
+                      )].map(courtName => (
+                        <option key={courtName} value={courtName}>{courtName}</option>
+                      ))}
+                    </select>
+
+                    {/* Academy Filter */}
+                    <select
+                      value={academyFilter || 'all'}
+                      onChange={(e) => setAcademyFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Academies</option>
+                      {projectBookings && [...new Set(
+                        projectBookings
+                          .filter(b => {
+                            // Check if it's an academy booking
+                            const isAcademy = b.type === 'academy' || b.academyId || b.academyName;
+                            return isAcademy && (b.academyName || b.academyId);
+                          })
+                          .map(b => b.academyName || b.academyId)
+                          .filter(Boolean) // Remove any undefined/null values
+                      )].map(academyName => (
+                        <option key={academyName} value={academyName}>{academyName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Loading State */}
+                {bookingsLoading && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
                     <div className="text-center">
-                      <Calendar className="h-16 w-16 text-blue-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming bookings</h3>
-                      <p className="text-gray-600">All upcoming bookings have been completed or cancelled.</p>
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading bookings...</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Upcoming Bookings Section */}
+                {!bookingsLoading && !bookingsError && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
+                      <h3 className="text-xl font-semibold text-gray-900">Upcoming Bookings</h3>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                        {getUpcomingBookings().length}
+                      </span>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                          <span>Court</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                          <span>Academy</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {getUpcomingBookings().length > 0 ? (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-blue-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  User
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Service
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Location
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Date & Time
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Price
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Status
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {getUpcomingBookings().map((booking) => (
+                                <tr key={booking.id} className={`hover:transition-colors ${booking.type === 'academy'
+                                  ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500'
+                                  : 'hover:bg-blue-50 border-l-4 border-l-blue-500'
+                                  }`}>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className="flex-shrink-0 h-10 w-10">
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <Users className="h-5 w-5 text-gray-600" />
+                                        </div>
+                                      </div>
+                                      <div className="ml-3 min-w-0 flex-1">
+                                        <div className="text-sm font-semibold text-gray-900 truncate">
+                                          {booking.userName || 'Unknown User'}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate">
+                                          {booking.userEmail || 'No email'}
+                                        </div>
+                                        <div className="text-xs text-gray-400 truncate">
+                                          {booking.userPhone || 'No phone'}
+                                        </div>
+
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <div className={`w-2 h-2 rounded-full mr-2 ${booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
+                                        }`}></div>
+                                      <span>
+                                        {booking.type === 'court'
+                                          ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
+                                          : booking.type === 'academy'
+                                            ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
+                                            : 'Unknown Service'
+                                        }
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                                      <span>{booking.courtLocation || 'No location'}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                                      <span className='flex flex-col'>{booking.date || 'No date'}</span> <br />
+                                      {booking.timeSlots && booking.timeSlots.length > 0 && (
+                                        <span className="ml-2 text-xs text-gray-500 flex flex-col">
+                                          ({booking.timeSlots.join(', ')})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <span className="font-medium text-green-600">
+                                      ${booking.totalPrice || booking.totalCost || 0}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                      ? 'bg-green-100 text-green-800'
+                                      : booking.status === 'pending'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : booking.status === 'cancelled'
+                                          ? 'bg-red-100 text-red-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                      {booking.status || 'Unknown'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => handleViewBooking(booking)}
+                                        className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                        title="View Details"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </button>
+
+                                      {/* Status Change Dropdown */}
+                                      <select
+                                        value={booking.status || 'pending'}
+                                        onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                                        className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                        <option value="completed">Completed</option>
+                                      </select>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                        <div className="text-center">
+                          <Calendar className="h-16 w-16 text-blue-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming bookings</h3>
+                          <p className="text-gray-600">All upcoming bookings have been completed or cancelled.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Past Bookings Section */}
+                {!bookingsLoading && !bookingsError && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-8 bg-gray-400 rounded-full"></div>
+                      <h3 className="text-xl font-semibold text-gray-900">Past Bookings</h3>
+                      <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                        {getPastBookings().length}
+                      </span>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                          <span>Court</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                          <span>Academy</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {getPastBookings().length > 0 ? (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  User
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Service
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Location
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Date & Time
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Price
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Status
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {getPastBookings().map((booking) => (
+                                <tr key={booking.id} className={`hover:transition-colors ${booking.type === 'academy'
+                                  ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500'
+                                  : 'hover:bg-gray-50 border-l-4 border-l-blue-500'
+                                  }`}>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className="flex-shrink-0 h-10 w-10">
+                                        <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+                                          <Users className="h-5 w-5 text-gray-600" />
+                                        </div>
+                                      </div>
+                                      <div className="ml-3 min-w-0 flex-1">
+                                        <div className="text-sm font-semibold text-gray-900 truncate">
+                                          {booking.userName || 'Unknown User'}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate">
+                                          {booking.userEmail || 'No email'}
+                                        </div>
+                                        <div className="text-xs text-gray-400 truncate">
+                                          {booking.userPhone || 'No phone'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <div className={`w-2 h-2 rounded-full mr-2 ${booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
+                                        }`}></div>
+                                      <span>
+                                        {booking.type === 'court'
+                                          ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
+                                          : booking.type === 'academy'
+                                            ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
+                                            : 'Unknown Service'
+                                        }
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                                      <span>{booking.courtLocation || 'No location'}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="flex items-center">
+                                      <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                                      <span>{booking.date || 'No date'}</span>
+                                      {booking.timeSlots && booking.timeSlots.length > 0 && (
+                                        <span className="ml-2 text-xs text-gray-500">
+                                          ({booking.timeSlots.join(', ')})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <span className="font-medium text-green-600">
+                                      ${booking.totalPrice || booking.totalCost || 0}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                      ? 'bg-green-100 text-green-800'
+                                      : booking.status === 'pending'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : booking.status === 'cancelled'
+                                          ? 'bg-red-100 text-red-800'
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                      {booking.status || 'Unknown'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => handleViewBooking(booking)}
+                                        className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                        title="View Details"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </button>
+
+                                      {/* Status Change Dropdown */}
+                                      <select
+                                        value={booking.status || 'pending'}
+                                        onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                                        className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      >
+                                        <option value="pending">Pending</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                        <option value="completed">Completed</option>
+                                      </select>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                        <div className="text-center">
+                          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No past bookings</h3>
+                          <p className="text-gray-600">No completed or cancelled bookings found.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty State for All Bookings */}
+                {!bookingsLoading && !bookingsError && getFilteredBookings().length === 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                    <div className="text-center">
+                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
+                      <p className="text-gray-600">
+                        {projectBookings && projectBookings.length > 0
+                          ? 'No bookings match your search criteria.'
+                          : 'Get started by creating your first booking.'
+                        }
+                      </p>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Past Bookings Section */}
-            {!bookingsLoading && !bookingsError && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-8 bg-gray-400 rounded-full"></div>
-                  <h3 className="text-xl font-semibold text-gray-900">Past Bookings</h3>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
-                    {getPastBookings().length}
-                  </span>
-                  <div className="flex items-center space-x-2 text-xs text-gray-500">
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
-                      <span>Court</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-                      <span>Academy</span>
-                    </div>
+            {activeTab === 'events' && (
+              <NotificationManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'news' && (
+              <NewsManagementSystem projectId={projectId} />
+            )}
+
+            {activeTab === 'services' && (
+              <ServicesManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'complaints' && (
+              <ComplaintsManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'store' && (
+              <div className="space-y-6">
+                {/* Store Management Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Store Management</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage stores, products, and orders
+                    </p>
                   </div>
                 </div>
 
-                {getPastBookings().length > 0 ? (
+                {/* Store Management Component */}
+                <StoreManagement projectId={projectId} onViewStore={handleViewStore} />
+              </div>
+            )}
+
+            {activeTab === 'orders' && (
+              <div className="space-y-6">
+                {/* Orders Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Project Orders</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage incoming orders and track shipments
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => fetchOrders(projectId)}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                {/* Orders Summary */}
+                {!ordersLoading && !ordersError && (
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Package className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Total Orders</p>
+                          <p className="text-2xl font-bold text-gray-900">{getOrderStats().total}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-yellow-100 rounded-lg">
+                          <Clock className="h-6 w-6 text-yellow-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Pending</p>
+                          <p className="text-2xl font-bold text-gray-900">{getOrderStats().pending}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <Truck className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Processing</p>
+                          <p className="text-2xl font-bold text-gray-900">{getOrderStats().processing}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <Package className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Delivered</p>
+                          <p className="text-2xl font-bold text-gray-900">{getOrderStats().delivered}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-red-100 rounded-lg">
+                          <Package className="h-6 w-6 text-red-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                          <p className="text-2xl font-bold text-gray-900">{getOrderStats().cancelled}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                    {/* Search Input */}
+                    <div className="relative md:col-span-2">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search orders by order number, customer, or store..."
+                        value={orderSearchTerm}
+                        onChange={(e) => setOrderSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Store Filter */}
+                    <select
+                      value={orderStoreFilter}
+                      onChange={(e) => setOrderStoreFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Stores</option>
+                      {getUniqueStoreNames().length > 0 ? (
+                        getUniqueStoreNames().map(storeName => (
+                          <option key={storeName} value={storeName}>{storeName}</option>
+                        ))
+                      ) : (
+                        <option value="no-stores" disabled>No stores available</option>
+                      )}
+                    </select>
+
+                    {/* Status Filter */}
+                    <select
+                      value={orderStatusFilter}
+                      onChange={(e) => setOrderStatusFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="processing">Processing</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+
+                    {/* Payment Method Filter */}
+                    <select
+                      value={orderPaymentFilter}
+                      onChange={(e) => setOrderPaymentFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Payment Methods</option>
+                      <option value="cash">Cash on Delivery</option>
+                      <option value="online">Online Payment</option>
+                    </select>
+                  </div>
+
+                  {/* Additional Filters Row */}
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Date Filter */}
+                    <select
+                      value={orderDateFilter}
+                      onChange={(e) => setOrderDateFilter(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Dates</option>
+                      <option value="today">Today</option>
+                      <option value="week">Last 7 Days</option>
+                      <option value="month">Last 30 Days</option>
+                      <option value="custom">Custom Range</option>
+                    </select>
+
+                    {/* Custom Date Range - Only show when custom is selected */}
+                    {orderDateFilter === 'custom' && (
+                      <>
+                        <input
+                          type="date"
+                          value={orderDateRange.start}
+                          onChange={(e) => setOrderDateRange(prev => ({ ...prev, start: e.target.value }))}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Start Date"
+                        />
+                        <input
+                          type="date"
+                          value={orderDateRange.end}
+                          onChange={(e) => setOrderDateRange(prev => ({ ...prev, end: e.target.value }))}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="End Date"
+                        />
+                      </>
+                    )}
+
+                    {/* Clear Filters Button */}
+                    {(orderSearchTerm || orderStatusFilter !== 'all' || orderStoreFilter !== 'all' ||
+                      orderPaymentFilter !== 'all' || orderDateFilter !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setOrderSearchTerm('');
+                            setOrderStatusFilter('all');
+                            setOrderStoreFilter('all');
+                            setOrderPaymentFilter('all');
+                            setOrderDateFilter('all');
+                            setOrderDateRange({ start: '', end: '' });
+                          }}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                  </div>
+                </div>
+
+                {/* Loading State */}
+                {ordersLoading && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading orders...</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Orders Table */}
+                {!ordersLoading && !ordersError && (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              User
+                              Order Details
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Service
+                              Customer
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Location
+                              Store
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Date & Time
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Price
+                              Total
                             </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Status
@@ -1769,85 +2271,97 @@ const ProjectDashboard = () => {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {getPastBookings().map((booking) => (
-                            <tr key={booking.id} className={`hover:transition-colors ${
-                              booking.type === 'academy' 
-                                ? 'hover:bg-green-50 bg-green-25 border-l-4 border-l-green-500' 
-                                : 'hover:bg-gray-50 border-l-4 border-l-blue-500'
-                            }`}>
+                          {getFilteredOrders().map((order) => (
+                            <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
-                                    <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                      <Users className="h-5 w-5 text-gray-600" />
+                                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                      <Package className="h-5 w-5 text-blue-600" />
                                     </div>
                                   </div>
-                                  <div className="ml-3 min-w-0 flex-1">
-                                    <div className="text-sm font-semibold text-gray-900 truncate">
-                                      {booking.userName || 'Unknown User'}
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {order.orderNumber || 'N/A'}
                                     </div>
-                                    <div className="text-xs text-gray-500 truncate">
-                                      {booking.userEmail || 'No email'}
-                                    </div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      {booking.userPhone || 'No phone'}
+                                    <div className="text-sm text-gray-500">
+                                      {order.items?.length || 0} items
                                     </div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center">
-                                  <div className={`w-2 h-2 rounded-full mr-2 ${
-                                    booking.type === 'academy' ? 'bg-green-500' : 'bg-blue-500'
-                                  }`}></div>
-                                  <span>
-                                    {booking.type === 'court'
-                                      ? `${booking.courtName || 'Unknown Court'} - ${booking.sport || 'Unknown Sport'}`
-                                      : booking.type === 'academy'
-                                        ? `${booking.academyName || 'Unknown Academy'} - ${booking.programName || 'Unknown Program'}`
-                                        : 'Unknown Service'
-                                    }
-                                  </span>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {order.userName || 'Unknown User'}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {order.userPhone || 'No phone'}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {order.userEmail || 'No email'}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center">
-                                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span>{booking.courtLocation || 'No location'}</span>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {order.storeName || `Store ID: ${order.storeId || 'N/A'}`}
                                 </div>
+                                <div className="text-sm text-gray-500">
+                                  {order.location || 'No location'}
+                                </div>
+                                {order.storeId && !order.storeName && (
+                                  <div className="text-xs text-orange-600 mt-1">
+                                    Store info loading...
+                                  </div>
+                                )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 <div className="flex items-center">
                                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span>{booking.date || 'No date'}</span>
-                                  {booking.timeSlots && booking.timeSlots.length > 0 && (
-                                    <span className="ml-2 text-xs text-gray-500">
-                                      ({booking.timeSlots.join(', ')})
-                                    </span>
+                                  <span>
+                                    {order.createdAt ?
+                                      (order.createdAt.toDate ?
+                                        order.createdAt.toDate().toLocaleDateString() :
+                                        new Date(order.createdAt).toLocaleDateString()
+                                      ) : 'No date'
+                                    }
+                                  </span>
+                                </div>
+                                {order.estimatedDelivery && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Est: {order.estimatedDelivery}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="space-y-1">
+                                  <div className="text-green-600 font-medium">
+                                    ${(order.total || 0).toFixed(2)}
+                                  </div>
+                                  {order.deliveryFee && (
+                                    <div className="text-xs text-gray-500">
+                                      +${(order.deliveryFee || 0).toFixed(2)} delivery
+                                    </div>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span className="font-medium text-green-600">
-                                  ${booking.totalPrice || booking.totalCost || 0}
-                                </span>
-                              </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${booking.status === 'confirmed'
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${order.status === 'delivered'
                                   ? 'bg-green-100 text-green-800'
-                                  : booking.status === 'pending'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : booking.status === 'cancelled'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-gray-100 text-gray-800'
+                                  : order.status === 'processing'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : order.status === 'shipped'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : order.status === 'cancelled'
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'bg-yellow-100 text-yellow-800'
                                   }`}>
-                                  {booking.status || 'Unknown'}
+                                  {order.status || 'pending'}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center space-x-2">
                                   <button
-                                    onClick={() => handleViewBooking(booking)}
+                                    onClick={() => handleViewOrder(order)}
                                     className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
                                     title="View Details"
                                   >
@@ -1856,14 +2370,15 @@ const ProjectDashboard = () => {
 
                                   {/* Status Change Dropdown */}
                                   <select
-                                    value={booking.status || 'pending'}
-                                    onChange={(e) => handleStatusChange(booking.id, e.target.value)}
+                                    value={order.status || 'pending'}
+                                    onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
                                     className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   >
                                     <option value="pending">Pending</option>
-                                    <option value="confirmed">Confirmed</option>
+                                    <option value="processing">Processing</option>
+                                    <option value="shipped">Shipped</option>
+                                    <option value="delivered">Delivered</option>
                                     <option value="cancelled">Cancelled</option>
-                                    <option value="completed">Completed</option>
                                   </select>
                                 </div>
                               </td>
@@ -1872,582 +2387,170 @@ const ProjectDashboard = () => {
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Empty State */}
+                    {getFilteredOrders().length === 0 && (
+                      <div className="text-center py-12">
+                        <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+                        <p className="text-gray-600">
+                          {projectOrders && projectOrders.length > 0
+                            ? 'No orders match your search criteria.'
+                            : 'No orders have been placed yet.'
+                          }
+                        </p>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                    <div className="text-center">
-                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No past bookings</h3>
-                      <p className="text-gray-600">No completed or cancelled bookings found.</p>
+                )}
+
+                {/* Error State */}
+                {ordersError && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="text-center text-red-600">
+                      <p className="font-medium">Error loading orders:</p>
+                      <p className="text-sm">{ordersError}</p>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Empty State for All Bookings */}
-            {!bookingsLoading && !bookingsError && getFilteredBookings().length === 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                <div className="text-center">
-                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
-                  <p className="text-gray-600">
-                    {projectBookings && projectBookings.length > 0
-                      ? 'No bookings match your search criteria.'
-                      : 'Get started by creating your first booking.'
-                    }
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'events' && (
-          <NotificationManagement projectId={projectId} />
-        )}
-
-        {activeTab === 'news' && (
-          <NewsManagementSystem projectId={projectId} />
-        )}
-
-        {activeTab === 'complaints' && (
-          <ComplaintsManagement projectId={projectId} />
-        )}
-
-        {activeTab === 'store' && (
-          <div className="space-y-6">
-            {/* Store Management Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Store Management</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage stores, products, and orders
-                </p>
-              </div>
-            </div>
-
-            {/* Store Management Component */}
-            <StoreManagement projectId={projectId} onViewStore={handleViewStore} />
-          </div>
-        )}
-
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
-            {/* Orders Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Orders</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage incoming orders and track shipments
-                </p>
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => fetchOrders(projectId)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </button>
-              </div>
-            </div>
-
-            {/* Orders Summary */}
-            {!ordersLoading && !ordersError && (
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Package className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                      <p className="text-2xl font-bold text-gray-900">{getOrderStats().total}</p>
-                    </div>
+            {activeTab === 'gatepass' && (
+              <div className="space-y-6">
+                {/* Gate Pass Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Project Gate Pass</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage visitor access and entry permissions
+                    </p>
                   </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-yellow-100 rounded-lg">
-                      <Clock className="h-6 w-6 text-yellow-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Pending</p>
-                      <p className="text-2xl font-bold text-gray-900">{getOrderStats().pending}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <Truck className="h-6 w-6 text-purple-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Processing</p>
-                      <p className="text-2xl font-bold text-gray-900">{getOrderStats().processing}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <Package className="h-6 w-6 text-green-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Delivered</p>
-                      <p className="text-2xl font-bold text-gray-900">{getOrderStats().delivered}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-red-100 rounded-lg">
-                      <Package className="h-6 w-6 text-red-600" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-600">Cancelled</p>
-                      <p className="text-2xl font-bold text-gray-900">{getOrderStats().cancelled}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                {/* Search Input */}
-                <div className="relative md:col-span-2">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search orders by order number, customer, or store..."
-                    value={orderSearchTerm}
-                    onChange={(e) => setOrderSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Store Filter */}
-                <select
-                  value={orderStoreFilter}
-                  onChange={(e) => setOrderStoreFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Stores</option>
-                  {getUniqueStoreNames().length > 0 ? (
-                    getUniqueStoreNames().map(storeName => (
-                      <option key={storeName} value={storeName}>{storeName}</option>
-                    ))
-                  ) : (
-                    <option value="no-stores" disabled>No stores available</option>
-                  )}
-                </select>
-
-                {/* Status Filter */}
-                <select
-                  value={orderStatusFilter}
-                  onChange={(e) => setOrderStatusFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-
-                {/* Payment Method Filter */}
-                <select
-                  value={orderPaymentFilter}
-                  onChange={(e) => setOrderPaymentFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Payment Methods</option>
-                  <option value="cash">Cash on Delivery</option>
-                  <option value="online">Online Payment</option>
-                </select>
-              </div>
-
-              {/* Additional Filters Row */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Date Filter */}
-                <select
-                  value={orderDateFilter}
-                  onChange={(e) => setOrderDateFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Dates</option>
-                  <option value="today">Today</option>
-                  <option value="week">Last 7 Days</option>
-                  <option value="month">Last 30 Days</option>
-                  <option value="custom">Custom Range</option>
-                </select>
-
-                {/* Custom Date Range - Only show when custom is selected */}
-                {orderDateFilter === 'custom' && (
-                  <>
-                    <input
-                      type="date"
-                      value={orderDateRange.start}
-                      onChange={(e) => setOrderDateRange(prev => ({ ...prev, start: e.target.value }))}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Start Date"
-                    />
-                    <input
-                      type="date"
-                      value={orderDateRange.end}
-                      onChange={(e) => setOrderDateRange(prev => ({ ...prev, end: e.target.value }))}
-                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="End Date"
-                    />
-                  </>
-                )}
-
-                {/* Clear Filters Button */}
-                {(orderSearchTerm || orderStatusFilter !== 'all' || orderStoreFilter !== 'all' || 
-                  orderPaymentFilter !== 'all' || orderDateFilter !== 'all') && (
-                  <button
-                    onClick={() => {
-                      setOrderSearchTerm('');
-                      setOrderStatusFilter('all');
-                      setOrderStoreFilter('all');
-                      setOrderPaymentFilter('all');
-                      setOrderDateFilter('all');
-                      setOrderDateRange({ start: '', end: '' });
-                    }}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Clear Filters
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <Plus className="h-4 w-4 mr-2 inline" />
+                    New Gate Pass
                   </button>
-                )}
-              </div>
-            </div>
-
-            {/* Loading State */}
-            {ordersLoading && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading orders...</p>
                 </div>
-              </div>
-            )}
 
-            {/* Orders Table */}
-            {!ordersLoading && !ordersError && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Order Details
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Store
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date & Time
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {getFilteredOrders().map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                {/* Search and Filters */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search gate passes by visitor name, ID, or date..."
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="expired">Expired</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="all">All Types</option>
+                      <option value="visitor">Visitor</option>
+                      <option value="delivery">Delivery</option>
+                      <option value="service">Service</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Gate Pass Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Gate Pass ID
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Visitor
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {/* Sample Gate Pass Data */}
+                        <tr className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            GP001
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                              Visitor
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <Package className="h-5 w-5 text-blue-600" />
-                                </div>
-                              </div>
-                              <div className="ml-3">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {order.orderNumber || 'N/A'}
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  {order.items?.length || 0} items
-                                </div>
-                              </div>
+                              <Users className="h-4 w-4 mr-2 text-gray-400" />
+                              <span>Mr. Smith</span>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {order.userName || 'Unknown User'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {order.userPhone || 'No phone'}
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {order.userEmail || 'No email'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {order.storeName || `Store ID: ${order.storeId || 'N/A'}`}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {order.location || 'No location'}
-                            </div>
-                            {order.storeId && !order.storeName && (
-                              <div className="text-xs text-orange-600 mt-1">
-                                Store info loading...
-                              </div>
-                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <div className="flex items-center">
                               <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                              <span>
-                                {order.createdAt ? 
-                                  (order.createdAt.toDate ? 
-                                    order.createdAt.toDate().toLocaleDateString() : 
-                                    new Date(order.createdAt).toLocaleDateString()
-                                  ) : 'No date'
-                                }
-                              </span>
-                            </div>
-                            {order.estimatedDelivery && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Est: {order.estimatedDelivery}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="space-y-1">
-                              <div className="text-green-600 font-medium">
-                                ${(order.total || 0).toFixed(2)}
-                              </div>
-                              {order.deliveryFee && (
-                                <div className="text-xs text-gray-500">
-                                  +${(order.deliveryFee || 0).toFixed(2)} delivery
-                                </div>
-                              )}
+                              <span>2023-06-15</span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              order.status === 'delivered'
-                                ? 'bg-green-100 text-green-800'
-                                : order.status === 'processing'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : order.status === 'shipped'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : order.status === 'cancelled'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {order.status || 'pending'}
+                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                              Active
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleViewOrder(order)}
-                                className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                title="View Details"
-                              >
+                              <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
                                 <Eye className="h-4 w-4" />
                               </button>
-
-                              {/* Status Change Dropdown */}
-                              <select
-                                value={order.status || 'pending'}
-                                onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
-                                className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
-                                <option value="shipped">Shipped</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
+                              <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Empty State */}
-                {getFilteredOrders().length === 0 && (
-                  <div className="text-center py-12">
-                    <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-                    <p className="text-gray-600">
-                      {projectOrders && projectOrders.length > 0
-                        ? 'No orders match your search criteria.'
-                        : 'No orders have been placed yet.'
-                      }
-                    </p>
+                      </tbody>
+                    </table>
                   </div>
-                )}
+
+                  {/* Empty State */}
+                  <div className="text-center py-12">
+                    <Key className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No gate passes found</h3>
+                    <p className="text-gray-600">Get started by issuing your first gate pass.</p>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Error State */}
-            {ordersError && (
+            {bookingsError && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="text-center text-red-600">
-                  <p className="font-medium">Error loading orders:</p>
-                  <p className="text-sm">{ordersError}</p>
+                  <p className="font-medium">Error loading bookings:</p>
+                  <p className="text-sm">{bookingsError}</p>
                 </div>
               </div>
             )}
           </div>
-        )}
-
-        {activeTab === 'gatepass' && (
-          <div className="space-y-6">
-            {/* Gate Pass Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Project Gate Pass</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Manage visitor access and entry permissions
-                </p>
-              </div>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="h-4 w-4 mr-2 inline" />
-                New Gate Pass
-              </button>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center space-x-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search gate passes by visitor name, ID, or date..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="expired">Expired</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-                <select className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="all">All Types</option>
-                  <option value="visitor">Visitor</option>
-                  <option value="delivery">Delivery</option>
-                  <option value="service">Service</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Gate Pass Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Gate Pass ID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Visitor
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {/* Sample Gate Pass Data */}
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        GP001
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                          Visitor
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>Mr. Smith</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>2023-06-15</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Active
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Empty State */}
-              <div className="text-center py-12">
-                <Key className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No gate passes found</h3>
-                <p className="text-gray-600">Get started by issuing your first gate pass.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {bookingsError && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="text-center text-red-600">
-              <p className="font-medium">Error loading bookings:</p>
-              <p className="text-sm">{bookingsError}</p>
-            </div>
-          </div>
-        )}
+        </main>
       </div>
 
       {/* Booking Details Modal */}
@@ -2799,17 +2902,16 @@ const ProjectDashboard = () => {
                   <div>
                     <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Status</label>
                     <p className="text-sm text-blue-900 font-medium mt-1">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        selectedOrderForModal.status === 'delivered'
-                          ? 'bg-green-100 text-green-800'
-                          : selectedOrderForModal.status === 'processing'
-                            ? 'bg-blue-100 text-blue-800'
-                            : selectedOrderForModal.status === 'shipped'
-                              ? 'bg-purple-100 text-purple-800'
-                              : selectedOrderForModal.status === 'cancelled'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                      }`}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${selectedOrderForModal.status === 'delivered'
+                        ? 'bg-green-100 text-green-800'
+                        : selectedOrderForModal.status === 'processing'
+                          ? 'bg-blue-100 text-blue-800'
+                          : selectedOrderForModal.status === 'shipped'
+                            ? 'bg-purple-100 text-purple-800'
+                            : selectedOrderForModal.status === 'cancelled'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                        }`}>
                         {selectedOrderForModal.status || 'pending'}
                       </span>
                     </p>
@@ -2938,7 +3040,7 @@ const ProjectDashboard = () => {
                     <svg className="h-5 w-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                  Cancellation Details
+                    Cancellation Details
                   </h3>
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2951,9 +3053,9 @@ const ProjectDashboard = () => {
                       <div>
                         <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Cancelled By</label>
                         <p className="text-sm text-red-900 font-medium mt-1">
-                          {selectedOrderForModal.cancelledBy === 'customer' ? 'Customer' : 
-                           selectedOrderForModal.cancelledBy === 'admin' ? 'Admin' : 
-                           selectedOrderForModal.cancelledBy || 'Unknown'}
+                          {selectedOrderForModal.cancelledBy === 'customer' ? 'Customer' :
+                            selectedOrderForModal.cancelledBy === 'admin' ? 'Admin' :
+                              selectedOrderForModal.cancelledBy || 'Unknown'}
                         </p>
                       </div>
                     </div>
@@ -2968,9 +3070,9 @@ const ProjectDashboard = () => {
                     <div>
                       <label className="text-xs font-medium text-red-700 uppercase tracking-wide">Cancelled At</label>
                       <p className="text-sm text-red-900 font-medium mt-1">
-                        {selectedOrderForModal.cancelledAt ? 
-                          (selectedOrderForModal.cancelledAt.toDate ? 
-                            selectedOrderForModal.cancelledAt.toDate().toLocaleString() : 
+                        {selectedOrderForModal.cancelledAt ?
+                          (selectedOrderForModal.cancelledAt.toDate ?
+                            selectedOrderForModal.cancelledAt.toDate().toLocaleString() :
                             new Date(selectedOrderForModal.cancelledAt).toLocaleString()
                           ) : 'Unknown date'
                         }
@@ -2994,9 +3096,9 @@ const ProjectDashboard = () => {
                     <div>
                       <p className="text-sm font-medium text-purple-900">Order Placed</p>
                       <p className="text-xs text-purple-600">
-                        {selectedOrderForModal.createdAt ? 
-                          (selectedOrderForModal.createdAt.toDate ? 
-                            selectedOrderForModal.createdAt.toDate().toLocaleString() : 
+                        {selectedOrderForModal.createdAt ?
+                          (selectedOrderForModal.createdAt.toDate ?
+                            selectedOrderForModal.createdAt.toDate().toLocaleString() :
                             new Date(selectedOrderForModal.createdAt).toLocaleString()
                           ) : 'Unknown date'
                         }
@@ -3018,9 +3120,9 @@ const ProjectDashboard = () => {
                       <div>
                         <p className="text-sm font-medium text-purple-900">Order Cancelled</p>
                         <p className="text-xs text-purple-600">
-                          {selectedOrderForModal.cancelledAt ? 
-                            (selectedOrderForModal.cancelledAt.toDate ? 
-                              selectedOrderForModal.cancelledAt.toDate().toLocaleString() : 
+                          {selectedOrderForModal.cancelledAt ?
+                            (selectedOrderForModal.cancelledAt.toDate ?
+                              selectedOrderForModal.cancelledAt.toDate().toLocaleString() :
                               new Date(selectedOrderForModal.cancelledAt).toLocaleString()
                             ) : 'Unknown date'
                           }
@@ -3072,14 +3174,13 @@ const ProjectDashboard = () => {
                         <DollarSign className="h-4 w-4 mr-1" />
                         Delivery: ${selectedStoreForModal.deliveryFee || 0}
                       </div>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        (selectedStoreForModal.status === 'active' || 
-                         selectedStoreForModal.status === 'Active' || 
-                         selectedStoreForModal.status === 'ACTIVE' ||
-                         selectedStoreForModal.status === true) 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${(selectedStoreForModal.status === 'active' ||
+                        selectedStoreForModal.status === 'Active' ||
+                        selectedStoreForModal.status === 'ACTIVE' ||
+                        selectedStoreForModal.status === true)
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                        }`}>
                         {selectedStoreForModal.status || selectedStoreForModal.isActive || 'Unknown'}
                       </span>
                     </div>
@@ -3116,7 +3217,7 @@ const ProjectDashboard = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-6">
                       <div className="flex items-center">
                         <div className="p-3 bg-green-200 rounded-lg">
@@ -3128,7 +3229,7 @@ const ProjectDashboard = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl p-6">
                       <div className="flex items-center">
                         <div className="p-3 bg-yellow-200 rounded-lg">
@@ -3137,7 +3238,7 @@ const ProjectDashboard = () => {
                         <div className="ml-4">
                           <p className="text-sm font-medium text-yellow-700">Average Rating</p>
                           <p className="text-2xl font-bold text-yellow-900">
-                            {storeReviews.length > 0 
+                            {storeReviews.length > 0
                               ? (storeReviews.reduce((sum, review) => sum + (review.rating || 0), 0) / storeReviews.length).toFixed(1)
                               : 'N/A'
                             }
@@ -3145,7 +3246,7 @@ const ProjectDashboard = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl p-6">
                       <div className="flex items-center">
                         <div className="p-3 bg-purple-200 rounded-lg">
@@ -3180,14 +3281,13 @@ const ProjectDashboard = () => {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-500">Status</label>
-                        <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
-                          (selectedStoreForModal.status === 'active' || 
-                           selectedStoreForModal.status === 'Active' || 
-                           selectedStoreForModal.status === 'ACTIVE' ||
-                           selectedStoreForModal.status === true) 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
+                        <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${(selectedStoreForModal.status === 'active' ||
+                          selectedStoreForModal.status === 'Active' ||
+                          selectedStoreForModal.status === 'ACTIVE' ||
+                          selectedStoreForModal.status === true)
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                          }`}>
                           {selectedStoreForModal.status || selectedStoreForModal.isActive || 'Unknown'}
                         </span>
                       </div>
@@ -3212,7 +3312,7 @@ const ProjectDashboard = () => {
                         Add Product
                       </button>
                     </div>
-                    
+
                     {storeProducts.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {storeProducts.map((product) => (
@@ -3298,7 +3398,7 @@ const ProjectDashboard = () => {
                           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      
+
                       <select
                         value={storeOrderStatusFilter}
                         onChange={(e) => setStoreOrderStatusFilter(e.target.value)}
@@ -3416,9 +3516,9 @@ const ProjectDashboard = () => {
                                   <div className="flex items-center">
                                     <Calendar className="h-4 w-4 mr-2 text-gray-400" />
                                     <span>
-                                      {order.createdAt ? 
-                                        (order.createdAt.toDate ? 
-                                          order.createdAt.toDate().toLocaleDateString() : 
+                                      {order.createdAt ?
+                                        (order.createdAt.toDate ?
+                                          order.createdAt.toDate().toLocaleDateString() :
                                           new Date(order.createdAt).toLocaleDateString()
                                         ) : 'No date'
                                       }
@@ -3443,17 +3543,16 @@ const ProjectDashboard = () => {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                    order.status === 'delivered'
-                                      ? 'bg-green-100 text-green-800'
-                                      : order.status === 'processing'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : order.status === 'shipped'
-                                          ? 'bg-purple-100 text-purple-800'
-                                          : order.status === 'cancelled'
-                                            ? 'bg-red-100 text-red-800'
-                                            : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
+                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${order.status === 'delivered'
+                                    ? 'bg-green-100 text-green-800'
+                                    : order.status === 'processing'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : order.status === 'shipped'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : order.status === 'cancelled'
+                                          ? 'bg-red-100 text-red-800'
+                                          : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
                                     {order.status || 'pending'}
                                   </span>
                                 </td>
@@ -3504,7 +3603,7 @@ const ProjectDashboard = () => {
                       <Star className="h-5 w-5 mr-2 text-yellow-600" />
                       Customer Reviews ({storeReviews.length})
                     </h3>
-                    
+
                     {storeReviews.length > 0 ? (
                       <div className="space-y-4">
                         {storeReviews.map((review) => (
@@ -3524,11 +3623,10 @@ const ProjectDashboard = () => {
                                     {[...Array(5)].map((_, i) => (
                                       <Star
                                         key={i}
-                                        className={`h-4 w-4 ${
-                                          i < (review.rating || 0) 
-                                            ? 'text-yellow-400 fill-current' 
-                                            : 'text-gray-300'
-                                        }`}
+                                        className={`h-4 w-4 ${i < (review.rating || 0)
+                                          ? 'text-yellow-400 fill-current'
+                                          : 'text-gray-300'
+                                          }`}
                                       />
                                     ))}
                                     <span className="ml-2 text-sm text-gray-600">({review.rating || 0}/5)</span>
@@ -3537,9 +3635,9 @@ const ProjectDashboard = () => {
                               </div>
                               <div className="text-right">
                                 <span className="text-xs text-gray-500">
-                                  {review.createdAt ? 
-                                    (review.createdAt.toDate ? 
-                                      review.createdAt.toDate().toLocaleDateString() : 
+                                  {review.createdAt ?
+                                    (review.createdAt.toDate ?
+                                      review.createdAt.toDate().toLocaleDateString() :
                                       new Date(review.createdAt).toLocaleDateString()
                                     ) : 'Unknown date'
                                   }
