@@ -29,6 +29,7 @@ import {
   Menu,
   Bell,
   Settings,
+  FileText,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -40,6 +41,7 @@ import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
 import ServicesManagement from '../components/ServicesManagement';
 import AdminSetup from '../components/AdminSetup';
+import ProjectGuidelines from '../components/ProjectGuidelines';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -150,7 +152,8 @@ const ProjectDashboard = () => {
       items: [
         { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications' },
         { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements' },
-        { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints' }
+        { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints' },
+        { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures' }
       ]
     },
     {
@@ -2015,6 +2018,10 @@ const ProjectDashboard = () => {
 
             {activeTab === 'complaints' && (
               <ComplaintsManagement projectId={projectId} />
+            )}
+
+            {activeTab === 'guidelines' && (
+              <ProjectGuidelines projectId={projectId} />
             )}
 
             {activeTab === 'store' && (
