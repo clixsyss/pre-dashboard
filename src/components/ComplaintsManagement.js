@@ -1,35 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  MessageSquare, 
-  Filter, 
-  Search, 
-  Plus, 
-  Eye, 
-  Trash2, 
-  User, 
-  Clock, 
+import {
+  MessageSquare,
+  Filter,
+  Search,
+  Plus,
+  Eye,
+  Trash2,
+  User,
+  Clock,
   AlertCircle,
   CheckCircle,
-  XCircle
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  Mail,
+  Phone,
+  Calendar,
+  CreditCard,
+  Building,
+  MapPin,
+  Activity,
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 import useComplaintStore from '../stores/complaintStore';
+import { getComprehensiveUserDetails, formatUserForDisplay } from '../services/userService';
 
 const ComplaintsManagement = ({ projectId }) => {
-  const { 
-    complaints, 
-    loading, 
-    stats, 
+  const {
+    complaints,
+    loading,
+    stats,
     filters,
-    fetchComplaints, 
+    fetchComplaints,
     fetchStats,
     setFilters,
     deleteComplaint
   } = useComplaintStore();
-  
+
   const [showFilters, setShowFilters] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [showComplaintModal, setShowComplaintModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [userDetails, setUserDetails] = useState(null);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  const [loadingUserDetails, setLoadingUserDetails] = useState(false);
 
   useEffect(() => {
     if (projectId) {
@@ -56,6 +71,25 @@ const ComplaintsManagement = ({ projectId }) => {
   const handleViewComplaint = (complaint) => {
     setSelectedComplaint(complaint);
     setShowComplaintModal(true);
+    // Fetch user details when viewing complaint
+    fetchUserDetails(complaint.userId);
+  };
+
+  const fetchUserDetails = async (userId) => {
+    if (!userId) return;
+    
+    setLoadingUserDetails(true);
+    try {
+      const userData = await getComprehensiveUserDetails(userId);
+      console.log('Fetched user data:', userData);
+      console.log('User projects:', userData?.projects);
+      setUserDetails(formatUserForDisplay(userData));
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      setUserDetails(null);
+    } finally {
+      setLoadingUserDetails(false);
+    }
   };
 
   const handleDeleteComplaint = async (complaintId) => {
@@ -140,7 +174,7 @@ const ComplaintsManagement = ({ projectId }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-betweeen align-items-center items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Complaints Management</h2>
           <p className="text-gray-600">Manage user complaints and support requests</p>
@@ -165,7 +199,7 @@ const ComplaintsManagement = ({ projectId }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
             <AlertCircle className="w-8 h-8 text-blue-500" />
@@ -175,7 +209,7 @@ const ComplaintsManagement = ({ projectId }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
             <Clock className="w-8 h-8 text-orange-500" />
@@ -185,7 +219,7 @@ const ComplaintsManagement = ({ projectId }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
             <CheckCircle className="w-8 h-8 text-green-500" />
@@ -195,7 +229,7 @@ const ComplaintsManagement = ({ projectId }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
             <XCircle className="w-8 h-8 text-gray-500" />
@@ -400,9 +434,15 @@ const ComplaintsManagement = ({ projectId }) => {
         <ComplaintDetailModal
           complaint={selectedComplaint}
           projectId={projectId}
+          userDetails={userDetails}
+          showUserDetails={showUserDetails}
+          setShowUserDetails={setShowUserDetails}
+          loadingUserDetails={loadingUserDetails}
           onClose={() => {
             setShowComplaintModal(false);
             setSelectedComplaint(null);
+            setUserDetails(null);
+            setShowUserDetails(false);
           }}
         />
       )}
@@ -411,15 +451,15 @@ const ComplaintsManagement = ({ projectId }) => {
 };
 
 // Complaint Detail Modal Component
-const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
+const ComplaintDetailModal = ({ complaint, projectId, onClose, userDetails, showUserDetails, setShowUserDetails, loadingUserDetails }) => {
   const { updateComplaintStatus, addMessage, uploadComplaintImage, subscribeToComplaint, currentComplaint } = useComplaintStore();
-  
+
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [unsubscribe, setUnsubscribe] = useState(null);
   const messagesEndRef = useRef(null);
-  
+
   // Use real-time complaint data if available, otherwise fallback to prop
   const currentComplaintData = currentComplaint || complaint;
   const isComplaintClosed = currentComplaintData?.status === 'Closed';
@@ -436,7 +476,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
     const timer = setTimeout(() => {
       scrollToBottom();
     }, 100);
-    
+
     return () => clearTimeout(timer);
   }, [currentComplaintData.messages]);
 
@@ -503,26 +543,317 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-6xl w-full h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
-          <div className="flex items-center gap-4">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">{currentComplaintData.title}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-500">Complaint #{currentComplaintData.id}</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  currentComplaintData.status === 'Open' ? 'bg-blue-100 text-blue-800' :
-                  currentComplaintData.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                  currentComplaintData.status === 'Resolved' ? 'bg-green-100 text-green-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {currentComplaintData.status}
-                </span>
+        <div className="relative px-6 py-4 border-b border-gray-200 bg-white">
+          <div className="flex justify-between">
+            <div className="flex items-center gap-4">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{currentComplaintData.title}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-gray-500">Complaint #{currentComplaintData.id}</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${currentComplaintData.status === 'Open' ? 'bg-blue-100 text-blue-800' :
+                    currentComplaintData.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                      currentComplaintData.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                    }`}>
+                    {currentComplaintData.status}
+                  </span>
+                </div>
+                {/* User Project & Unit Info */}
+                {userDetails && userDetails.projects && userDetails.projects.length > 0 && (
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <Building className="w-3 h-3" />
+                      <span>{userDetails.projects.find(p => p.id === projectId)?.name || userDetails.projects[0]?.name || 'Unknown Project'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <MapPin className="w-3 h-3" />
+                      <span>Unit {userDetails.projects.find(p => p.id === projectId)?.userUnit || userDetails.projects[0]?.userUnit || 'N/A'}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* User Details Toggle */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowUserDetails(!showUserDetails)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <User className="w-4 h-4" />
+                User Details
+                {showUserDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
+
+          {/* User Details Section */}
+          {showUserDetails && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+              {loadingUserDetails ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Loading user details...</span>
+                </div>
+              ) : userDetails ? (
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Basic Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Name</span>
+                        </div>
+                        <p className="text-sm text-gray-900">{userDetails.fullName}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Email</span>
+                        </div>
+                        <p className="text-sm text-gray-900">{userDetails.email}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Phone</span>
+                        </div>
+                        <p className="text-sm text-gray-900">{userDetails.mobile}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Date of Birth</span>
+                        </div>
+                        <p className="text-sm text-gray-900">{userDetails.dateOfBirth}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">National ID</span>
+                        </div>
+                        <p className="text-sm text-gray-900">{userDetails.nationalId}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Gender</span>
+                        </div>
+                        <p className="text-sm text-gray-900 capitalize">{userDetails.gender}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium text-gray-700">Profile Status</span>
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${userDetails.isProfileComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                          {userDetails.isProfileComplete ? 'Complete' : 'Incomplete'}
+                        </span>
+                      </div>
+                      
+                      {/* Current Project & Unit */}
+                      {userDetails.projects && userDetails.projects.length > 0 && (
+                        <>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Building className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm font-medium text-gray-700">Current Project</span>
+                            </div>
+                            <p className="text-sm text-gray-900">
+                              {userDetails.projects.find(p => p.id === projectId)?.name || 
+                               userDetails.projects[0]?.name || 'No project found'}
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm font-medium text-gray-700">Current Unit</span>
+                            </div>
+                            <p className="text-sm text-gray-900">
+                              Unit {userDetails.projects.find(p => p.id === projectId)?.userUnit || 
+                                    userDetails.projects[0]?.userUnit || 'N/A'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Projects and Units */}
+                  {userDetails.projects && userDetails.projects.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <Building className="w-4 h-4" />
+                        Projects & Units ({userDetails.projects.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {userDetails.projects.map((project, index) => (
+                          <div key={project.id || index} className="bg-white p-3 rounded-lg border">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h5 className="font-medium text-gray-900">{project.name || 'Unknown Project'}</h5>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <span className="text-sm text-gray-600 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    {project.location || 'Location not set'}
+                                  </span>
+                                  <span className="text-sm text-gray-600">Unit {project.userUnit || 'N/A'}</span>
+                                  <span className="text-sm text-gray-600">Role: {project.userRole || 'Member'}</span>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.status === 'active' ? 'bg-green-100 text-green-800' :
+                                project.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                {project.status || 'active'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activity Metrics */}
+                  {userDetails.activityMetrics && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <Activity className="w-4 h-4" />
+                        Activity Overview
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-3 rounded-lg border text-center">
+                          <div className="flex items-center justify-center mb-1">
+                            <Building className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <p className="text-lg font-semibold text-gray-900">{userDetails.activityMetrics.totalProjects || 0}</p>
+                          <p className="text-xs text-gray-600">Projects</p>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-lg border text-center">
+                          <div className="flex items-center justify-center mb-1">
+                            <Calendar className="w-4 h-4 text-green-500" />
+                          </div>
+                          <p className="text-lg font-semibold text-gray-900">{userDetails.activityMetrics.totalBookings || 0}</p>
+                          <p className="text-xs text-gray-600">Total Bookings</p>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-lg border text-center">
+                          <div className="flex items-center justify-center mb-1">
+                            <TrendingUp className="w-4 h-4 text-orange-500" />
+                          </div>
+                          <p className="text-lg font-semibold text-gray-900">{userDetails.activityMetrics.recentBookings || 0}</p>
+                          <p className="text-xs text-gray-600">Recent (30d)</p>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-lg border text-center">
+                          <div className="flex items-center justify-center mb-1">
+                            <FileText className="w-4 h-4 text-red-500" />
+                          </div>
+                          <p className="text-lg font-semibold text-gray-900">{userDetails.activityMetrics.totalComplaints || 0}</p>
+                          <p className="text-xs text-gray-600">Complaints</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Bookings */}
+                  {userDetails.bookings && userDetails.bookings.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        Recent Bookings ({userDetails.bookings.length})
+                      </h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {userDetails.bookings.slice(0, 5).map((booking, index) => (
+                          <div key={booking.id || index} className="bg-white p-3 rounded-lg border">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h5 className="font-medium text-gray-900">
+                                  {booking.type === 'court' ? 'Court Booking' :
+                                    booking.type === 'academy' ? 'Academy Registration' :
+                                      'Booking'}
+                                </h5>
+                                <p className="text-sm text-gray-600">{booking.projectName}</p>
+                                {booking.date && (
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(booking.date).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-gray-100 text-gray-800'
+                                }`}>
+                                {booking.status || 'unknown'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Complaints */}
+                  {userDetails.complaints && userDetails.complaints.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Recent Complaints ({userDetails.complaints.length})
+                      </h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {userDetails.complaints.slice(0, 3).map((complaint, index) => (
+                          <div key={complaint.id || index} className="bg-white p-3 rounded-lg border">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h5 className="font-medium text-gray-900">{complaint.title || 'Complaint'}</h5>
+                                <p className="text-sm text-gray-600">{complaint.projectName}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(complaint.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${complaint.status === 'Open' ? 'bg-blue-100 text-blue-800' :
+                                complaint.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                                  complaint.status === 'Resolved' ? 'bg-green-100 text-green-800' :
+                                    complaint.status === 'Closed' ? 'bg-gray-100 text-gray-800' :
+                                      'bg-gray-100 text-gray-800'
+                                }`}>
+                                {complaint.status || 'unknown'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">Unable to load user details</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Close Button */}
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <XCircle className="w-6 h-6" />
           </button>
@@ -537,19 +868,17 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
                 className={`flex items-end gap-3 ${message.senderType === 'admin' ? 'justify-start' : 'justify-end'}`}
               >
                 {/* Avatar */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                  message.senderType === 'admin' ? 'bg-gray-600' : 'bg-red-600'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${message.senderType === 'admin' ? 'bg-gray-600' : 'bg-red-600'
+                  }`}>
                   {message.senderType === 'admin' ? 'A' : 'U'}
                 </div>
-                
+
                 {/* Message */}
                 <div
-                  className={`max-w-md px-4 py-3 rounded-2xl shadow-sm ${
-                    message.senderType === 'admin'
-                      ? 'bg-white text-gray-900 border border-gray-200'
-                      : 'bg-red-600 text-white'
-                  }`}
+                  className={`max-w-md px-4 py-3 rounded-2xl shadow-sm ${message.senderType === 'admin'
+                    ? 'bg-white text-gray-900 border border-gray-200'
+                    : 'bg-red-600 text-white'
+                    }`}
                 >
                   {message.imageUrl && (
                     <div className="mb-2">
@@ -562,9 +891,8 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
                     </div>
                   )}
                   {message.text && <p className="text-sm leading-relaxed">{message.text}</p>}
-                  <p className={`text-xs mt-2 ${
-                    message.senderType === 'admin' ? 'text-gray-500' : 'text-red-100'
-                  }`}>
+                  <p className={`text-xs mt-2 ${message.senderType === 'admin' ? 'text-gray-500' : 'text-red-100'
+                    }`}>
                     {message.timestamp?.toDate?.()?.toLocaleString() || new Date(message.timestamp).toLocaleString()}
                   </p>
                 </div>
@@ -581,15 +909,15 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center gap-2 text-yellow-800">
                 <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                  <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                  <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span className="text-sm font-medium">This complaint has been closed. You can view the conversation but cannot send new messages.</span>
               </div>
             </div>
           )}
-          
+
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -627,7 +955,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
             </label>
-            
+
             <div className="flex-1 relative">
               <textarea
                 value={newMessage}
@@ -648,7 +976,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
                 </div>
               )}
             </div>
-            
+
             <button
               type="submit"
               disabled={uploading || (!newMessage.trim() && !selectedFile) || isComplaintClosed}
@@ -670,7 +998,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose }) => {
               )}
             </button>
           </form>
-          
+
           {selectedFile && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
