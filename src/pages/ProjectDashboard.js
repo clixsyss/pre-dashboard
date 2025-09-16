@@ -46,6 +46,7 @@ import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import PermissionGate from '../components/PermissionGate';
 import '../styles/servicesManagement.css';
 import '../styles/projectSidebar.css';
 
@@ -140,50 +141,60 @@ const ProjectDashboard = () => {
     {
       category: 'Overview',
       items: [
-        { id: 'dashboard', name: 'Dashboard', icon: BarChart3, description: 'Project overview & analytics' }
+        { id: 'dashboard', name: 'Dashboard', icon: BarChart3, description: 'Project overview & analytics', permission: null } // Always visible
       ]
     },
     {
       category: 'User Management',
       items: [
-        { id: 'users', name: 'Users', icon: Users, description: 'Manage user accounts' }
+        { id: 'users', name: 'Users', icon: Users, description: 'Manage user accounts', permission: 'users' }
       ]
     },
     {
       category: 'Facilities & Services',
       items: [
-        { id: 'services', name: 'Services', icon: Wrench, description: 'Service categories & bookings' },
-        { id: 'academies', name: 'Academies', icon: School, description: 'Academy programs' },
-        { id: 'courts', name: 'Courts', icon: MapPin, description: 'Court bookings' },
-        { id: 'bookings', name: 'Bookings', icon: Calendar, description: 'All bookings overview' }
+        { id: 'services', name: 'Services', icon: Wrench, description: 'Service categories & bookings', permission: 'services' },
+        { id: 'academies', name: 'Academies', icon: School, description: 'Academy programs', permission: 'academies' },
+        { id: 'courts', name: 'Courts', icon: MapPin, description: 'Court bookings', permission: 'courts' },
+        { id: 'bookings', name: 'Bookings', icon: Calendar, description: 'All bookings overview', permission: 'bookings' }
       ]
     },
     {
       category: 'Communication',
       items: [
-        { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications' },
-        { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements' },
-        { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints' },
-        { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures' }
+        { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications', permission: 'notifications' },
+        { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements', permission: 'news' },
+        { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints', permission: 'complaints' },
+        { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures', permission: 'guidelines' }
       ]
     },
     {
       category: 'E-commerce',
       items: [
-        { id: 'store', name: 'Store', icon: ShoppingBag, description: 'Store management' },
-        { id: 'orders', name: 'Orders', icon: Package, description: 'Order management' }
+        { id: 'store', name: 'Store', icon: ShoppingBag, description: 'Store management', permission: 'store' },
+        { id: 'orders', name: 'Orders', icon: Package, description: 'Order management', permission: 'orders' }
       ]
     },
     {
       category: 'Security',
       items: [
-        { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management' }
+        { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' }
       ]
     }
   ];
 
+  // Filter sidebar navigation based on permissions
+  const getFilteredSidebarNavigation = () => {
+    return sidebarNavigation.map(category => ({
+      ...category,
+      items: category.items.filter(item => 
+        item.permission === null || hasPermission(item.permission, 'read')
+      )
+    })).filter(category => category.items.length > 0);
+  };
+
   // Flattened tabs for backward compatibility
-  const serviceTabs = sidebarNavigation.flatMap(category => category.items);
+  const serviceTabs = getFilteredSidebarNavigation().flatMap(category => category.items);
 
   // Handle escape key to close sidebar
   useEffect(() => {
@@ -952,7 +963,7 @@ const ProjectDashboard = () => {
 
         <nav className="mt-10 px-6 overflow-y-auto h-full pb-32">
           <div className="space-y-6">
-            {sidebarNavigation.map((category) => (
+            {getFilteredSidebarNavigation().map((category) => (
               <div key={category.category}>
                 <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   {category.category}
@@ -1159,20 +1170,23 @@ const ProjectDashboard = () => {
             )}
 
             {activeTab === 'users' && (
-              <div className="space-y-6">
-                {/* Users Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Project Users</h2>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Manage users and their project access
-                    </p>
+              <PermissionGate entity="users" action="read" showMessage={true}>
+                <div className="space-y-6">
+                  {/* Users Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Project Users</h2>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Manage users and their project access
+                      </p>
+                    </div>
+                    <PermissionGate entity="users" action="create">
+                      <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        <Plus className="h-4 w-4 mr-2 inline" />
+                        Add User
+                      </button>
+                    </PermissionGate>
                   </div>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    <Plus className="h-4 w-4 mr-2 inline" />
-                    Add User
-                  </button>
-                </div>
 
                 {/* Search and Filters */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1263,24 +1277,30 @@ const ProjectDashboard = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center space-x-2">
-                                  <button
-                                    onClick={() => handleUserAction('view', user)}
-                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleUserAction('edit', user)}
-                                    className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleUserAction('delete', user)}
-                                    className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
+                                  <PermissionGate entity="users" action="read">
+                                    <button
+                                      onClick={() => handleUserAction('view', user)}
+                                      className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGate>
+                                  <PermissionGate entity="users" action="write">
+                                    <button
+                                      onClick={() => handleUserAction('edit', user)}
+                                      className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGate>
+                                  <PermissionGate entity="users" action="delete">
+                                    <button
+                                      onClick={() => handleUserAction('delete', user)}
+                                      className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGate>
                                 </div>
                               </td>
                             </tr>
@@ -1298,11 +1318,14 @@ const ProjectDashboard = () => {
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
+              </PermissionGate>
             )}
 
             {activeTab === 'academies' && (
-              <AcademiesManagement projectId={projectId} />
+              <PermissionGate entity="academies" action="read" showMessage={true}>
+                <AcademiesManagement projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'sports' && (
@@ -1486,11 +1509,14 @@ const ProjectDashboard = () => {
             )}
 
             {activeTab === 'courts' && (
-              <CourtsManagement projectId={projectId} />
+              <PermissionGate entity="courts" action="read" showMessage={true}>
+                <CourtsManagement projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'bookings' && (
-              <div className="space-y-6">
+              <PermissionGate entity="bookings" action="read" showMessage={true}>
+                <div className="space-y-6">
 
                 {/* Bookings Header */}
                 <div className="flex items-center justify-between">
@@ -2012,48 +2038,62 @@ const ProjectDashboard = () => {
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              </PermissionGate>
             )}
 
             {activeTab === 'events' && (
-              <NotificationManagement projectId={projectId} />
+              <PermissionGate entity="notifications" action="read" showMessage={true}>
+                <NotificationManagement projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'news' && (
-              <NewsManagementSystem projectId={projectId} />
+              <PermissionGate entity="news" action="read" showMessage={true}>
+                <NewsManagementSystem projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'services' && (
-              <ServicesManagement projectId={projectId} />
+              <PermissionGate entity="services" action="read" showMessage={true}>
+                <ServicesManagement projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'complaints' && (
-              <ComplaintsManagement projectId={projectId} />
+              <PermissionGate entity="complaints" action="read" showMessage={true}>
+                <ComplaintsManagement projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'guidelines' && (
-              <ProjectGuidelines projectId={projectId} />
+              <PermissionGate entity="guidelines" action="read" showMessage={true}>
+                <ProjectGuidelines projectId={projectId} />
+              </PermissionGate>
             )}
 
             {activeTab === 'store' && (
-              <div className="space-y-6">
-                {/* Store Management Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Store Management</h2>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Manage stores, products, and orders
-                    </p>
+              <PermissionGate entity="store" action="read" showMessage={true}>
+                <div className="space-y-6">
+                  {/* Store Management Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Store Management</h2>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Manage stores, products, and orders
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Store Management Component */}
-                <StoreManagement projectId={projectId} onViewStore={handleViewStore} />
-              </div>
+                  {/* Store Management Component */}
+                  <StoreManagement projectId={projectId} onViewStore={handleViewStore} />
+                </div>
+              </PermissionGate>
             )}
 
             {activeTab === 'orders' && (
-              <div className="space-y-6">
+              <PermissionGate entity="orders" action="read" showMessage={true}>
+                <div className="space-y-6">
                 {/* Orders Header */}
                 <div className="flex items-center justify-between">
                   <div>
@@ -2431,11 +2471,13 @@ const ProjectDashboard = () => {
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              </PermissionGate>
             )}
 
             {activeTab === 'gatepass' && (
-              <div className="space-y-6">
+              <PermissionGate entity="gate_pass" action="read" showMessage={true}>
+                <div className="space-y-6">
                 {/* Gate Pass Header */}
                 <div className="flex items-center justify-between">
                   <div>
@@ -2555,7 +2597,8 @@ const ProjectDashboard = () => {
                     <p className="text-gray-600">Get started by issuing your first gate pass.</p>
                   </div>
                 </div>
-              </div>
+                </div>
+              </PermissionGate>
             )}
 
             {/* Error State */}

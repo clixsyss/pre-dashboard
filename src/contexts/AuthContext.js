@@ -60,6 +60,9 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     try {
+      // Set loading to true to prevent multiple login attempts
+      setLoading(true);
+      
       // First, authenticate with Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
@@ -83,6 +86,9 @@ export function AuthProvider({ children }) {
       
       // For Firebase auth errors, re-throw as is
       throw error;
+    } finally {
+      // Always set loading to false
+      setLoading(false);
     }
   }
 
@@ -95,8 +101,6 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    let timeoutId;
-    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
@@ -120,28 +124,11 @@ export function AuthProvider({ children }) {
         setCurrentUser(null);
       }
       
-      // Clear any existing timeout
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      
-      // Set loading to false with a small delay to prevent flash
-      timeoutId = setTimeout(() => {
-        setLoading(false);
-      }, 100);
+      // Set loading to false immediately to prevent refresh loops
+      setLoading(false);
     });
 
-    // Fallback timeout in case auth state never resolves
-    const fallbackTimeout = setTimeout(() => {
-      console.log('Auth state check timeout - setting loading to false');
-      setLoading(false);
-    }, 3000);
-
-    return () => {
-      unsubscribe();
-      if (timeoutId) clearTimeout(timeoutId);
-      clearTimeout(fallbackTimeout);
-    };
+    return () => unsubscribe();
   }, []);
 
   const value = {

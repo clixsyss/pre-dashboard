@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
@@ -60,6 +60,86 @@ const AdminProtectedRoute = ({ children }) => {
   return children;
 };
 
+// Super Admin Protected Route Component
+const SuperAdminProtectedRoute = ({ children }) => {
+  const { currentAdmin, loading, isSuperAdmin } = useAdminAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-pre-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
+          <p className="text-pre-black text-lg">Loading...</p>
+          <p className="text-gray-500 text-sm mt-2">Please wait while we verify your admin access</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentAdmin) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isSuperAdmin()) {
+    return <Navigate to="/project-selection" replace />;
+  }
+
+  return children;
+};
+
+// Main App Router Component - handles routing based on admin type
+const AppRouter = () => {
+  const { currentAdmin, loading, isSuperAdmin } = useAdminAuth();
+
+  // Memoize the admin type check to prevent unnecessary re-renders
+  const isSuperAdminMemo = useMemo(() => {
+    return isSuperAdmin();
+  }, [currentAdmin?.accountType]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-pre-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
+          <p className="text-pre-black text-lg">Loading...</p>
+          <p className="text-gray-500 text-sm mt-2">Please wait while we verify your admin access</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentAdmin) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Super admins get the main layout with all pages
+  if (isSuperAdminMemo) {
+    return (
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="users" element={<Users />} />
+          <Route path="projects" element={<Projects />} />
+          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin-management" element={<AdminManagement />} />
+          <Route path="project-selection" element={<ProjectSelection />} />
+        </Route>
+        <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
+      </Routes>
+    );
+  }
+
+  // Regular admins only get project selection and project dashboards
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/project-selection" element={<ProjectSelection />} />
+      <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
+    </Routes>
+  );
+};
+
 // Main App Component
 function App() {
   return (
@@ -69,42 +149,11 @@ function App() {
           <div className="App">
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="users" element={<Users />} />
-              <Route path="projects" element={<Projects />} />
-              <Route path="/project-selection" element={
-                <AdminProtectedRoute>
-                  <ProjectSelection />
-                </AdminProtectedRoute>
-              } />
-              <Route path="/admin" element={
-                <AdminProtectedRoute>
-                  <AdminDashboard />
-                </AdminProtectedRoute>
-              } />
-              <Route path="/admin-management" element={
-                <AdminProtectedRoute>
-                  <AdminManagement />
-                </AdminProtectedRoute>
-              } />
-            </Route>
-
-            {/* Project-based routes */}
-            <Route path="/project/:projectId/*" element={
-              <AdminProtectedRoute>
-                <ProjectDashboard />
-              </AdminProtectedRoute>
-            } />
-          </Routes>
-          <NotificationContainer />
-        </div>
-      </Router>
+              <Route path="/*" element={<AppRouter />} />
+            </Routes>
+            <NotificationContainer />
+          </div>
+        </Router>
       </AdminAuthProvider>
     </AuthProvider>
   );

@@ -4,11 +4,14 @@ import {
   Building2, 
   MapPin, 
   ArrowRight,
-  Search
+  Search,
+  LogOut,
+  User
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProjectSelection = () => {
   const [projects, setProjects] = useState([]);
@@ -17,7 +20,17 @@ const ProjectSelection = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const navigate = useNavigate();
-  const { currentAdmin, getFilteredProjects } = useAdminAuth();
+  const { currentAdmin, getFilteredProjects, hasPermission, isSuperAdmin, loading: adminLoading } = useAdminAuth();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
+  };
 
   useEffect(() => {
     if (currentAdmin) {
@@ -28,12 +41,8 @@ const ProjectSelection = () => {
   useEffect(() => {
     if (!currentAdmin || !projects.length) return;
     
-    console.log('Current admin:', currentAdmin);
-    console.log('All projects:', projects);
-    
     // Get projects filtered by admin assignments
     const adminProjects = getFilteredProjects(projects);
-    console.log('Filtered projects for admin:', adminProjects);
     
     if (searchTerm) {
       const filtered = adminProjects.filter(project => 
@@ -121,12 +130,14 @@ const ProjectSelection = () => {
     };
   };
 
-  if (loading) {
+  if (loading || adminLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading projects...</p>
+          <p className="text-gray-600">
+            {adminLoading ? 'Loading admin data...' : 'Loading projects...'}
+          </p>
         </div>
       </div>
     );
@@ -152,6 +163,24 @@ const ProjectSelection = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+              
+              {/* Admin Info and Logout */}
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <User className="h-4 w-4" />
+                  <span>{currentAdmin?.firstName} {currentAdmin?.lastName}</span>
+                  <span className="text-gray-400">•</span>
+                  <span className="capitalize">{currentAdmin?.accountType?.replace('_', ' ')}</span>
+                </div>
+                
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
               </div>
             </div>
           </div>
