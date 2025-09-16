@@ -46,11 +46,18 @@ export const AdminAuthProvider = ({ children }) => {
         if (isMounted) {
           if (adminSnap.exists()) {
             const adminData = adminSnap.data();
+            console.log('AdminAuthContext: Admin data loaded successfully', { 
+              id: adminSnap.id, 
+              accountType: adminData.accountType,
+              isActive: adminData.isActive,
+              assignedProjects: adminData.assignedProjects 
+            });
             setCurrentAdmin({
               id: adminSnap.id,
               ...adminData
             });
           } else {
+            console.log('AdminAuthContext: Admin account not found for UID:', currentUser.uid);
             setCurrentAdmin(null);
             setError('Admin account not found');
           }
