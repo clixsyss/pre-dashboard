@@ -223,6 +223,18 @@ const AdminManagement = () => {
     }
   };
 
+  const handleToggleActive = async (adminId, isActive) => {
+    try {
+      await updateAdmin(adminId, { isActive: !isActive });
+      setAdmins(prev => prev.map(admin => 
+        admin.id === adminId ? { ...admin, isActive: !isActive } : admin
+      ));
+      alert(`Admin ${!isActive ? 'activated' : 'deactivated'} successfully!`);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // Approval handlers
   const openApprovalModal = (admin) => {
     setSelectedPendingAdmin(admin);
@@ -472,6 +484,16 @@ const AdminManagement = () => {
                         className="text-blue-600 hover:text-blue-900"
                       >
                         Edit
+                      </button>
+                      <button
+                        onClick={() => handleToggleActive(admin.id, admin.isActive)}
+                        className={`${
+                          admin.isActive 
+                            ? 'text-orange-600 hover:text-orange-900' 
+                            : 'text-green-600 hover:text-green-900'
+                        }`}
+                      >
+                        {admin.isActive ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(admin)}

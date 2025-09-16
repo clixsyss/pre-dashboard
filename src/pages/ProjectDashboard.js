@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Users,
   MapPin,
@@ -45,6 +45,7 @@ import ProjectGuidelines from '../components/ProjectGuidelines';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import '../styles/servicesManagement.css';
 import '../styles/projectSidebar.css';
 
@@ -57,6 +58,8 @@ const ProjectDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
+  const navigate = useNavigate();
 
   // Booking store integration
   const {
@@ -86,6 +89,14 @@ const ProjectDashboard = () => {
     fetchNotifications,
     getNotificationStats
   } = useNotificationStore();
+
+  // Check if admin has access to this project
+  useEffect(() => {
+    if (currentAdmin && projectId && !hasProjectAccess(projectId)) {
+      navigate('/admin/projects');
+      return;
+    }
+  }, [currentAdmin, projectId, hasProjectAccess, navigate]);
 
   // Booking search and filters
   const [bookingSearchTerm, setBookingSearchTerm] = useState('');

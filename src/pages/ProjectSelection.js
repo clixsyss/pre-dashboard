@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const ProjectSelection = () => {
   const [projects, setProjects] = useState([]);
@@ -16,22 +17,34 @@ const ProjectSelection = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const navigate = useNavigate();
+  const { currentAdmin, getFilteredProjects } = useAdminAuth();
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (currentAdmin) {
+      fetchProjects();
+    }
+  }, [currentAdmin]);
 
   useEffect(() => {
+    if (!currentAdmin || !projects.length) return;
+    
+    console.log('Current admin:', currentAdmin);
+    console.log('All projects:', projects);
+    
+    // Get projects filtered by admin assignments
+    const adminProjects = getFilteredProjects(projects);
+    console.log('Filtered projects for admin:', adminProjects);
+    
     if (searchTerm) {
-      const filtered = projects.filter(project => 
+      const filtered = adminProjects.filter(project => 
         project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.location?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredProjects(filtered);
     } else {
-      setFilteredProjects(projects);
+      setFilteredProjects(adminProjects);
     }
-  }, [searchTerm, projects]);
+  }, [searchTerm, projects, currentAdmin, getFilteredProjects]);
 
   const fetchProjects = async () => {
     try {

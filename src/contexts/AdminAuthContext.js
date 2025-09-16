@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getAdminById } from '../services/adminService';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { useAuth } from './AuthContext';
 
 const AdminAuthContext = createContext();
 
@@ -15,54 +17,52 @@ export const AdminAuthProvider = ({ children }) => {
   const [currentAdmin, setCurrentAdmin] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { currentUser } = useAuth();
 
-  // Load admin data from localStorage on mount
+  // Load admin data when user changes
   useEffect(() => {
-    const loadAdminFromStorage = async () => {
+    const loadAdminData = async () => {
+      if (!currentUser) {
+        setCurrentAdmin(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        const storedAdminId = localStorage.getItem('adminId');
+        setError(null);
         
-        if (storedAdminId) {
-          const admin = await getAdminById(storedAdminId);
-          setCurrentAdmin(admin);
+        // Get admin data from Firestore using Firebase UID
+        const adminRef = doc(db, 'admins', currentUser.uid);
+        const adminSnap = await getDoc(adminRef);
+        
+        if (adminSnap.exists()) {
+          const adminData = adminSnap.data();
+          console.log('Admin data loaded:', adminData);
+          setCurrentAdmin({
+            id: adminSnap.id,
+            ...adminData
+          });
+        } else {
+          console.log('Admin document not found for UID:', currentUser.uid);
+          setCurrentAdmin(null);
+          setError('Admin account not found');
         }
       } catch (err) {
-        console.error('Error loading admin from storage:', err);
+        console.error('Error loading admin data:', err);
         setError(err.message);
-        // Clear invalid admin data
-        localStorage.removeItem('adminId');
+        setCurrentAdmin(null);
       } finally {
         setLoading(false);
       }
     };
 
-    loadAdminFromStorage();
-  }, []);
+    loadAdminData();
+  }, [currentUser]);
 
-  // Login admin
-  const loginAdmin = async (adminId) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const admin = await getAdminById(adminId);
-      setCurrentAdmin(admin);
-      localStorage.setItem('adminId', adminId);
-      
-      return admin;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Logout admin
+  // Logout admin (uses AuthContext logout)
   const logoutAdmin = () => {
     setCurrentAdmin(null);
-    localStorage.removeItem('adminId');
   };
 
   // Update admin data
@@ -117,15 +117,24 @@ export const AdminAuthProvider = ({ children }) => {
 
   // Get filtered projects for current admin
   const getFilteredProjects = (allProjects) => {
-    if (!currentAdmin) return [];
+    console.log('getFilteredProjects called with:', { currentAdmin, allProjects });
+    
+    if (!currentAdmin) {
+      console.log('No current admin, returning empty array');
+      return [];
+    }
     
     if (currentAdmin.accountType === 'super_admin') {
+      console.log('Super admin detected, returning all projects');
       return allProjects;
     }
     
-    return allProjects.filter(project => 
+    console.log('Regular admin, filtering by assigned projects:', currentAdmin.assignedProjects);
+    const filtered = allProjects.filter(project => 
       currentAdmin.assignedProjects?.includes(project.id)
     );
+    console.log('Filtered projects:', filtered);
+    return filtered;
   };
 
   // Check if admin is super admin
@@ -142,7 +151,6 @@ export const AdminAuthProvider = ({ children }) => {
     currentAdmin,
     loading,
     error,
-    loginAdmin,
     logoutAdmin,
     updateAdminData,
     hasPermission,

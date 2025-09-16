@@ -1,70 +1,49 @@
 import React from 'react';
-import { hasPermission, hasProjectAccess } from '../services/adminService';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
-/**
- * Permission Gate Component
- * Controls what content admins can see based on their permissions
- */
 const PermissionGate = ({ 
-  children, 
   entity, 
   action, 
-  projectId, 
-  admin, 
-  fallback = null 
+  children, 
+  fallback = null, 
+  showMessage = false,
+  message = "You don't have permission to access this feature."
 }) => {
-  // Check if admin has permission for the specific action
-  const hasEntityPermission = entity && action ? hasPermission(admin, entity, action) : true;
-  
-  // Check if admin has access to the specific project
-  const hasProjectPermission = projectId ? hasProjectAccess(admin, projectId) : true;
-  
-  // Show content only if admin has both entity and project permissions
-  if (hasEntityPermission && hasProjectPermission) {
-    return <>{children}</>;
+  const { hasPermission, isSuperAdmin } = useAdminAuth();
+
+  // Super admin has access to everything
+  if (isSuperAdmin()) {
+    return children;
   }
-  
-  // Return fallback or null if no permissions
-  return fallback;
-};
 
-/**
- * Hook to check permissions
- */
-export const usePermissions = (admin) => {
-  const canAccess = (entity, action, projectId = null) => {
-    const hasEntityPermission = entity && action ? hasPermission(admin, entity, action) : true;
-    const hasProjectPermission = projectId ? hasProjectAccess(admin, projectId) : true;
-    return hasEntityPermission && hasProjectPermission;
-  };
-
-  const canRead = (entity, projectId = null) => canAccess(entity, 'read', projectId);
-  const canWrite = (entity, projectId = null) => canAccess(entity, 'write', projectId);
-  const canDelete = (entity, projectId = null) => canAccess(entity, 'delete', projectId);
-  const canCreate = (entity, projectId = null) => canAccess(entity, 'create', projectId);
-  const canSend = (entity, projectId = null) => canAccess(entity, 'send', projectId);
-
-  return {
-    canAccess,
-    canRead,
-    canWrite,
-    canDelete,
-    canCreate,
-    canSend
-  };
-};
-
-/**
- * Hook to get filtered projects for admin
- */
-export const useFilteredProjects = (admin, allProjects) => {
-  if (admin.accountType === 'super_admin') {
-    return allProjects;
+  // Check if admin has the required permission
+  if (hasPermission(entity, action)) {
+    return children;
   }
-  
-  return allProjects.filter(project => 
-    admin.assignedProjects?.includes(project.id)
-  );
+
+  // Show fallback or message
+  if (fallback) {
+    return fallback;
+  }
+
+  if (showMessage) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-yellow-700">{message}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default PermissionGate;
