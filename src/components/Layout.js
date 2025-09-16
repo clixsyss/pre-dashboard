@@ -10,7 +10,8 @@ import {
   Settings,
   Bell,
   BarChart3,
-  UserCheck
+  UserCheck,
+  Shield
 } from 'lucide-react';
 import logo from '../logo.png';
 
@@ -24,6 +25,7 @@ const Layout = () => {
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
     { name: 'Projects', href: '/projects', icon: Building2, description: 'Manage Projects' },
     { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
+    { name: 'Admin Management', href: '/admin-management', icon: Shield, description: 'Manage Admin Accounts & Approvals' },
   ];
 
   const handleLogout = async () => {

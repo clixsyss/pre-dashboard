@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AdminAuthProvider } from './contexts/AdminAuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
@@ -8,6 +9,7 @@ import Projects from './pages/Projects';
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminManagement from './components/AdminManagement';
 import Layout from './components/Layout';
 import NotificationContainer from './components/NotificationContainer';
 import './App.css';
@@ -39,15 +41,16 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
+      <AdminAuthProvider>
+        <Router>
+          <div className="App">
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<Users />} />
@@ -62,6 +65,11 @@ function App() {
                   <AdminDashboard />
                 </ProtectedRoute>
               } />
+              <Route path="/admin-management" element={
+                <ProtectedRoute>
+                  <AdminManagement />
+                </ProtectedRoute>
+              } />
             </Route>
 
             {/* Project-based routes */}
@@ -74,6 +82,7 @@ function App() {
           <NotificationContainer />
         </div>
       </Router>
+      </AdminAuthProvider>
     </AuthProvider>
   );
 }

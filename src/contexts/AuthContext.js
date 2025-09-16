@@ -5,7 +5,8 @@ import {
   onAuthStateChanged,
   updateProfile 
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '../config/firebase';
 
 const AuthContext = createContext();
 
@@ -17,8 +18,72 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  function login(email, password) {
-    return signInWithEmailAndPassword(auth, email, password);
+  // Check if user is an approved admin
+  const checkAdminStatus = async (user) => {
+    if (!user) return false;
+    
+    try {
+      // Check if user exists in approved admins collection
+      const adminRef = doc(db, 'admins', user.uid);
+      const adminSnap = await getDoc(adminRef);
+      
+      if (adminSnap.exists()) {
+        const adminData = adminSnap.data();
+        return adminData.isActive !== false; // Return true if active (or undefined)
+      }
+      
+      // If not in approved admins, check if they're pending
+      const pendingRef = collection(db, 'pendingAdmins');
+      const q = query(pendingRef, where('firebaseUid', '==', user.uid));
+      const pendingSnap = await getDocs(q);
+      
+      if (!pendingSnap.empty) {
+        const pendingData = pendingSnap.docs[0].data();
+        if (pendingData.status === 'pending') {
+          console.log('Admin account is pending approval');
+          throw new Error('Your account is pending approval. Please wait for a super admin to approve your request.');
+        } else if (pendingData.status === 'rejected') {
+          console.log('Admin account was rejected');
+          throw new Error('Your admin request has been rejected. Please contact a super admin for more information.');
+        }
+      }
+      
+      return false; // Not found in either collection
+    } catch (error) {
+      // Don't log as error for pending/rejected status - this is expected behavior
+      if (!error.message.includes('pending approval') && !error.message.includes('rejected')) {
+        console.error('Error checking admin status:', error);
+      }
+      throw error;
+    }
+  };
+
+  async function login(email, password) {
+    try {
+      // First, authenticate with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Then check if they're an approved admin
+      const isApprovedAdmin = await checkAdminStatus(userCredential.user);
+      
+      if (!isApprovedAdmin) {
+        // Sign them out if they're not approved
+        await signOut(auth);
+        throw new Error('Access denied. Your admin account is not approved or active.');
+      }
+      
+      return userCredential;
+    } catch (error) {
+      // If it's our custom error, re-throw it
+      if (error.message.includes('pending approval') || 
+          error.message.includes('rejected') || 
+          error.message.includes('Access denied')) {
+        throw error;
+      }
+      
+      // For Firebase auth errors, re-throw as is
+      throw error;
+    }
   }
 
   function logout() {
@@ -32,8 +97,28 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let timeoutId;
     
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Check if user is an approved admin
+          const isApprovedAdmin = await checkAdminStatus(user);
+          
+          if (isApprovedAdmin) {
+            setCurrentUser(user);
+          } else {
+            // If not approved, sign them out and clear current user
+            await signOut(auth);
+            setCurrentUser(null);
+          }
+        } catch (error) {
+          // If there's an error checking status, sign them out
+          console.log('Auth state check:', error.message);
+          await signOut(auth);
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
       
       // Clear any existing timeout
       if (timeoutId) {

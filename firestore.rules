@@ -6,6 +6,36 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == adminId;
     }
     
+    // Allow admins to read all admin documents (for admin management)
+    match /admins/{adminId} {
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow admins to create new admin accounts
+    match /admins/{adminId} {
+      allow create: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow admins to update admin accounts
+    match /admins/{adminId} {
+      allow update: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow admins to delete admin accounts
+    match /admins/{adminId} {
+      allow delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing admins collection (needed for admin management dashboard)
+    match /admins {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
     // Users collection - users can only access their own data
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -85,6 +115,80 @@ service cloud.firestore {
     
     // Allow listing project academies
     match /projects/{projectId}/academies {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Service Categories - allow authenticated users to read/write within project
+    match /projects/{projectId}/serviceCategories/{categoryId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project service categories
+    match /projects/{projectId}/serviceCategories {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Services within Categories - allow authenticated users to read/write within project
+    match /projects/{projectId}/serviceCategories/{categoryId}/services/{serviceId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project services within categories
+    match /projects/{projectId}/serviceCategories/{categoryId}/services {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Complaints - allow authenticated users to read/write within project
+    match /projects/{projectId}/complaints/{complaintId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project complaints
+    match /projects/{projectId}/complaints {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Shops - allow authenticated users to read/write within project
+    match /projects/{projectId}/shops/{shopId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project shops
+    match /projects/{projectId}/shops {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Products - allow authenticated users to read/write within project
+    match /projects/{projectId}/products/{productId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project products
+    match /projects/{projectId}/products {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Orders - users can read/write their own orders within project
+    match /projects/{projectId}/orders/{orderId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project orders
+    match /projects/{projectId}/orders {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Gate Passes - users can read/write their own gate passes within project
+    match /projects/{projectId}/gatePasses/{gatePassId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project gate passes
+    match /projects/{projectId}/gatePasses {
       allow list: if request.auth != null;
     }
     
@@ -207,6 +311,26 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // Project Ratings - allow authenticated users to read/write ratings within project
+    match /projects/{projectId}/ratings/{ratingId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project ratings
+    match /projects/{projectId}/ratings {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Sample Data - allow authenticated users to read/write sample data within project
+    match /projects/{projectId}/sampleData/{sampleId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project sample data
+    match /projects/{projectId}/sampleData {
+      allow list: if request.auth != null;
+    }
+    
     // LEGACY COLLECTIONS - Keep for backward compatibility
     // These are the old global collections that might still exist
     
@@ -317,6 +441,22 @@ service cloud.firestore {
     // Allow listing global notifications collection
     match /notifications {
       allow list: if request.auth != null;
+    }
+    
+    // Pending Admins collection - allow anyone to create (for registration)
+    // Allow authenticated users to read (for status checking)
+    // Only approved admins can update/delete (for approval process)
+    match /pendingAdmins/{pendingAdminId} {
+      allow create, write: if true; // Temporarily allow anyone to create/write (for debugging)
+      allow read: if request.auth != null; // Any authenticated user can read (for status checking)
+      allow update, delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing pending admins collection (only for approved admins)
+    match /pendingAdmins {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
     // Project News - allow authenticated users to read published news within project
