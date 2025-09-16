@@ -41,7 +41,7 @@ import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
 import ServicesManagement from '../components/ServicesManagement';
 import AdminSetup from '../components/AdminSetup';
-import ProjectGuidelines from '../components/ProjectGuidelines';
+import PDFGuidelines from '../components/PDFGuidelines';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -2068,7 +2068,7 @@ const ProjectDashboard = () => {
 
             {activeTab === 'guidelines' && (
               <PermissionGate entity="guidelines" action="read" showMessage={true}>
-                <ProjectGuidelines projectId={projectId} />
+                <PDFGuidelines projectId={projectId} />
               </PermissionGate>
             )}
 

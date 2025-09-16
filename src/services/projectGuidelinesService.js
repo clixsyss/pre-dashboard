@@ -157,11 +157,79 @@ export const searchGuidelines = async (projectId, searchTerm) => {
     
     return guidelines.filter(guideline => 
       guideline.title.toLowerCase().includes(searchLower) ||
-      guideline.content.toLowerCase().includes(searchLower) ||
+      (guideline.content && guideline.content.toLowerCase().includes(searchLower)) ||
       guideline.category.toLowerCase().includes(searchLower)
     );
   } catch (error) {
     console.error('Error searching guidelines:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get PDF guidelines for a specific project
+ * @param {string} projectId - The project ID
+ * @returns {Promise<Array>} Array of PDF guidelines
+ */
+export const getPDFGuidelines = async (projectId) => {
+  try {
+    const guidelinesRef = collection(db, 'projects', projectId, COLLECTION_NAME);
+    const q = query(
+      guidelinesRef, 
+      where('type', '==', 'pdf'),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error fetching PDF guidelines:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create a PDF guideline
+ * @param {string} projectId - The project ID
+ * @param {Object} pdfData - The PDF guideline data
+ * @returns {Promise<string>} The ID of the created guideline
+ */
+export const createPDFGuideline = async (projectId, pdfData) => {
+  try {
+    const guidelinesRef = collection(db, 'projects', projectId, COLLECTION_NAME);
+    const docRef = await addDoc(guidelinesRef, {
+      ...pdfData,
+      type: 'pdf',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating PDF guideline:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a PDF guideline
+ * @param {string} projectId - The project ID
+ * @param {string} guidelineId - The guideline ID
+ * @param {Object} updateData - The data to update
+ * @returns {Promise<void>}
+ */
+export const updatePDFGuideline = async (projectId, guidelineId, updateData) => {
+  try {
+    const guidelineRef = doc(db, 'projects', projectId, COLLECTION_NAME, guidelineId);
+    await updateDoc(guidelineRef, {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating PDF guideline:', error);
     throw error;
   }
 };
