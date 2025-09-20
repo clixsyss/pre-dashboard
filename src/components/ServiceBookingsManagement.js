@@ -283,7 +283,23 @@ const ServiceBookingsManagement = ({ projectId }) => {
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    
+    // Handle both ISO date strings and formatted date strings
+    let date;
+    if (dateString.includes('-')) {
+      // ISO format (2025-01-15)
+      date = new Date(dateString + 'T00:00:00');
+    } else {
+      // Already formatted or other format
+      date = new Date(dateString);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return dateString; // Return original if can't parse
+    }
+    
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -330,9 +346,9 @@ const ServiceBookingsManagement = ({ projectId }) => {
     const lastMessage = booking.messages[booking.messages.length - 1];
     
     if (lastMessage.messageType === 'status_update') {
-      return '📋 Status updated';
+      return 'Status updated';
     } else if (lastMessage.messageType === 'details_update') {
-      return '✏️ Details updated';
+      return 'Details updated';
     } else {
       return lastMessage.text || 'New message';
     }
