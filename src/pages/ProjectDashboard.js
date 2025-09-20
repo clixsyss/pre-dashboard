@@ -62,7 +62,7 @@ const ProjectDashboard = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
-  const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
+  const { currentAdmin, hasPermission, hasProjectAccess } = useAdminAuth();
   const navigate = useNavigate();
 
   // Booking store integration

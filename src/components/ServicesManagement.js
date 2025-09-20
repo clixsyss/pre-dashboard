@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  Settings, 
-  Users, 
-  Building
-} from 'lucide-react';
+import { Building, Users } from 'lucide-react';
 import ServiceCategoriesManagement from './ServiceCategoriesManagement';
 import IndividualServicesManagement from './IndividualServicesManagement';
 import ServiceBookingRequests from './ServiceBookingRequests';

@@ -33,17 +33,23 @@ const ProjectSelection = () => {
   };
 
   useEffect(() => {
-    if (currentAdmin) {
+    console.log('ProjectSelection: useEffect triggered - currentAdmin:', !!currentAdmin, 'adminLoading:', adminLoading);
+    if (currentAdmin && !adminLoading) {
+      console.log('ProjectSelection: Loading projects for admin:', currentAdmin.email);
       fetchProjects();
     }
-  }, [currentAdmin]);
+  }, [currentAdmin?.id, adminLoading]);
 
+  // Simple search effect
   useEffect(() => {
-    if (!currentAdmin || !projects.length) return;
+    if (!projects.length) return;
     
-    // Get projects filtered by admin assignments
-    const adminProjects = getFilteredProjects(projects);
+    // Get admin's assigned projects
+    const adminProjects = projects.filter(project => 
+      currentAdmin?.assignedProjects?.includes(project.id)
+    );
     
+    // Apply search filter
     if (searchTerm) {
       const filtered = adminProjects.filter(project => 
         project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,10 +59,16 @@ const ProjectSelection = () => {
     } else {
       setFilteredProjects(adminProjects);
     }
-  }, [searchTerm, projects, currentAdmin, getFilteredProjects]);
+  }, [searchTerm, projects, currentAdmin?.assignedProjects]);
 
   const fetchProjects = async () => {
+    if (!currentAdmin) {
+      console.log('ProjectSelection: No admin data available, skipping project fetch');
+      return;
+    }
+
     try {
+      console.log('ProjectSelection: Starting to fetch projects...');
       setLoading(true);
       
       // Fetch projects
@@ -65,6 +77,8 @@ const ProjectSelection = () => {
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log('ProjectSelection: Fetched projects:', projectsData.length);
       
       // Fetch users to get real stats for each project
       const usersSnapshot = await getDocs(collection(db, 'users'));
@@ -101,11 +115,22 @@ const ProjectSelection = () => {
       });
       
       setProjects(projectsWithStats);
-      setFilteredProjects(projectsWithStats);
+      
+      // Simple filtering - just show admin's assigned projects
+      const adminProjects = projectsWithStats.filter(project => 
+        currentAdmin?.assignedProjects?.includes(project.id)
+      );
+      setFilteredProjects(adminProjects);
+      
+      console.log('ProjectSelection: Projects loaded successfully:', projectsWithStats.length);
+      console.log('ProjectSelection: Admin assigned projects:', adminProjects.length);
     } catch (err) {
-      console.error('Error fetching projects:', err);
+      console.error('ProjectSelection: Error fetching projects:', err);
+      setProjects([]); // Set empty array on error
+      setFilteredProjects([]);
     } finally {
       setLoading(false);
+      console.log('ProjectSelection: Loading complete');
     }
   };
 
@@ -138,13 +163,58 @@ const ProjectSelection = () => {
           <p className="text-gray-600">
             {adminLoading ? 'Loading admin data...' : 'Loading projects...'}
           </p>
+          <p className="text-gray-400 text-sm mt-2">
+            Admin: {currentAdmin ? 'Loaded' : 'Not loaded'} | 
+            Projects: {projects.length} | 
+            Filtered: {filteredProjects.length}
+          </p>
         </div>
       </div>
     );
   }
 
+  if (!currentAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 text-lg">No admin account found</p>
+          <p className="text-gray-500 mt-2">Please contact your administrator</p>
+          <button 
+            onClick={handleLogout}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('ProjectSelection: About to render with state:', { 
+    loading, 
+    adminLoading, 
+    currentAdmin: !!currentAdmin, 
+    currentAdminType: currentAdmin?.accountType,
+    projects: projects.length, 
+    filteredProjects: filteredProjects.length,
+    hasGetFilteredProjects: !!getFilteredProjects
+  });
+
+  // Simple test to see if basic render works
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Debug Info */}
+      <div className="p-4 bg-yellow-100 border-b">
+        <h3 className="font-bold">Debug Info:</h3>
+        <p>Loading: {loading.toString()}</p>
+        <p>Admin Loading: {adminLoading.toString()}</p>
+        <p>Current Admin: {currentAdmin ? 'YES' : 'NO'}</p>
+        <p>Admin Type: {currentAdmin?.accountType || 'N/A'}</p>
+        <p>Projects: {projects.length}</p>
+        <p>Filtered Projects: {filteredProjects.length}</p>
+        <p>Has getFilteredProjects: {getFilteredProjects ? 'YES' : 'NO'}</p>
+      </div>
+      
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

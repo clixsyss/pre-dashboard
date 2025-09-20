@@ -7,10 +7,8 @@ import {
   User,
   Edit,
   CheckCircle,
-  XCircle,
   AlertCircle,
   Search,
-  Filter,
   RefreshCw,
   Send,
   X,
@@ -20,7 +18,6 @@ import {
   collection, 
   getDocs, 
   query, 
-  where, 
   orderBy, 
   doc,
   updateDoc,
@@ -124,7 +121,7 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
   // Real-time updates for selected booking
   useEffect(() => {
-    if (!selectedBooking || !projectId) return;
+    if (!selectedBooking?.id || !projectId) return;
 
     const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
     const unsubscribe = onSnapshot(bookingRef, (doc) => {

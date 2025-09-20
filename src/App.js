@@ -8,10 +8,12 @@ import Users from './pages/Users';
 import Projects from './pages/Projects';
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
+import TestComponent from './components/TestComponent';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminManagement from './components/AdminManagement';
 import Layout from './components/Layout';
 import NotificationContainer from './components/NotificationContainer';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 // Protected Route Component
@@ -91,12 +93,22 @@ const SuperAdminProtectedRoute = ({ children }) => {
 const AppRouter = () => {
   const { currentAdmin, loading, isSuperAdmin } = useAdminAuth();
 
+  console.log('AppRouter: Rendering with admin data:', {
+    loading,
+    hasCurrentAdmin: !!currentAdmin,
+    adminType: currentAdmin?.accountType,
+    adminEmail: currentAdmin?.email
+  });
+
   // Memoize the admin type check to prevent unnecessary re-renders
   const isSuperAdminMemo = useMemo(() => {
-    return isSuperAdmin();
+    const result = isSuperAdmin();
+    console.log('AppRouter: isSuperAdmin check result:', result);
+    return result;
   }, [currentAdmin?.accountType]);
 
   if (loading) {
+    console.log('AppRouter: Still loading admin data...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-pre-white">
         <div className="text-center">
@@ -109,11 +121,13 @@ const AppRouter = () => {
   }
 
   if (!currentAdmin) {
+    console.log('AppRouter: No admin found, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
   // Super admins get the main layout with all pages
   if (isSuperAdminMemo) {
+    console.log('AppRouter: Rendering super admin routes');
     return (
       <Routes>
         <Route path="/" element={<Layout />}>
@@ -131,11 +145,19 @@ const AppRouter = () => {
   }
 
   // Regular admins only get project selection and project dashboards
+  console.log('AppRouter: Rendering regular admin routes (should see TestComponent)');
+  console.log('AppRouter: Current URL:', window.location.pathname);
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/users" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/projects" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/admin" element={<Navigate to="/project-selection" replace />} />
+      <Route path="/admin-management" element={<Navigate to="/project-selection" replace />} />
       <Route path="/project-selection" element={<ProjectSelection />} />
       <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
+      <Route path="*" element={<Navigate to="/project-selection" replace />} />
     </Routes>
   );
 };
@@ -149,7 +171,7 @@ function App() {
           <div className="App">
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/*" element={<AppRouter />} />
+              <Route path="/*" element={<ErrorBoundary><AppRouter /></ErrorBoundary>} />
             </Routes>
             <NotificationContainer />
           </div>
