@@ -1056,7 +1056,7 @@ const AcademiesManagement = ({ projectId }) => {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Price:</span>
-                              <span>${program.price || 'N/A'}/month</span>
+                              <span>EGP {program.price || 'N/A'}/month</span>
                             </div>
                             {program.maxCapacity && (
                               <div className="flex items-center gap-2">
@@ -1836,7 +1836,7 @@ const AcademiesManagement = ({ projectId }) => {
                             </p>
                             <div className="flex items-center gap-4 text-sm text-gray-500">
                               <span>Duration: {program.duration} months</span>
-                              <span>Price: ${program.price}/month</span>
+                              <span>Price: EGP {program.price}/month</span>
                               {program.maxCapacity && <span>Capacity: {program.maxCapacity}</span>}
                             </div>
                             
@@ -1996,7 +1996,7 @@ const AcademiesManagement = ({ projectId }) => {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
-                    <p className="text-sm text-gray-900 font-medium mt-1">${selectedProgramForView.price}/month</p>
+                    <p className="text-sm text-gray-900 font-medium mt-1">EGP {selectedProgramForView.price}/month</p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Max Capacity</label>

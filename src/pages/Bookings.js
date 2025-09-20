@@ -308,7 +308,7 @@ const Bookings = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center">
                         <DollarSign className="h-4 w-4 mr-1 text-gray-400" />
-                        ${booking.price || '0'}
+                        EGP {booking.price || '0'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -401,7 +401,7 @@ const Bookings = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Amount</label>
-                  <p className="mt-1 text-sm text-gray-900">${selectedBooking.price || '0'}</p>
+                  <p className="mt-1 text-sm text-gray-900">EGP {selectedBooking.price || '0'}</p>
                 </div>
                 
                 {selectedBooking.notes && (

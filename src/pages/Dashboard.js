@@ -318,7 +318,7 @@ const Dashboard = () => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'EGP',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount || 0);

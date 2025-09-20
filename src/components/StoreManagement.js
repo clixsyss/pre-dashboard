@@ -658,9 +658,9 @@ const StoreManagement = ({ projectId, onViewStore }) => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Prices</option>
-                <option value="low">Low (≤ $50)</option>
-                <option value="medium">Medium ($51 - $200)</option>
-                <option value="high">High (&gt; $200)</option>
+                <option value="low">Low (≤ EGP 500)</option>
+                <option value="medium">Medium (EGP 501 - EGP 2000)</option>
+                <option value="high">High (&gt; EGP 2000)</option>
               </select>
             </div>
           )}
@@ -910,7 +910,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
                             {product.category}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <span className="font-medium text-green-600">${product.price}</span>
+                            <span className="font-medium text-green-600">EGP {product.price}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -1702,7 +1702,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
                           
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-gray-900 truncate">{product.name}</h4>
-                            <p className="text-lg font-bold text-green-600">${product.price}</p>
+                            <p className="text-lg font-bold text-green-600">EGP {product.price}</p>
                             <p className="text-sm text-gray-600 mt-1">{product.category}</p>
                             {product.description && (
                               <p className="text-sm text-gray-500 mt-1 line-clamp-2">{product.description}</p>
@@ -1929,7 +1929,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900">{selectedProduct.name}</h3>
-                    <p className="text-2xl font-bold text-green-600">${selectedProduct.price}</p>
+                    <p className="text-2xl font-bold text-green-600">EGP {selectedProduct.price}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

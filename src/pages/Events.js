@@ -528,7 +528,7 @@ const Events = () => {
                         type="text"
                         value={formData.prizes}
                         onChange={(e) => setFormData({...formData, prizes: e.target.value})}
-                        placeholder="e.g., 1st: $1000, 2nd: $500"
+                        placeholder="e.g., 1st: EGP 10000, 2nd: EGP 5000"
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>

@@ -40,6 +40,7 @@ import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
 import ServicesManagement from '../components/ServicesManagement';
+import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
 import AdminSetup from '../components/AdminSetup';
 import PDFGuidelines from '../components/PDFGuidelines';
 import { useBookingStore } from '../stores/bookingStore';
@@ -59,6 +60,7 @@ const ProjectDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [servicesSubTab, setServicesSubTab] = useState('categories');
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
 
@@ -1802,7 +1804,7 @@ const ProjectDashboard = () => {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <span className="font-medium text-green-600">
-                                      ${booking.totalPrice || booking.totalCost || 0}
+                                      EGP {booking.totalPrice || booking.totalCost || 0}
                                     </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
@@ -1967,7 +1969,7 @@ const ProjectDashboard = () => {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <span className="font-medium text-green-600">
-                                      ${booking.totalPrice || booking.totalCost || 0}
+                                      EGP {booking.totalPrice || booking.totalCost || 0}
                                     </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
@@ -2056,7 +2058,46 @@ const ProjectDashboard = () => {
 
             {activeTab === 'services' && (
               <PermissionGate entity="services" action="read" showMessage={true}>
-                <ServicesManagement projectId={projectId} />
+                <div className="space-y-6">
+                  {/* Services Sub-Navigation */}
+                  <div className="bg-white shadow rounded-lg">
+                    <div className="border-b border-gray-200">
+                      <nav className="flex space-x-8 px-6" aria-label="Services">
+                        <button
+                          onClick={() => setServicesSubTab('categories')}
+                          className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                            servicesSubTab === 'categories'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <Wrench className="w-4 h-4 inline mr-2" />
+                          Service Categories
+                        </button>
+                        <button
+                          onClick={() => setServicesSubTab('bookings')}
+                          className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                            servicesSubTab === 'bookings'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <MessageCircle className="w-4 h-4 inline mr-2" />
+                          Service Bookings
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+
+                  {/* Services Content */}
+                  {servicesSubTab === 'categories' && (
+                    <ServicesManagement projectId={projectId} />
+                  )}
+                  
+                  {servicesSubTab === 'bookings' && (
+                    <ServiceBookingsManagement projectId={projectId} />
+                  )}
+                </div>
               </PermissionGate>
             )}
 
@@ -2802,7 +2843,7 @@ const ProjectDashboard = () => {
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Price</label>
                     <p className="text-sm text-green-600 font-bold mt-1">
-                      ${selectedBookingForModal.totalPrice || selectedBookingForModal.totalCost || 0}
+                      EGP {selectedBookingForModal.totalPrice || selectedBookingForModal.totalCost || 0}
                     </p>
                   </div>
                 </div>
@@ -3086,8 +3127,8 @@ const ProjectDashboard = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">${(item.price || 0).toFixed(2)}</p>
-                        <p className="text-xs text-gray-500">Total: ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</p>
+                        <p className="text-sm font-medium text-gray-900">EGP {(item.price || 0).toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">Total: EGP {((item.price || 0) * (item.quantity || 0)).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
@@ -3383,7 +3424,7 @@ const ProjectDashboard = () => {
                                 <h4 className="font-semibold text-gray-900">{product.name}</h4>
                                 <p className="text-sm text-gray-600 mt-1">{product.description || 'No description'}</p>
                                 <div className="flex items-center justify-between mt-3">
-                                  <span className="text-lg font-bold text-green-600">${product.price || 0}</span>
+                                  <span className="text-lg font-bold text-green-600">EGP {product.price || 0}</span>
                                   <span className="text-sm text-gray-500">Stock: {product.stock || 0}</span>
                                 </div>
                               </div>
