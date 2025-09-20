@@ -203,18 +203,6 @@ const ProjectSelection = () => {
   // Simple test to see if basic render works
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Debug Info */}
-      <div className="p-4 bg-yellow-100 border-b">
-        <h3 className="font-bold">Debug Info:</h3>
-        <p>Loading: {loading.toString()}</p>
-        <p>Admin Loading: {adminLoading.toString()}</p>
-        <p>Current Admin: {currentAdmin ? 'YES' : 'NO'}</p>
-        <p>Admin Type: {currentAdmin?.accountType || 'N/A'}</p>
-        <p>Projects: {projects.length}</p>
-        <p>Filtered Projects: {filteredProjects.length}</p>
-        <p>Has getFilteredProjects: {getFilteredProjects ? 'YES' : 'NO'}</p>
-      </div>
-      
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
