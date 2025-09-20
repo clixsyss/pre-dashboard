@@ -44,6 +44,7 @@ import ServicesManagement from '../components/ServicesManagement';
 import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
 import AdminSetup from '../components/AdminSetup';
 import PDFGuidelines from '../components/PDFGuidelines';
+import AdsManagement from '../components/AdsManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -168,7 +169,8 @@ const ProjectDashboard = () => {
         { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications', permission: 'notifications' },
         { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements', permission: 'news' },
         { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints', permission: 'complaints' },
-        { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures', permission: 'guidelines' }
+        { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures', permission: 'guidelines' },
+        { id: 'ads', name: 'Ads', icon: Star, description: 'Promotional banners & advertisements', permission: 'ads' }
       ]
     },
     {
@@ -2127,6 +2129,12 @@ const ProjectDashboard = () => {
             {activeTab === 'guidelines' && (
               <PermissionGate entity="guidelines" action="read" showMessage={true}>
                 <PDFGuidelines projectId={projectId} />
+              </PermissionGate>
+            )}
+
+            {activeTab === 'ads' && (
+              <PermissionGate entity="ads" action="read" showMessage={true}>
+                <AdsManagement projectId={projectId} />
               </PermissionGate>
             )}
 

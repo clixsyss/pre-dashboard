@@ -288,6 +288,19 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // Project Ads - allow authenticated users to read ads within project
+    // Admins can write, users can only read (ads are created by admins)
+    match /projects/{projectId}/ads/{adId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project ads
+    match /projects/{projectId}/ads {
+      allow list: if request.auth != null;
+    }
+    
     // Allow listing project notifications
     match /projects/{projectId}/notifications {
       allow list: if request.auth != null;
