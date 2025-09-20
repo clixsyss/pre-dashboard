@@ -328,7 +328,7 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
             onClick={() => setShowModal(true)}
             className="btn-primary"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-2 w-2" />
             Add Category
           </button>
         </div>

@@ -5,6 +5,10 @@
   padding: 0;
 }
 
+.services-management-content {
+  padding: 0;
+}
+
 .page-header {
   background: linear-gradient(135deg, #AF1E23 0%, #8B1A1E 100%);
   color: white;
@@ -44,6 +48,82 @@
   font-size: 1rem;
   opacity: 0.9;
   margin: 0;
+}
+
+/* Services Navigation Cards */
+.services-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.nav-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.nav-card:hover {
+  border-color: #AF1E23;
+  box-shadow: 0 8px 24px rgba(175, 30, 35, 0.12);
+  transform: translateY(-2px);
+}
+
+.nav-card.active {
+  border-color: #AF1E23;
+  background: #fef2f2;
+  box-shadow: 0 8px 24px rgba(175, 30, 35, 0.15);
+}
+
+.nav-card-icon {
+  background: #f3f4f6;
+  padding: 0.75rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.nav-card.active .nav-card-icon {
+  background: #AF1E23;
+  color: white;
+}
+
+.nav-card:hover .nav-card-icon {
+  background: #AF1E23;
+  color: white;
+}
+
+.nav-card-content h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.nav-card-content p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.nav-card.active .nav-card-content h3 {
+  color: #AF1E23;
+}
+
+.services-content {
+  margin-top: 1rem;
 }
 
 /* Tabs Navigation */

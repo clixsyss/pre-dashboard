@@ -12,23 +12,6 @@ const ServicesManagement = ({ projectId }) => {
   const [activeTab, setActiveTab] = useState('categories');
   const [selectedCategory, setSelectedCategory] = useState(null);
 
-  const tabs = [
-    { 
-      id: 'categories', 
-      name: 'Service Categories', 
-      icon: Building, 
-      color: 'blue',
-      description: 'Manage service categories and availability'
-    },
-    { 
-      id: 'bookings', 
-      name: 'Booking Requests', 
-      icon: Users, 
-      color: 'green',
-      description: 'View and manage service booking requests'
-    }
-  ];
-
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
     setActiveTab('services');
@@ -50,42 +33,8 @@ const ServicesManagement = ({ projectId }) => {
   }
 
   return (
-    <div className="services-management">
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-left">
-            <div className="header-icon">
-              <Settings className="h-6 w-6" />
-            </div>
-            <div className="header-text">
-              <h1>Services Management</h1>
-              <p>Manage service categories, individual services, and booking requests</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="tabs-navigation">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-            >
-              <div className="tab-icon">
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="tab-content">
-                <span className="tab-name">{tab.name}</span>
-                <span className="tab-description">{tab.description}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+    <div className="services-management-content">
+      
 
       {/* Tab Content */}
       <div className="tab-content-area">

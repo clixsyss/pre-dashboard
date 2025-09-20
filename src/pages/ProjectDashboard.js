@@ -30,6 +30,7 @@ import {
   Bell,
   Settings,
   FileText,
+  Building,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -2058,45 +2059,61 @@ const ProjectDashboard = () => {
 
             {activeTab === 'services' && (
               <PermissionGate entity="services" action="read" showMessage={true}>
-                <div className="space-y-6">
-                  {/* Services Sub-Navigation */}
-                  <div className="bg-white shadow rounded-lg">
-                    <div className="border-b border-gray-200">
-                      <nav className="flex space-x-8 px-6" aria-label="Services">
-                        <button
-                          onClick={() => setServicesSubTab('categories')}
-                          className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                            servicesSubTab === 'categories'
-                              ? 'border-blue-500 text-blue-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          <Wrench className="w-4 h-4 inline mr-2" />
-                          Service Categories
-                        </button>
-                        <button
-                          onClick={() => setServicesSubTab('bookings')}
-                          className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                            servicesSubTab === 'bookings'
-                              ? 'border-blue-500 text-blue-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          <MessageCircle className="w-4 h-4 inline mr-2" />
-                          Service Bookings
-                        </button>
-                      </nav>
+                <div className="services-management">
+                  {/* Services Header */}
+                  <div className="page-header bg-gradient-to-r from-red-600 to-red-700 text-white">
+                    <div className="header-content">
+                      <div className="header-left">
+                        <div className="header-icon">
+                          <Settings className="h-6 w-6" />
+                        </div>
+                        <div className="header-text">
+                          <h1>Services Management</h1>
+                          <p>Manage service categories, individual services, and booking requests</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Services Navigation Cards */}
+                  <div className="services-nav-grid">
+                    <div 
+                      className={`nav-card ${servicesSubTab === 'categories' ? 'active' : ''}`}
+                      onClick={() => setServicesSubTab('categories')}
+                    >
+                      <div className="nav-card-icon">
+                        <Building className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>Service Categories</h3>
+                        <p>Manage service categories and availability</p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`nav-card ${servicesSubTab === 'bookings' ? 'active' : ''}`}
+                      onClick={() => setServicesSubTab('bookings')}
+                    >
+                      <div className="nav-card-icon">
+                        <MessageCircle className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>Service Bookings</h3>
+                        <p>View and manage service booking requests</p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Services Content */}
-                  {servicesSubTab === 'categories' && (
-                    <ServicesManagement projectId={projectId} />
-                  )}
-                  
-                  {servicesSubTab === 'bookings' && (
-                    <ServiceBookingsManagement projectId={projectId} />
-                  )}
+                  <div className="services-content">
+                    {servicesSubTab === 'categories' && (
+                      <ServicesManagement projectId={projectId} />
+                    )}
+                    
+                    {servicesSubTab === 'bookings' && (
+                      <ServiceBookingsManagement projectId={projectId} />
+                    )}
+                  </div>
                 </div>
               </PermissionGate>
             )}

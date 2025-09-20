@@ -38,6 +38,7 @@ const ServiceBookingsManagement = ({ projectId }) => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showChat, setShowChat] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showBookingDetail, setShowBookingDetail] = useState(false);
   const [updateType, setUpdateType] = useState(''); // 'status' or 'details'
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -260,6 +261,12 @@ const ServiceBookingsManagement = ({ projectId }) => {
     }
   };
 
+  // Open booking detail
+  const openBookingDetail = (booking) => {
+    setSelectedBooking(booking);
+    setShowBookingDetail(true);
+  };
+
   // Open chat
   const openChat = (booking) => {
     setSelectedBooking(booking);
@@ -303,6 +310,36 @@ const ServiceBookingsManagement = ({ projectId }) => {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  };
+
+  // Format date and time
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'Not available';
+    
+    let date;
+    if (timestamp.seconds) {
+      // Firestore timestamp
+      date = new Date(timestamp.seconds * 1000);
+    } else if (timestamp.toDate) {
+      // Firestore timestamp object
+      date = timestamp.toDate();
+    } else {
+      date = new Date(timestamp);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -386,7 +423,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div 
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'all' ? 'ring-2 ring-blue-500' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -402,7 +442,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div 
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'open' ? 'ring-2 ring-green-500' : ''}`}
+          onClick={() => setStatusFilter('open')}
+        >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -418,7 +461,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div 
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'processing' ? 'ring-2 ring-yellow-500' : ''}`}
+          onClick={() => setStatusFilter('processing')}
+        >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -434,7 +480,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div 
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'closed' ? 'ring-2 ring-gray-500' : ''}`}
+          onClick={() => setStatusFilter('closed')}
+        >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -497,7 +546,7 @@ const ServiceBookingsManagement = ({ projectId }) => {
         ) : (
           <ul className="divide-y divide-gray-200">
             {filteredBookings.map((booking) => (
-              <li key={booking.id} className="p-6 hover:bg-gray-50">
+              <li key={booking.id} className="p-6 hover:bg-gray-50 cursor-pointer" onClick={() => openBookingDetail(booking)}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="flex-shrink-0">
@@ -538,21 +587,21 @@ const ServiceBookingsManagement = ({ projectId }) => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => openChat(booking)}
+                      onClick={(e) => { e.stopPropagation(); openChat(booking); }}
                       className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                     >
                       <MessageCircle className="w-4 h-4 mr-1" />
                       Chat
                     </button>
                     <button
-                      onClick={() => openUpdateModal(booking, 'status')}
+                      onClick={(e) => { e.stopPropagation(); openUpdateModal(booking, 'status'); }}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                     >
                       <CheckCircle className="w-4 h-4 mr-1" />
                       Status
                     </button>
                     <button
-                      onClick={() => openUpdateModal(booking, 'details')}
+                      onClick={(e) => { e.stopPropagation(); openUpdateModal(booking, 'details'); }}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                     >
                       <Edit className="w-4 h-4 mr-1" />
@@ -740,6 +789,181 @@ const ServiceBookingsManagement = ({ projectId }) => {
                 >
                   Update
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Detail Modal */}
+      {showBookingDetail && selectedBooking && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="flex flex-col">
+              {/* Detail Header */}
+              <div className="flex items-center justify-between p-6 border-b">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {selectedBooking.serviceName}
+                  </h3>
+                  <div className="flex items-center space-x-3 mt-2">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedBooking.status)}`}>
+                      {selectedBooking.status}
+                    </span>
+                    <span className="text-gray-500">{selectedBooking.categoryName}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBookingDetail(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Detail Content */}
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Customer Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <User className="w-5 h-5 mr-2 text-blue-600" />
+                      Customer Information
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Name:</span>
+                        <span className="font-medium">{selectedBooking.userName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Email:</span>
+                        <span className="font-medium">{selectedBooking.userEmail}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">User ID:</span>
+                        <span className="font-medium text-xs">{selectedBooking.userId}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Booking Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Calendar className="w-5 h-5 mr-2 text-green-600" />
+                      Booking Information
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Service:</span>
+                        <span className="font-medium">{selectedBooking.serviceName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Category:</span>
+                        <span className="font-medium">{selectedBooking.categoryName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Price:</span>
+                        <span className="font-medium text-green-600">EGP {selectedBooking.servicePrice}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Scheduled Date:</span>
+                        <span className="font-medium">{formatDate(selectedBooking.selectedDate)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Scheduled Time:</span>
+                        <span className="font-medium">{selectedBooking.selectedTime || 'Not specified'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timeline Information */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Clock className="w-5 h-5 mr-2 text-purple-600" />
+                      Timeline
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Created:</span>
+                        <span className="font-medium">{formatDateTime(selectedBooking.createdAt)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Updated:</span>
+                        <span className="font-medium">{formatDateTime(selectedBooking.updatedAt)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Message:</span>
+                        <span className="font-medium">{formatDateTime(selectedBooking.lastMessageAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Communication Summary */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <MessageCircle className="w-5 h-5 mr-2 text-indigo-600" />
+                      Communication
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Messages:</span>
+                        <span className="font-medium">{selectedBooking.messages?.length || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Message:</span>
+                        <span className="font-medium text-sm">{getLastMessagePreview(selectedBooking)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Status:</span>
+                        <span className={`font-medium ${getStatusColor(selectedBooking.status)}`}>
+                          {selectedBooking.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes Section */}
+                {selectedBooking.notes && (
+                  <div className="mt-6 bg-yellow-50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">Notes</h4>
+                    <p className="text-gray-700">{selectedBooking.notes}</p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowBookingDetail(false);
+                      openChat(selectedBooking);
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Open Chat
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowBookingDetail(false);
+                      openUpdateModal(selectedBooking, 'status');
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Update Status
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowBookingDetail(false);
+                      openUpdateModal(selectedBooking, 'details');
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Details
+                  </button>
+                </div>
               </div>
             </div>
           </div>
