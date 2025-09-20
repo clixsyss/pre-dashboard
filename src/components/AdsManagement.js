@@ -5,7 +5,6 @@ import {
   Trash2, 
   Eye, 
   EyeOff, 
-  Upload, 
   Image as ImageIcon,
   Save,
   X,
@@ -22,7 +21,6 @@ import {
   uploadAdImage,
   deleteAdImage,
   toggleAdStatus,
-  updateAdOrder
 } from '../services/adsService';
 
 const AdsManagement = ({ projectId }) => {
@@ -31,7 +29,6 @@ const AdsManagement = ({ projectId }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingAd, setEditingAd] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [draggedIndex, setDraggedIndex] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
