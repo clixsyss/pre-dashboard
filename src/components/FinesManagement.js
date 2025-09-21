@@ -22,7 +22,9 @@ import {
   updateFineStatus, 
   updateFineDetails,
   searchUsers,
-  uploadFineImage
+  uploadFineImage,
+  addMessage,
+  onFineChange
 } from '../services/finesService';
 
 const FinesManagement = ({ projectId }) => {
@@ -33,7 +35,10 @@ const FinesManagement = ({ projectId }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [selectedFine, setSelectedFine] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -84,6 +89,21 @@ const FinesManagement = ({ projectId }) => {
     loadFines();
   }, [loadFines]);
 
+  // Setup real-time listener when chat opens
+  useEffect(() => {
+    let unsubscribe = null;
+    
+    if (showChat && selectedFine) {
+      unsubscribe = setupChatListener(selectedFine.id);
+    }
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [showChat, selectedFine]);
+
   // Filter fines
   useEffect(() => {
     let filtered = fines;
@@ -132,6 +152,16 @@ const FinesManagement = ({ projectId }) => {
       return;
     }
 
+    if (!formData.occurrenceDate) {
+      alert('Please select an occurrence date');
+      return;
+    }
+
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
     try {
       setUploading(true);
       
@@ -145,15 +175,17 @@ const FinesManagement = ({ projectId }) => {
         userName: selectedUser.name,
         userEmail: selectedUser.email,
         userPhone: selectedUser.phone,
-        userUnit: selectedUser.unitNumber,
+        userUnit: selectedUser.unitNumber || selectedUser.userUnit,
         reason: formData.reason,
         amount: parseFloat(formData.amount),
-        occurrenceDate: formData.occurrenceDate,
-        issuingDate: formData.issuingDate,
+        occurrenceDate: formData.occurrenceDate ? new Date(formData.occurrenceDate) : null,
+        issuingDate: formData.issuingDate ? new Date(formData.issuingDate) : new Date(),
         description: formData.description,
         evidenceImage: evidenceUrl,
         issuedBy: 'admin' // You might want to get actual admin info
       };
+
+      console.log('Creating fine with data:', fineData); // Debug log
 
       await createFine(projectId, fineData);
       await loadFines();
@@ -195,6 +227,46 @@ const FinesManagement = ({ projectId }) => {
     }
   };
 
+  // Open chat modal
+  const openChat = (fine) => {
+    setSelectedFine(fine);
+    setChatMessages(fine.messages || []);
+    setShowChat(true);
+  };
+
+  // Send message in chat
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedFine) return;
+
+    try {
+      setSendingMessage(true);
+      const messageData = {
+        text: newMessage.trim(),
+        sender: 'admin'
+      };
+
+      await addMessage(projectId, selectedFine.id, messageData);
+      setNewMessage('');
+      
+      // The real-time listener will update the messages
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Error sending message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Setup real-time chat listener
+  const setupChatListener = (fineId) => {
+    return onFineChange(projectId, fineId, (updatedFine) => {
+      if (updatedFine) {
+        setChatMessages(updatedFine.messages || []);
+        setSelectedFine(updatedFine);
+      }
+    });
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-EG', {
@@ -206,7 +278,25 @@ const FinesManagement = ({ projectId }) => {
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    
+    let date;
+    // Handle different date formats
+    if (dateString?.toDate) {
+      // Firestore Timestamp
+      date = dateString.toDate();
+    } else if (dateString instanceof Date) {
+      date = dateString;
+    } else if (typeof dateString === 'string') {
+      date = new Date(dateString);
+    } else {
+      return 'Invalid date';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -235,6 +325,34 @@ const FinesManagement = ({ projectId }) => {
     };
     const Icon = icons[status] || AlertTriangle;
     return <Icon className="w-4 h-4" />;
+  };
+
+  // Format message time
+  const formatMessageTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    let date;
+    // Handle different timestamp formats
+    if (timestamp?.toDate) {
+      // Firestore Timestamp
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp);
+    } else {
+      return '';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
@@ -409,10 +527,7 @@ const FinesManagement = ({ projectId }) => {
                         <Eye className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          setSelectedFine(fine);
-                          setShowChatModal(true);
-                        }}
+                        onClick={() => openChat(fine)}
                         className="text-green-600 hover:text-green-900"
                         title="Chat"
                       >
@@ -699,31 +814,87 @@ const FinesManagement = ({ projectId }) => {
         </div>
       )}
 
-      {/* Chat Modal - Placeholder */}
-      {showChatModal && selectedFine && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Chat about Fine</h2>
-              <button
-                onClick={() => setShowChatModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <p className="text-gray-600 mb-4">
-              Chat functionality will be implemented similar to complaints and services.
-            </p>
-            
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowChatModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Close
-              </button>
+      {/* Chat Modal */}
+      {showChat && selectedFine && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="flex flex-col h-96">
+              {/* Chat Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Fine Chat: {selectedFine.reason}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {selectedFine.userName} (Unit {selectedFine.userUnit}) • {formatCurrency(selectedFine.amount)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {chatMessages.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No messages yet. Start the conversation!</p>
+                  </div>
+                ) : (
+                  chatMessages.map((message, index) => (
+                    <div
+                      key={message.id || index}
+                      className={`flex ${message.sender === 'admin' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          message.sender === 'admin'
+                            ? 'bg-blue-500 text-white'
+                            : message.sender === 'system'
+                            ? 'bg-gray-200 text-gray-700 text-center'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        <p className="text-sm">{message.text}</p>
+                        <p className={`text-xs mt-1 ${
+                          message.sender === 'admin' ? 'text-blue-100' : 'text-gray-500'
+                        }`}>
+                          {formatMessageTime(message.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Message Input */}
+              <div className="border-t p-4">
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Type your message..."
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={sendingMessage}
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim() || sendingMessage}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {sendingMessage && (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    Send
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
