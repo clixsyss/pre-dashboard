@@ -858,8 +858,8 @@ const FinesManagement = ({ projectId }) => {
       {/* Chat Modal */}
       {showChat && selectedFine && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="flex flex-col h-96">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="flex flex-col" style={{ height: '80vh' }}>
               {/* Chat Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <div>
