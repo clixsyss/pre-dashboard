@@ -31,6 +31,7 @@ import {
   Settings,
   FileText,
   Building,
+  AlertTriangle,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -45,6 +46,7 @@ import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
 import AdminSetup from '../components/AdminSetup';
 import PDFGuidelines from '../components/PDFGuidelines';
 import AdsManagement from '../components/AdsManagement';
+import FinesManagement from '../components/FinesManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -183,7 +185,8 @@ const ProjectDashboard = () => {
     {
       category: 'Security',
       items: [
-        { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' }
+        { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' },
+        { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' }
       ]
     }
   ];
@@ -2135,6 +2138,12 @@ const ProjectDashboard = () => {
             {activeTab === 'ads' && (
               <PermissionGate entity="ads" action="read" showMessage={true}>
                 <AdsManagement projectId={projectId} />
+              </PermissionGate>
+            )}
+
+            {activeTab === 'fines' && (
+              <PermissionGate entity="fines" action="read" showMessage={true}>
+                <FinesManagement projectId={projectId} />
               </PermissionGate>
             )}
 
