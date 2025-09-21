@@ -607,8 +607,13 @@ service cloud.firestore {
       allow read: if request.auth != null && 
         (resource.data.userId == request.auth.uid || 
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      // Admins can write everything, users can only update messages and lastMessageAt
       allow write: if request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      // Allow users to update their own fines (for adding messages)
+      allow update: if request.auth != null && 
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messages', 'lastMessageAt', 'updatedAt']);
     }
     
     // Allow listing fines
