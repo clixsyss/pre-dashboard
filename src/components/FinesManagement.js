@@ -39,6 +39,9 @@ const FinesManagement = ({ projectId }) => {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedFine, setSelectedFine] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -234,19 +237,38 @@ const FinesManagement = ({ projectId }) => {
     setShowChat(true);
   };
 
+  // Close chat modal
+  const closeChat = () => {
+    setShowChat(false);
+    setSelectedFine(null);
+    setChatMessages([]);
+    setNewMessage('');
+    removeSelectedImage();
+  };
+
   // Send message in chat
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedFine) return;
+    if ((!newMessage.trim() && !selectedImage) || !selectedFine) return;
 
     try {
       setSendingMessage(true);
+      
+      let imageUrl = null;
+      if (selectedImage) {
+        setUploadingImage(true);
+        imageUrl = await uploadFineImage(projectId, selectedFine.id, selectedImage);
+        setUploadingImage(false);
+      }
+
       const messageData = {
         text: newMessage.trim(),
-        sender: 'admin'
+        sender: 'admin',
+        imageUrl
       };
 
       await addMessage(projectId, selectedFine.id, messageData);
       setNewMessage('');
+      removeSelectedImage();
       
       // The real-time listener will update the messages
     } catch (error) {
@@ -254,7 +276,26 @@ const FinesManagement = ({ projectId }) => {
       alert('Error sending message');
     } finally {
       setSendingMessage(false);
+      setUploadingImage(false);
     }
+  };
+
+  // Handle image selection
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  // Remove selected image
+  const removeSelectedImage = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setSelectedImage(null);
+    setImagePreview('');
   };
 
   // Setup real-time chat listener
@@ -830,7 +871,7 @@ const FinesManagement = ({ projectId }) => {
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowChat(false)}
+                  onClick={closeChat}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="w-6 h-6" />
@@ -859,7 +900,17 @@ const FinesManagement = ({ projectId }) => {
                             : 'bg-gray-200 text-gray-700'
                         }`}
                       >
-                        <p className="text-sm">{message.text}</p>
+                        {message.text && <p className="text-sm">{message.text}</p>}
+                        {message.imageUrl && (
+                          <div className="mt-2">
+                            <img 
+                              src={message.imageUrl} 
+                              alt="Attached image" 
+                              className="max-w-xs rounded-lg cursor-pointer hover:opacity-90"
+                              onClick={() => window.open(message.imageUrl, '_blank')}
+                            />
+                          </div>
+                        )}
                         <p className={`text-xs mt-1 ${
                           message.sender === 'admin' ? 'text-blue-100' : 'text-gray-500'
                         }`}>
@@ -873,25 +924,59 @@ const FinesManagement = ({ projectId }) => {
 
               {/* Message Input */}
               <div className="border-t p-4">
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="mb-3 relative inline-block">
+                    <img 
+                      src={imagePreview} 
+                      alt="Selected image" 
+                      className="max-w-xs max-h-32 rounded-lg border"
+                    />
+                    <button
+                      onClick={removeSelectedImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                
                 <div className="flex space-x-2">
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                     placeholder="Type your message..."
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={sendingMessage}
                   />
+                  
+                  {/* Image Upload Button */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="chat-image-upload"
+                  />
+                  <label
+                    htmlFor="chat-image-upload"
+                    className="bg-gray-100 text-gray-600 px-3 py-2 rounded-lg hover:bg-gray-200 cursor-pointer flex items-center justify-center"
+                    title="Attach Image"
+                  >
+                    <Upload className="w-4 h-4" />
+                  </label>
+                  
                   <button
                     onClick={sendMessage}
-                    disabled={!newMessage.trim() || sendingMessage}
+                    disabled={(!newMessage.trim() && !selectedImage) || sendingMessage || uploadingImage}
                     className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    {sendingMessage && (
+                    {(sendingMessage || uploadingImage) && (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     )}
-                    Send
+                    {uploadingImage ? 'Uploading...' : 'Send'}
                   </button>
                 </div>
               </div>
