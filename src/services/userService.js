@@ -1,376 +1,288 @@
-import { db } from '../config/firebase';
-import { doc, getDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore'
+import { db } from '../config/firebase'
 
-/**
- * User Service for Dashboard
- * Handles user data operations for admin dashboard
- */
-
-/**
- * Get user details by user ID
- * @param {string} userId - The user's UID
- * @returns {Promise<Object|null>} - User details or null if not found
- */
-export const getUserDetails = async (userId) => {
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      return {
-        id: userSnap.id,
-        ...userData,
-        // Format dates for display
-        createdAt: userData.createdAt?.toDate?.() || userData.createdAt,
-        updatedAt: userData.updatedAt?.toDate?.() || userData.updatedAt,
-        lastLoginAt: userData.lastLoginAt?.toDate?.() || userData.lastLoginAt,
-      };
-    } else {
-      console.log('No user found with ID:', userId);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error fetching user details:', error);
-    throw error;
-  }
-};
-
-/**
- * Get multiple users by their IDs
- * @param {Array<string>} userIds - Array of user IDs
- * @returns {Promise<Array>} - Array of user details
- */
-export const getUsersByIds = async (userIds) => {
-  try {
-    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-      return [];
-    }
-
-    const userPromises = userIds.map(userId => getUserDetails(userId));
-    const users = await Promise.all(userPromises);
-    
-    // Filter out null results
-    return users.filter(user => user !== null);
-  } catch (error) {
-    console.error('Error fetching multiple users:', error);
-    throw error;
-  }
-};
-
-/**
- * Get user's projects and units
- * @param {string} userId - The user's UID
- * @returns {Promise<Array>} - Array of user projects with units
- */
-export const getUserProjects = async (userId) => {
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      const userProjects = userData.projects || [];
+class UserService {
+  /**
+   * Fetch all users with enhanced project information
+   * @returns {Promise<Array>} Array of user objects with enhanced data
+   */
+  async getAllUsers() {
+    try {
+      // Fetch users
+      const usersSnapshot = await getDocs(collection(db, 'users'))
       
-      console.log('User data from Firestore:', userData);
-      console.log('User projects array:', userProjects);
+      // Fetch projects for project name resolution
+      const projectsSnapshot = await getDocs(collection(db, 'projects'))
+      const projectsMap = {}
+      projectsSnapshot.docs.forEach(doc => {
+        projectsMap[doc.id] = doc.data()
+      })
       
-      if (userProjects.length === 0) {
-        console.log('No user projects found');
-        return [];
-      }
-
-      // Get all project IDs from user projects
-      const projectIds = userProjects.map(up => up.projectId || up.id).filter(Boolean);
-      console.log('Project IDs to fetch:', projectIds);
-      
-      if (projectIds.length === 0) {
-        return [];
-      }
-
-      // Split into chunks of 10 (Firestore 'in' query limit)
-      const chunks = [];
-      for (let i = 0; i < projectIds.length; i += 10) {
-        chunks.push(projectIds.slice(i, i + 10));
-      }
-
-      // Fetch all chunks in parallel
-      const chunkPromises = chunks.map(async (chunk) => {
-        try {
-          const projectsRef = collection(db, 'projects');
-          const q = query(projectsRef, where('__name__', 'in', chunk));
-          const snapshot = await getDocs(q);
-          
-          const projects = [];
-          snapshot.forEach((doc) => {
-            const projectData = doc.data();
-            // Find the user's role and unit for this project
-            const userProject = userProjects.find(up => (up.projectId || up.id) === doc.id);
-            
-            projects.push({
-              id: doc.id,
-              ...projectData,
-              userRole: userProject?.userRole || 'Member',
-              userUnit: userProject?.userUnit || 'N/A',
-              joinedAt: userProject?.joinedAt?.toDate?.() || userProject?.joinedAt,
-            });
-          });
-          
-          return projects;
-        } catch (error) {
-          console.error('Error fetching project chunk:', error);
-          return [];
+      const usersData = usersSnapshot.docs.map(doc => {
+        const userData = doc.data()
+        
+        // Enhance projects data with actual project names
+        let enhancedProjects = []
+        if (userData.projects && Array.isArray(userData.projects)) {
+          enhancedProjects = userData.projects.map(project => ({
+            ...project,
+            projectName: projectsMap[project.projectId]?.name || 'Unknown Project',
+            projectType: projectsMap[project.projectId]?.type || 'Unknown Type',
+            projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
+          }))
         }
-      });
-
-      const projectChunks = await Promise.all(chunkPromises);
-      const allProjects = projectChunks.flat();
+        
+        return {
+          id: doc.id,
+          ...userData,
+          enhancedProjects,
+          createdAt: userData.createdAt?.toDate?.() || new Date(),
+          lastLoginAt: userData.lastLoginAt?.toDate?.() || null,
+          updatedAt: userData.updatedAt?.toDate?.() || null
+        }
+      })
       
-      return allProjects;
-    } else {
-      return [];
+      return usersData
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      throw error
     }
-  } catch (error) {
-    console.error('Error fetching user projects:', error);
-    throw error;
   }
-};
 
-/**
- * Get user's bookings across all projects
- * @param {string} userId - The user's UID
- * @returns {Promise<Array>} - Array of user bookings
- */
-export const getUserBookings = async (userId) => {
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-
-    // First get all projects
-    const projectsRef = collection(db, 'projects');
-    const projectsSnapshot = await getDocs(projectsRef);
-    
-    const allBookings = [];
-    
-    // Fetch bookings from each project
-    const bookingPromises = projectsSnapshot.docs.map(async (projectDoc) => {
-      try {
-        const bookingsRef = collection(db, `projects/${projectDoc.id}/bookings`);
-        const bookingsQuery = query(
-          bookingsRef,
-          where('userId', '==', userId),
-          orderBy('createdAt', 'desc'),
-          limit(50) // Limit to recent bookings
-        );
-        
-        const bookingsSnapshot = await getDocs(bookingsQuery);
-        const projectBookings = bookingsSnapshot.docs.map(bookingDoc => ({
-          id: bookingDoc.id,
-          projectId: projectDoc.id,
-          projectName: projectDoc.data().name || 'Unknown Project',
-          ...bookingDoc.data(),
-          createdAt: bookingDoc.data().createdAt?.toDate?.() || bookingDoc.data().createdAt,
-          updatedAt: bookingDoc.data().updatedAt?.toDate?.() || bookingDoc.data().updatedAt,
-        }));
-        
-        return projectBookings;
-      } catch (error) {
-        console.error(`Error fetching bookings for project ${projectDoc.id}:`, error);
-        return [];
+  /**
+   * Fetch a specific user by ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User object
+   */
+  async getUserById(userId) {
+    try {
+      const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', userId)))
+      
+      if (userDoc.empty) {
+        throw new Error('User not found')
       }
-    });
-
-    const projectBookings = await Promise.all(bookingPromises);
-    projectBookings.forEach(bookings => allBookings.push(...bookings));
-    
-    // Sort by creation date
-    return allBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  } catch (error) {
-    console.error('Error fetching user bookings:', error);
-    throw error;
-  }
-};
-
-/**
- * Get user's complaints across all projects
- * @param {string} userId - The user's UID
- * @returns {Promise<Array>} - Array of user complaints
- */
-export const getUserComplaints = async (userId) => {
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-
-    // First get all projects
-    const projectsRef = collection(db, 'projects');
-    const projectsSnapshot = await getDocs(projectsRef);
-    
-    const allComplaints = [];
-    
-    // Fetch complaints from each project
-    const complaintPromises = projectsSnapshot.docs.map(async (projectDoc) => {
-      try {
-        const complaintsRef = collection(db, `projects/${projectDoc.id}/complaints`);
-        const complaintsQuery = query(
-          complaintsRef,
-          where('userId', '==', userId),
-          orderBy('createdAt', 'desc'),
-          limit(20) // Limit to recent complaints
-        );
-        
-        const complaintsSnapshot = await getDocs(complaintsQuery);
-        const projectComplaints = complaintsSnapshot.docs.map(complaintDoc => ({
-          id: complaintDoc.id,
-          projectId: projectDoc.id,
-          projectName: projectDoc.data().name || 'Unknown Project',
-          ...complaintDoc.data(),
-          createdAt: complaintDoc.data().createdAt?.toDate?.() || complaintDoc.data().createdAt,
-          updatedAt: complaintDoc.data().updatedAt?.toDate?.() || complaintDoc.data().updatedAt,
-        }));
-        
-        return projectComplaints;
-      } catch (error) {
-        console.error(`Error fetching complaints for project ${projectDoc.id}:`, error);
-        return [];
+      
+      const userData = userDoc.docs[0].data()
+      return {
+        id: userDoc.docs[0].id,
+        ...userData,
+        createdAt: userData.createdAt?.toDate?.() || new Date(),
+        lastLoginAt: userData.lastLoginAt?.toDate?.() || null,
+        updatedAt: userData.updatedAt?.toDate?.() || null
       }
-    });
-
-    const projectComplaints = await Promise.all(complaintPromises);
-    projectComplaints.forEach(complaints => allComplaints.push(...complaints));
-    
-    // Sort by creation date
-    return allComplaints.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  } catch (error) {
-    console.error('Error fetching user complaints:', error);
-    throw error;
+    } catch (error) {
+      console.error('Error fetching user:', error)
+      throw error
+    }
   }
-};
 
-/**
- * Get comprehensive user details including projects, bookings, and complaints
- * @param {string} userId - The user's UID
- * @returns {Promise<Object>} - Comprehensive user data
- */
-export const getComprehensiveUserDetails = async (userId) => {
-  try {
-    if (!userId) {
-      throw new Error('User ID is required');
+  /**
+   * Search users by various criteria
+   * @param {string} searchTerm - Search term
+   * @param {string} field - Field to search in ('name', 'email', 'mobile', 'nationalId')
+   * @returns {Promise<Array>} Array of matching users
+   */
+  async searchUsers(searchTerm, field = 'name') {
+    try {
+      const users = await this.getAllUsers()
+      
+      return users.filter(user => {
+        switch (field) {
+          case 'name':
+            const fullName = user.firstName && user.lastName 
+              ? `${user.firstName} ${user.lastName}`.toLowerCase()
+              : user.fullName?.toLowerCase() || ''
+            return fullName.includes(searchTerm.toLowerCase())
+          
+          case 'email':
+            return user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+          
+          case 'mobile':
+            return user.mobile?.includes(searchTerm)
+          
+          case 'nationalId':
+            return user.nationalId?.includes(searchTerm)
+          
+          default:
+            // Search in all fields
+            const name = user.firstName && user.lastName 
+              ? `${user.firstName} ${user.lastName}`.toLowerCase()
+              : user.fullName?.toLowerCase() || ''
+            return (
+              name.includes(searchTerm.toLowerCase()) ||
+              user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              user.mobile?.includes(searchTerm) ||
+              user.nationalId?.includes(searchTerm)
+            )
+        }
+      })
+    } catch (error) {
+      console.error('Error searching users:', error)
+      throw error
     }
+  }
 
-    // Fetch all user data in parallel
-    const [userDetails, projects, bookings, complaints] = await Promise.all([
-      getUserDetails(userId),
-      getUserProjects(userId),
-      getUserBookings(userId),
-      getUserComplaints(userId)
-    ]);
-
-    if (!userDetails) {
-      return null;
+  /**
+   * Update user information
+   * @param {string} userId - User ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<void>}
+   */
+  async updateUser(userId, updateData) {
+    try {
+      const userDocRef = doc(db, 'users', userId)
+      await updateDoc(userDocRef, {
+        ...updateData,
+        updatedAt: new Date()
+      })
+    } catch (error) {
+      console.error('Error updating user:', error)
+      throw error
     }
+  }
 
-    // Calculate activity metrics
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+  /**
+   * Delete a user
+   * @param {string} userId - User ID
+   * @returns {Promise<void>}
+   */
+  async deleteUser(userId) {
+    try {
+      const userDocRef = doc(db, 'users', userId)
+      await deleteDoc(userDocRef)
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get document status for a user
+   * @param {Object} user - User object
+   * @returns {Object} Document status object
+   */
+  getDocumentStatus(user) {
+    const documents = user.documents || {}
     
-    const recentBookings = bookings.filter(booking => 
-      new Date(booking.createdAt) >= thirtyDaysAgo
-    );
-    
-    const recentComplaints = complaints.filter(complaint => 
-      new Date(complaint.createdAt) >= thirtyDaysAgo
-    );
+    return {
+      profilePicture: !!documents.profilePictureUrl,
+      frontId: !!documents.frontIdUrl,
+      backId: !!documents.backIdUrl,
+      allRequired: !!documents.frontIdUrl && !!documents.backIdUrl,
+      anyDocuments: !!documents.profilePictureUrl || !!documents.frontIdUrl || !!documents.backIdUrl
+    }
+  }
 
-    // Calculate booking statistics
-    const bookingStats = {
-      total: bookings.length,
-      recent: recentBookings.length,
-      byType: bookings.reduce((acc, booking) => {
-        const type = booking.type || 'unknown';
-        acc[type] = (acc[type] || 0) + 1;
-        return acc;
-      }, {}),
-      byStatus: bookings.reduce((acc, booking) => {
-        const status = booking.status || 'unknown';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {})
-    };
+  /**
+   * Get users with missing required documents
+   * @returns {Promise<Array>} Array of users missing required documents
+   */
+  async getUsersWithMissingDocuments() {
+    try {
+      const users = await this.getAllUsers()
+      return users.filter(user => {
+        const status = this.getDocumentStatus(user)
+        return !status.allRequired
+      })
+    } catch (error) {
+      console.error('Error fetching users with missing documents:', error)
+      throw error
+    }
+  }
 
-    // Calculate complaint statistics
-    const complaintStats = {
-      total: complaints.length,
-      recent: recentComplaints.length,
-      byStatus: complaints.reduce((acc, complaint) => {
-        const status = complaint.status || 'unknown';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {})
-    };
+  /**
+   * Get document statistics
+   * @returns {Promise<Object>} Document statistics
+   */
+  async getDocumentStatistics() {
+    try {
+      const users = await this.getAllUsers()
+      
+      const stats = {
+        total: users.length,
+        withProfilePicture: 0,
+        withFrontId: 0,
+        withBackId: 0,
+        withAllRequired: 0,
+        withAnyDocuments: 0
+      }
+      
+      users.forEach(user => {
+        const status = this.getDocumentStatus(user)
+        
+        if (status.profilePicture) stats.withProfilePicture++
+        if (status.frontId) stats.withFrontId++
+        if (status.backId) stats.withBackId++
+        if (status.allRequired) stats.withAllRequired++
+        if (status.anyDocuments) stats.withAnyDocuments++
+      })
+      
+      return stats
+    } catch (error) {
+      console.error('Error getting document statistics:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get comprehensive user details (alias for getUserById)
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User object
+   */
+  async getComprehensiveUserDetails(userId) {
+    return this.getUserById(userId)
+  }
+
+  /**
+   * Get basic user details (alias for getUserById)
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User object
+   */
+  async getUserDetails(userId) {
+    return this.getUserById(userId)
+  }
+
+  /**
+   * Get user projects
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of user projects
+   */
+  async getUserProjects(userId) {
+    try {
+      const user = await this.getUserById(userId)
+      return user.enhancedProjects || user.projects || []
+    } catch (error) {
+      console.error('Error getting user projects:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Format user data for display
+   * @param {Object} userData - Raw user data
+   * @returns {Object} Formatted user data
+   */
+  formatUserForDisplay(userData) {
+    if (!userData) return null
 
     return {
-      ...userDetails,
-      projects,
-      bookings,
-      complaints,
-      activityMetrics: {
-        totalProjects: projects.length,
-        totalBookings: bookingStats.total,
-        recentBookings: bookingStats.recent,
-        totalComplaints: complaintStats.total,
-        recentComplaints: complaintStats.recent,
-        lastActivity: bookings.length > 0 ? bookings[0].createdAt : userDetails.createdAt
-      },
-      bookingStats,
-      complaintStats
-    };
-  } catch (error) {
-    console.error('Error fetching comprehensive user details:', error);
-    throw error;
+      ...userData,
+      displayName: userData.firstName && userData.lastName 
+        ? `${userData.firstName} ${userData.lastName}`
+        : userData.fullName || userData.email || 'Unknown User',
+      fullName: userData.firstName && userData.lastName 
+        ? `${userData.firstName} ${userData.lastName}`
+        : userData.fullName || 'N/A'
+    }
   }
-};
+}
 
-/**
- * Format user data for display
- * @param {Object} user - User data object
- * @returns {Object} - Formatted user data
- */
-export const formatUserForDisplay = (user) => {
-  if (!user) return null;
+const userServiceInstance = new UserService()
 
-  return {
-    id: user.id,
-    email: user.email || 'N/A',
-    firstName: user.firstName || 'N/A',
-    lastName: user.lastName || 'N/A',
-    fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'N/A',
-    mobile: user.mobile || 'N/A',
-    dateOfBirth: user.dateOfBirth || 'N/A',
-    gender: user.gender || 'N/A',
-    nationalId: user.nationalId || 'N/A',
-    isProfileComplete: user.isProfileComplete || false,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-    lastLoginAt: user.lastLoginAt,
-    // Additional fields that might be useful
-    displayName: user.displayName || user.fullName || 'N/A',
-    photoURL: user.photoURL || null,
-    // Enhanced data
-    projects: user.projects || [],
-    bookings: user.bookings || [],
-    complaints: user.complaints || [],
-    activityMetrics: user.activityMetrics || {},
-    bookingStats: user.bookingStats || {},
-    complaintStats: user.complaintStats || {}
-  };
-};
+// Named exports for backward compatibility
+export const getComprehensiveUserDetails = (userId) => userServiceInstance.getComprehensiveUserDetails(userId)
+export const getUserDetails = (userId) => userServiceInstance.getUserDetails(userId)
+export const getUserProjects = (userId) => userServiceInstance.getUserProjects(userId)
+export const formatUserForDisplay = (userData) => userServiceInstance.formatUserForDisplay(userData)
+
+export default userServiceInstance

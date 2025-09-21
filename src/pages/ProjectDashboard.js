@@ -33,7 +33,7 @@ import {
   Building,
   AlertTriangle,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -139,6 +139,10 @@ const ProjectDashboard = () => {
   const [storeOrderDateFilter, setStoreOrderDateFilter] = useState('all');
   const [storeOrderDateRange, setStoreOrderDateRange] = useState({ start: '', end: '' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // User modal state
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
 
 
 
@@ -841,13 +845,20 @@ const ProjectDashboard = () => {
   const handleUserAction = (action, user) => {
     switch (action) {
       case 'view':
-        // TODO: Implement user view modal
+        setSelectedUser(user);
+        setShowUserModal(true);
         break;
       case 'edit':
-        // TODO: Implement user edit modal
+        // Navigate to user edit page or open edit modal
+        console.log('Edit user:', user);
+        // For now, we'll use the view modal - you can implement edit functionality later
+        setSelectedUser(user);
+        setShowUserModal(true);
         break;
       case 'delete':
-        // TODO: Implement user delete confirmation
+        if (window.confirm(`Are you sure you want to delete user ${user.firstName} ${user.lastName}?`)) {
+          handleDeleteUser(user);
+        }
         break;
       default:
         break;
@@ -898,6 +909,35 @@ const ProjectDashboard = () => {
       await completeBooking(projectId, bookingId);
     } catch (error) {
       console.error('Error completing booking:', error);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    try {
+      await deleteDoc(doc(db, 'users', user.id));
+      
+      // Refresh the users list
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const usersData = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Filter users who belong to this specific project
+      const projectUsersData = usersData.filter(userData => {
+        if (userData.projects && Array.isArray(userData.projects)) {
+          return userData.projects.some(project => project.projectId === projectId);
+        }
+        return false;
+      });
+
+      setProjectUsers(projectUsersData);
+      setFilteredUsers(projectUsersData);
+      
+      console.log('User deleted successfully');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user. Please try again.');
     }
   };
 
@@ -3821,6 +3861,302 @@ const ProjectDashboard = () => {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Details Modal */}
+      {showUserModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">User Details</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedUser.firstName} {selectedUser.lastName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* User Information Section */}
+              <div className="bg-blue-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-600" />
+                  Personal Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Full Name</label>
+                    <p className="text-sm text-blue-900 font-medium mt-1">
+                      {selectedUser.firstName} {selectedUser.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Email</label>
+                    <p className="text-sm text-blue-900 font-medium mt-1">
+                      {selectedUser.email || 'No email'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Phone</label>
+                    <p className="text-sm text-blue-900 font-medium mt-1">
+                      {selectedUser.phone || selectedUser.mobile || 'No phone'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Registration Status</label>
+                    <p className="text-sm text-blue-900 font-medium mt-1">
+                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                        selectedUser.registrationStatus === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : selectedUser.registrationStatus === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedUser.registrationStatus || 'Unknown'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Information Section */}
+              <div className="bg-green-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-green-600" />
+                  Project Information
+                </h3>
+                <div className="space-y-4">
+                  {selectedUser.projects && selectedUser.projects.length > 0 ? (
+                    selectedUser.projects.map((project, index) => (
+                      <div key={index} className="bg-white rounded-lg p-4 border border-green-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Project ID</label>
+                            <p className="text-sm text-green-900 font-medium mt-1">{project.projectId}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Role</label>
+                            <p className="text-sm text-green-900 font-medium mt-1 capitalize">{project.role || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Unit</label>
+                            <p className="text-sm text-green-900 font-medium mt-1">{project.unit || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Status</label>
+                            <p className="text-sm text-green-900 font-medium mt-1">{project.status || 'Active'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-green-700">No project information available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Documents & Profile Pictures Section */}
+              <div className="bg-purple-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-purple-900 mb-3 flex items-center">
+                  <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                  Documents & Profile Pictures
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* Profile Picture */}
+                  <div>
+                    <label className="text-sm font-medium text-purple-700">Profile Picture</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.profilePictureUrl ? (
+                        <div className="flex items-center space-x-4">
+                          <img
+                            src={selectedUser.documents.profilePictureUrl}
+                            alt="Profile"
+                            className="h-20 w-20 rounded-full object-cover border-4 border-purple-200 shadow-md"
+                          />
+                          <button
+                            onClick={() => window.open(selectedUser.documents.profilePictureUrl, '_blank')}
+                            className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Full Size
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-4">
+                          <div className="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300">
+                            <Users className="h-8 w-8 text-gray-400" />
+                          </div>
+                          <span className="text-gray-500 text-sm">No profile picture uploaded</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* National ID Documents */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Front ID */}
+                    <div>
+                      <label className="text-sm font-medium text-purple-700">Front National ID</label>
+                      <div className="mt-2">
+                        {selectedUser.documents?.frontIdUrl ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img
+                                src={selectedUser.documents.frontIdUrl}
+                                alt="Front National ID"
+                                className="w-full h-32 object-cover rounded-lg border-2 border-purple-200 shadow-sm"
+                              />
+                              <div className="absolute top-2 right-2">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✓ Uploaded
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => window.open(selectedUser.documents.frontIdUrl, '_blank')}
+                              className="w-full px-3 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center"
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Document
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                            <div className="text-center">
+                              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                              <span className="text-gray-500 text-sm">Not uploaded</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Back ID */}
+                    <div>
+                      <label className="text-sm font-medium text-purple-700">Back National ID</label>
+                      <div className="mt-2">
+                        {selectedUser.documents?.backIdUrl ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img
+                                src={selectedUser.documents.backIdUrl}
+                                alt="Back National ID"
+                                className="w-full h-32 object-cover rounded-lg border-2 border-purple-200 shadow-sm"
+                              />
+                              <div className="absolute top-2 right-2">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✓ Uploaded
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => window.open(selectedUser.documents.backIdUrl, '_blank')}
+                              className="w-full px-3 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center"
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Document
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                            <div className="text-center">
+                              <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                              <span className="text-gray-500 text-sm">Not uploaded</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Document Status Summary */}
+                  <div className="bg-white rounded-lg p-4 border border-purple-200">
+                    <h4 className="text-sm font-semibold text-purple-900 mb-3">Document Status</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.profilePictureUrl ? 'bg-green-500' : 'bg-gray-300'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Profile Picture</span>
+                      </div>
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.frontIdUrl ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Front ID</span>
+                      </div>
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.backIdUrl ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Back ID</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Information Section */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <Settings className="h-5 w-5 mr-2 text-gray-600" />
+                  Account Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                    <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.id}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created At</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.createdAt ? 
+                        (selectedUser.createdAt.toDate ? 
+                          selectedUser.createdAt.toDate().toLocaleString() :
+                          new Date(selectedUser.createdAt).toLocaleString()
+                        ) : 'Unknown'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.lastLoginAt ? 
+                        (selectedUser.lastLoginAt.toDate ? 
+                          selectedUser.lastLoginAt.toDate().toLocaleString() :
+                          new Date(selectedUser.lastLoginAt).toLocaleString()
+                        ) : 'Never'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Auth UID</label>
+                    <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.authUid || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end p-6 border-t border-gray-100">
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

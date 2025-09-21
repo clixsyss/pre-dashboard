@@ -10,13 +10,14 @@ import {
   Phone,
   X
 } from 'lucide-react';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
+import userService from '../services/userService';
 
 const Users = () => {
   const navigate = useNavigate();
-  const { success, error: showError, warning, info } = useUINotificationStore();
+  const { error: showError } = useUINotificationStore();
   
   // Check if a project is selected, if not redirect to project selection
   useEffect(() => {
@@ -40,21 +41,32 @@ const Users = () => {
 
   const filterUsers = useCallback(() => {
     let filtered = users;
+    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter });
 
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(user => 
-        user.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.phone?.includes(searchTerm)
-      );
+      filtered = filtered.filter(user => {
+        const fullName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}`.toLowerCase()
+          : user.fullName?.toLowerCase() || '';
+        const email = user.email?.toLowerCase() || '';
+        const phone = user.phone || '';
+        
+        return fullName.includes(searchTerm.toLowerCase()) ||
+               email.includes(searchTerm.toLowerCase()) ||
+               phone.includes(searchTerm);
+      });
     }
 
-    // Apply role filter
+    // Apply role filter - check if user has the role in any of their projects
     if (roleFilter !== 'all') {
-      filtered = filtered.filter(user => user.role === roleFilter);
+      filtered = filtered.filter(user => {
+        if (!user.projects || !Array.isArray(user.projects)) return false;
+        return user.projects.some(project => project.role === roleFilter);
+      });
     }
 
+    console.log('Filtered users result:', filtered.length);
     setFilteredUsers(filtered);
   }, [users, searchTerm, roleFilter]);
 
@@ -72,40 +84,9 @@ const Users = () => {
     try {
       setLoading(true);
       
-      // Fetch users
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      
-      // Fetch projects for project name resolution
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
-      const projectsMap = {};
-      projectsSnapshot.docs.forEach(doc => {
-        projectsMap[doc.id] = doc.data();
-      });
-      
-      const usersData = usersSnapshot.docs.map(doc => {
-        const userData = doc.data();
-        
-        // Enhance projects data with actual project names
-        let enhancedProjects = [];
-        if (userData.projects && Array.isArray(userData.projects)) {
-          enhancedProjects = userData.projects.map(project => ({
-            ...project,
-            projectName: projectsMap[project.projectId]?.name || 'Unknown Project',
-            projectType: projectsMap[project.projectId]?.type || 'Unknown Type',
-            projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
-          }));
-        }
-        
-        return {
-          id: doc.id,
-          ...userData,
-          enhancedProjects,
-          createdAt: userData.createdAt?.toDate?.() || new Date(),
-          lastLoginAt: userData.lastLoginAt?.toDate?.() || null,
-          updatedAt: userData.updatedAt?.toDate?.() || null
-        };
-      });
-      
+      // Use the user service to fetch all users
+      const usersData = await userService.getAllUsers();
+      console.log('Fetched users:', usersData);
       setUsers(usersData);
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -232,6 +213,12 @@ const Users = () => {
                   Contact
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Documents
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -276,6 +263,45 @@ const Users = () => {
                         )}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${
+                            user.documents?.profilePictureUrl ? 'bg-green-400' : 'bg-gray-300'
+                          }`}></div>
+                          <span className="text-xs text-gray-600">Profile</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${
+                            user.documents?.frontIdUrl ? 'bg-green-400' : 'bg-red-400'
+                          }`}></div>
+                          <span className="text-xs text-gray-600">Front ID</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-2 ${
+                            user.documents?.backIdUrl ? 'bg-green-400' : 'bg-red-400'
+                          }`}></div>
+                          <span className="text-xs text-gray-600">Back ID</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {user.projects && user.projects.length > 0 ? (
+                          <div className="flex flex-col space-y-1">
+                            {user.projects.map((project, index) => (
+                              <div key={index} className="flex items-center">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                                  {project.role || 'Unknown'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">No projects</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
@@ -305,7 +331,7 @@ const Users = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
                     {searchTerm || roleFilter !== 'all' ? 'No users match your filters' : 'No users found'}
                   </td>
                 </tr>
@@ -369,6 +395,82 @@ const Users = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">National ID</label>
                     <p className="mt-1 text-sm text-gray-900">{selectedUser.nationalId || 'N/A'}</p>
+                  </div>
+                </div>
+                
+                {/* Documents Section */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Documents & Profile</h4>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Profile Picture</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.profilePictureUrl ? (
+                        <div className="flex items-center space-x-3">
+                          <img 
+                            src={selectedUser.documents.profilePictureUrl} 
+                            alt="Profile"
+                            className="h-16 w-16 rounded-full object-cover border-2 border-gray-200"
+                          />
+                          <button
+                            onClick={() => window.open(selectedUser.documents.profilePictureUrl, '_blank')}
+                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                          >
+                            View Full Size
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-400 text-sm">No Image</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Front National ID</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.frontIdUrl ? (
+                        <div className="flex items-center space-x-3">
+                          <div className="h-16 w-16 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                            <Eye className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <button
+                            onClick={() => window.open(selectedUser.documents.frontIdUrl, '_blank')}
+                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                          >
+                            View Document
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-400 text-sm">Not Uploaded</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Back National ID</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.backIdUrl ? (
+                        <div className="flex items-center space-x-3">
+                          <div className="h-16 w-16 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                            <Eye className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <button
+                            onClick={() => window.open(selectedUser.documents.backIdUrl, '_blank')}
+                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                          >
+                            View Document
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-400 text-sm">Not Uploaded</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
