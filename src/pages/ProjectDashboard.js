@@ -28,12 +28,14 @@ import {
   Wrench,
   Menu,
   Bell,
+  UserX,
+  UserCheck,
+  AlertTriangle,
   Settings,
   FileText,
   Building,
-  AlertTriangle,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -143,6 +145,13 @@ const ProjectDashboard = () => {
   // User modal state
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
+  
+  // Suspension modal state
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [userToSuspend, setUserToSuspend] = useState(null);
+  const [suspensionReason, setSuspensionReason] = useState('');
+  const [suspensionDuration, setSuspensionDuration] = useState('7'); // days
+  const [suspensionType, setSuspensionType] = useState('temporary'); // temporary or permanent
 
 
 
@@ -259,9 +268,8 @@ const ProjectDashboard = () => {
     }
   }, [projectId]);
 
-
-
-  useEffect(() => {
+  // Filter users function
+  const filterUsers = useCallback(() => {
     if (searchTerm || statusFilter !== 'all') {
       let filtered = [...projectUsers];
 
@@ -282,6 +290,10 @@ const ProjectDashboard = () => {
       setFilteredUsers(projectUsers);
     }
   }, [searchTerm, statusFilter, projectUsers]);
+
+  useEffect(() => {
+    filterUsers();
+  }, [filterUsers]);
 
   // Fetch project bookings when bookings tab is active
   useEffect(() => {
@@ -855,6 +867,16 @@ const ProjectDashboard = () => {
         setSelectedUser(user);
         setShowUserModal(true);
         break;
+      case 'suspend':
+        setUserToSuspend(user);
+        setSuspensionReason('');
+        setSuspensionDuration('7');
+        setSuspensionType('temporary');
+        setShowSuspendModal(true);
+        break;
+      case 'unsuspend':
+        handleUnsuspendUser(user);
+        break;
       case 'delete':
         if (window.confirm(`Are you sure you want to delete user ${user.firstName} ${user.lastName}?`)) {
           handleDeleteUser(user);
@@ -862,6 +884,90 @@ const ProjectDashboard = () => {
         break;
       default:
         break;
+    }
+  };
+
+  const handleSuspendUser = async () => {
+    if (!userToSuspend || !suspensionReason.trim()) {
+      alert('Please provide a reason for suspension');
+      return;
+    }
+
+    try {
+      const suspensionData = {
+        isSuspended: true,
+        suspensionReason: suspensionReason.trim(),
+        suspensionType: suspensionType,
+        suspendedAt: new Date(),
+        suspendedBy: currentAdmin?.uid || 'admin'
+      };
+
+      if (suspensionType === 'temporary') {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + parseInt(suspensionDuration));
+        suspensionData.suspensionEndDate = endDate;
+      }
+
+      // Update user in Firestore
+      const userRef = doc(db, 'users', userToSuspend.id);
+      await updateDoc(userRef, suspensionData);
+      
+      // Update local state
+      setProjectUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userToSuspend.id 
+            ? { ...user, ...suspensionData }
+            : user
+        )
+      );
+
+      setShowSuspendModal(false);
+      setUserToSuspend(null);
+      setSuspensionReason('');
+      setSuspensionDuration('7');
+      setSuspensionType('temporary');
+      
+      // Refresh filtered users
+      filterUsers();
+      
+    } catch (error) {
+      console.error('Error suspending user:', error);
+      alert('Failed to suspend user. Please try again.');
+    }
+  };
+
+  const handleUnsuspendUser = async (user) => {
+    try {
+      const unsuspensionData = {
+        isSuspended: false,
+        suspensionReason: null,
+        suspensionType: null,
+        suspendedAt: null,
+        suspendedBy: null,
+        suspensionEndDate: null,
+        unsuspendedAt: new Date(),
+        unsuspendedBy: currentAdmin?.uid || 'admin'
+      };
+
+      // Update user in Firestore
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, unsuspensionData);
+      
+      // Update local state
+      setProjectUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === user.id 
+            ? { ...u, ...unsuspensionData }
+            : u
+        )
+      );
+
+      // Refresh filtered users
+      filterUsers();
+      
+    } catch (error) {
+      console.error('Error unsuspending user:', error);
+      alert('Failed to unsuspend user. Please try again.');
     }
   };
 
@@ -1314,14 +1420,28 @@ const ProjectDashboard = () => {
                                 <span className="capitalize">{userProject?.role || 'N/A'}</span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.registrationStatus === 'completed'
-                                  ? 'bg-green-100 text-green-800'
-                                  : user.registrationStatus === 'pending'
-                                    ? 'bg-yellow-100 text-yellow-800'
-                                    : 'bg-red-100 text-red-800'
-                                  }`}>
-                                  {user.registrationStatus}
-                                </span>
+                                {user.isSuspended ? (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                      <UserX className="h-3 w-3 mr-1" />
+                                      Suspended
+                                    </span>
+                                    {user.suspensionType === 'temporary' && user.suspensionEndDate && (
+                                      <span className="text-xs text-gray-500">
+                                        Until {new Date(user.suspensionEndDate).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${user.registrationStatus === 'completed'
+                                    ? 'bg-green-100 text-green-800'
+                                    : user.registrationStatus === 'pending'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                    }`}>
+                                    {user.registrationStatus}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center space-x-2">
@@ -1341,6 +1461,27 @@ const ProjectDashboard = () => {
                                       <Edit className="h-4 w-4" />
                                     </button>
                                   </PermissionGate>
+                                  {user.isSuspended ? (
+                                    <PermissionGate entity="users" action="write">
+                                      <button
+                                        onClick={() => handleUserAction('unsuspend', user)}
+                                        className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
+                                        title="Unsuspend User"
+                                      >
+                                        <UserCheck className="h-4 w-4" />
+                                      </button>
+                                    </PermissionGate>
+                                  ) : (
+                                    <PermissionGate entity="users" action="write">
+                                      <button
+                                        onClick={() => handleUserAction('suspend', user)}
+                                        className="text-orange-600 hover:text-orange-900 p-2 rounded-lg hover:bg-orange-50 transition-colors"
+                                        title="Suspend User"
+                                      >
+                                        <UserX className="h-4 w-4" />
+                                      </button>
+                                    </PermissionGate>
+                                  )}
                                   <PermissionGate entity="users" action="delete">
                                     <button
                                       onClick={() => handleUserAction('delete', user)}
@@ -4108,6 +4249,67 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
+              {/* Account Status Section */}
+              <div className="bg-red-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center">
+                  <AlertTriangle className="h-5 w-5 mr-2 text-red-600" />
+                  Account Status
+                </h3>
+                <div className="space-y-4">
+                  {selectedUser.isSuspended ? (
+                    <div className="bg-white rounded-lg p-4 border border-red-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                          <UserX className="h-4 w-4 mr-2" />
+                          Account Suspended
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {selectedUser.suspensionType === 'permanent' ? 'Permanent' : 'Temporary'}
+                        </span>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Reason:</span>
+                          <p className="text-gray-600 mt-1">{selectedUser.suspensionReason}</p>
+                        </div>
+                        {selectedUser.suspensionType === 'temporary' && selectedUser.suspensionEndDate && (
+                          <div>
+                            <span className="font-medium text-gray-700">Suspension Ends:</span>
+                            <p className="text-gray-600 mt-1">
+                              {new Date(selectedUser.suspensionEndDate).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium text-gray-700">Suspended At:</span>
+                          <p className="text-gray-600 mt-1">
+                            {selectedUser.suspendedAt ? 
+                              (selectedUser.suspendedAt.toDate ? 
+                                selectedUser.suspendedAt.toDate().toLocaleString() :
+                                new Date(selectedUser.suspendedAt).toLocaleString()
+                              ) : 'Unknown'
+                            }
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Suspended By:</span>
+                          <p className="text-gray-600 mt-1">{selectedUser.suspendedBy || 'Unknown'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center">
+                        <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Account Active
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Account Information Section */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
@@ -4156,6 +4358,115 @@ const ProjectDashboard = () => {
                 className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend User Modal */}
+      {showSuspendModal && userToSuspend && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div className="flex items-center">
+                <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center mr-3">
+                  <UserX className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Suspend User</h3>
+                  <p className="text-sm text-gray-500">
+                    {userToSuspend.firstName} {userToSuspend.lastName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSuspendModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Suspension Type
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="temporary"
+                      checked={suspensionType === 'temporary'}
+                      onChange={(e) => setSuspensionType(e.target.value)}
+                      className="mr-2 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-gray-700">Temporary</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="permanent"
+                      checked={suspensionType === 'permanent'}
+                      onChange={(e) => setSuspensionType(e.target.value)}
+                      className="mr-2 text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-gray-700">Permanent</span>
+                  </label>
+                </div>
+              </div>
+
+              {suspensionType === 'temporary' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Duration
+                  </label>
+                  <select
+                    value={suspensionDuration}
+                    onChange={(e) => setSuspensionDuration(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="1">1 day</option>
+                    <option value="3">3 days</option>
+                    <option value="7">1 week</option>
+                    <option value="14">2 weeks</option>
+                    <option value="30">1 month</option>
+                    <option value="90">3 months</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Suspension *
+                </label>
+                <textarea
+                  value={suspensionReason}
+                  onChange={(e) => setSuspensionReason(e.target.value)}
+                  placeholder="Enter reason for suspension..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  rows="3"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-100">
+              <button
+                onClick={() => setShowSuspendModal(false)}
+                className="px-4 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSuspendUser}
+                className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Suspend User
               </button>
             </div>
           </div>

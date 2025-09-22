@@ -8,7 +8,11 @@ import {
   UserPlus,
   Mail,
   Phone,
-  X
+  X,
+  UserX,
+  UserCheck,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -38,6 +42,11 @@ const Users = () => {
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [userToSuspend, setUserToSuspend] = useState(null);
+  const [suspensionReason, setSuspensionReason] = useState('');
+  const [suspensionDuration, setSuspensionDuration] = useState('7'); // days
+  const [suspensionType, setSuspensionType] = useState('temporary'); // temporary or permanent
 
   const filterUsers = useCallback(() => {
     let filtered = users;
@@ -122,6 +131,97 @@ const Users = () => {
   const openDeleteModal = (user) => {
     setUserToDelete(user);
     setShowDeleteModal(true);
+  };
+
+  const openSuspendModal = (user) => {
+    setUserToSuspend(user);
+    setSuspensionReason('');
+    setSuspensionDuration('7');
+    setSuspensionType('temporary');
+    setShowSuspendModal(true);
+  };
+
+  const handleSuspendUser = async () => {
+    if (!userToSuspend || !suspensionReason.trim()) {
+      showError('Please provide a reason for suspension');
+      return;
+    }
+
+    try {
+      const suspensionData = {
+        isSuspended: true,
+        suspensionReason: suspensionReason.trim(),
+        suspensionType: suspensionType,
+        suspendedAt: new Date(),
+        suspendedBy: localStorage.getItem('adminUserId') || 'admin'
+      };
+
+      if (suspensionType === 'temporary') {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + parseInt(suspensionDuration));
+        suspensionData.suspensionEndDate = endDate;
+      }
+
+      // Update user in Firestore
+      const userRef = doc(db, 'users', userToSuspend.id);
+      await userService.updateUser(userToSuspend.id, suspensionData);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userToSuspend.id 
+            ? { ...user, ...suspensionData }
+            : user
+        )
+      );
+
+      setShowSuspendModal(false);
+      setUserToSuspend(null);
+      setSuspensionReason('');
+      setSuspensionDuration('7');
+      setSuspensionType('temporary');
+      
+      // Refresh filtered users
+      filterUsers();
+      
+    } catch (error) {
+      console.error('Error suspending user:', error);
+      showError('Failed to suspend user. Please try again.');
+    }
+  };
+
+  const handleUnsuspendUser = async (user) => {
+    try {
+      const unsuspensionData = {
+        isSuspended: false,
+        suspensionReason: null,
+        suspensionType: null,
+        suspendedAt: null,
+        suspendedBy: null,
+        suspensionEndDate: null,
+        unsuspendedAt: new Date(),
+        unsuspendedBy: localStorage.getItem('adminUserId') || 'admin'
+      };
+
+      // Update user in Firestore
+      await userService.updateUser(user.id, unsuspensionData);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === user.id 
+            ? { ...u, ...unsuspensionData }
+            : u
+        )
+      );
+
+      // Refresh filtered users
+      filterUsers();
+      
+    } catch (error) {
+      console.error('Error unsuspending user:', error);
+      showError('Failed to unsuspend user. Please try again.');
+    }
   };
 
   if (loading) {
@@ -219,6 +319,9 @@ const Users = () => {
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -302,6 +405,29 @@ const Users = () => {
                         )}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {user.role || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {user.isSuspended ? (
+                        <div className="flex items-center space-x-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <UserX className="h-3 w-3 mr-1" />
+                            Suspended
+                          </span>
+                          {user.suspensionType === 'temporary' && user.suspensionEndDate && (
+                            <span className="text-xs text-gray-500">
+                              Until {new Date(user.suspensionEndDate).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <UserCheck className="h-3 w-3 mr-1" />
+                          Active
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
@@ -318,6 +444,23 @@ const Users = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        {user.isSuspended ? (
+                          <button
+                            onClick={() => handleUnsuspendUser(user)}
+                            className="text-green-600 hover:text-green-900 p-1 rounded"
+                            title="Unsuspend User"
+                          >
+                            <UserCheck className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openSuspendModal(user)}
+                            className="text-orange-600 hover:text-orange-900 p-1 rounded"
+                            title="Suspend User"
+                          >
+                            <UserX className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => openDeleteModal(user)}
                           className="text-red-600 hover:text-red-900 p-1 rounded"
@@ -331,7 +474,7 @@ const Users = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
                     {searchTerm || roleFilter !== 'all' ? 'No users match your filters' : 'No users found'}
                   </td>
                 </tr>
@@ -527,6 +670,32 @@ const Users = () => {
                       {selectedUser.isProfileComplete ? 'Yes' : 'No'}
                     </span>
                   </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Account Status</label>
+                    {selectedUser.isSuspended ? (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <UserX className="h-3 w-3 mr-1" />
+                          Suspended
+                        </span>
+                        <div className="mt-2 space-y-1 text-sm text-gray-600">
+                          <div><strong>Reason:</strong> {selectedUser.suspensionReason}</div>
+                          <div><strong>Type:</strong> {selectedUser.suspensionType === 'permanent' ? 'Permanent' : 'Temporary'}</div>
+                          {selectedUser.suspensionType === 'temporary' && selectedUser.suspensionEndDate && (
+                            <div><strong>Until:</strong> {new Date(selectedUser.suspensionEndDate).toLocaleString()}</div>
+                          )}
+                          <div><strong>Suspended At:</strong> {selectedUser.suspendedAt ? new Date(selectedUser.suspendedAt).toLocaleString() : 'N/A'}</div>
+                          <div><strong>Suspended By:</strong> {selectedUser.suspendedBy || 'N/A'}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <UserCheck className="h-3 w-3 mr-1" />
+                        Active
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -626,6 +795,106 @@ const Users = () => {
                     Cancel
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend User Modal */}
+      {showSuspendModal && userToSuspend && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100">
+                <UserX className="h-6 w-6 text-orange-600" />
+              </div>
+              <div className="mt-3 text-center">
+                <h3 className="text-lg font-medium text-gray-900">Suspend User</h3>
+                <div className="mt-2 px-7 py-3">
+                  <p className="text-sm text-gray-500">
+                    Suspend <strong>{userToSuspend.firstName} {userToSuspend.lastName}</strong>?
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Suspension Type
+                  </label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="temporary"
+                        checked={suspensionType === 'temporary'}
+                        onChange={(e) => setSuspensionType(e.target.value)}
+                        className="mr-2"
+                      />
+                      Temporary
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="permanent"
+                        checked={suspensionType === 'permanent'}
+                        onChange={(e) => setSuspensionType(e.target.value)}
+                        className="mr-2"
+                      />
+                      Permanent
+                    </label>
+                  </div>
+                </div>
+
+                {suspensionType === 'temporary' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Duration (days)
+                    </label>
+                    <select
+                      value={suspensionDuration}
+                      onChange={(e) => setSuspensionDuration(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="1">1 day</option>
+                      <option value="3">3 days</option>
+                      <option value="7">1 week</option>
+                      <option value="14">2 weeks</option>
+                      <option value="30">1 month</option>
+                      <option value="90">3 months</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason for Suspension *
+                  </label>
+                  <textarea
+                    value={suspensionReason}
+                    onChange={(e) => setSuspensionReason(e.target.value)}
+                    placeholder="Enter reason for suspension..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    rows="3"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowSuspendModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSuspendUser}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-medium hover:bg-orange-700"
+                >
+                  Suspend User
+                </button>
               </div>
             </div>
           </div>
