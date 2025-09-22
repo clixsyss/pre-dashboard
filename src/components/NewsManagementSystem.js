@@ -25,6 +25,7 @@ import {
   deleteDoc, 
   doc, 
   getDocs, 
+  getDoc,
   query, 
   orderBy, 
   serverTimestamp,
@@ -66,7 +67,9 @@ const NewsManagementSystem = ({ projectId }) => {
     featured: false,
     isPublished: false,
     mediaFile: null,
-    mediaType: 'image'
+    mediaType: 'image',
+    linkUrl: '',
+    linkTitle: ''
   });
 
   const fetchNews = useCallback(async () => {
@@ -169,6 +172,14 @@ const NewsManagementSystem = ({ projectId }) => {
         createdAt: editingItem ? editingItem.createdAt : serverTimestamp(),
         updatedAt: serverTimestamp()
       };
+
+      // Only add URL fields if they have actual values
+      if (formData.linkUrl && formData.linkUrl.trim() !== '') {
+        newsData.linkUrl = formData.linkUrl.trim();
+      }
+      if (formData.linkTitle && formData.linkTitle.trim() !== '') {
+        newsData.linkTitle = formData.linkTitle.trim();
+      }
       
       // Add media data if available
       if (mediaData) {
@@ -241,7 +252,9 @@ const NewsManagementSystem = ({ projectId }) => {
       featured: item.featured || false,
       isPublished: item.isPublished || false,
       mediaFile: null,
-      mediaType: item.mediaType || 'image'
+      mediaType: item.mediaType || 'image',
+      linkUrl: item.linkUrl || '',
+      linkTitle: item.linkTitle || ''
     });
     setShowModal(true);
   };
@@ -307,7 +320,9 @@ const NewsManagementSystem = ({ projectId }) => {
       featured: false,
       isPublished: false,
       mediaFile: null,
-      mediaType: 'image'
+      mediaType: 'image',
+      linkUrl: '',
+      linkTitle: ''
     });
     setEditingItem(null);
   };
@@ -873,6 +888,12 @@ const NewsManagementSystem = ({ projectId }) => {
                           <p className="text-sm text-gray-600 line-clamp-2">
                             {item.excerpt || item.content || 'No content'}
                           </p>
+                          {item.linkUrl && (
+                            <div className="flex items-center mt-2 text-xs text-blue-600">
+                              <Globe className="h-3 w-3 mr-1" />
+                              <span className="truncate">{item.linkTitle || 'External Link'}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1085,6 +1106,35 @@ const NewsManagementSystem = ({ projectId }) => {
                   <option value="event">Event</option>
                   <option value="update">Update</option>
                 </select>
+              </div>
+
+              {/* Link URL and Title */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Link URL (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.linkUrl}
+                    onChange={(e) => setFormData({ ...formData, linkUrl: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="https://example.com"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Link Title (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.linkTitle}
+                    onChange={(e) => setFormData({ ...formData, linkTitle: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Read more about this news..."
+                  />
+                </div>
               </div>
 
               {/* Media Upload */}
