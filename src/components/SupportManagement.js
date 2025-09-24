@@ -62,16 +62,48 @@ const SupportManagement = () => {
     const q = query(supportChatsRef, orderBy('updatedAt', 'desc'))
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const chats = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      const chats = snapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+          lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt
+        }
+      })
       setSupportChats(chats)
       setLoading(false)
     })
 
     return () => unsubscribe()
   }, [projectId])
+
+  // Live-update selected chat while modal is open
+  useEffect(() => {
+    if (!showChatModal || !selectedChat?.id || !projectId) return
+
+    const chatRef = doc(db, `projects/${projectId}/supportChats`, selectedChat.id)
+    const unsubscribe = onSnapshot(chatRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data()
+        // Convert Firestore timestamps to Date objects for proper display
+        const processedData = {
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+          lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt,
+          messages: data.messages?.map(msg => ({
+            ...msg,
+            timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : msg.timestamp
+          })) || []
+        }
+        setSelectedChat({ id: snapshot.id, ...processedData })
+      }
+    })
+
+    return () => unsubscribe()
+  }, [showChatModal, selectedChat?.id, projectId])
 
   // Handle chat selection
   const handleChatSelect = (chat) => {
@@ -179,8 +211,14 @@ const SupportManagement = () => {
   // Format date
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A'
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+      if (isNaN(date.getTime())) return 'Invalid Date'
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
+    } catch (error) {
+      console.error('Error formatting date:', error, timestamp)
+      return 'Invalid Date'
+    }
   }
 
   if (loading) {
@@ -396,7 +434,7 @@ const SupportManagement = () => {
                         <div className={`text-xs mt-1 ${
                           message.senderType === 'admin' ? 'text-blue-100' : 'text-gray-500'
                         }`}>
-                          {message.timestamp ? new Date(message.timestamp).toLocaleString() : 'Just now'}
+                          {message.timestamp ? formatDate(message.timestamp) : 'Just now'}
                         </div>
                       </div>
                     </div>
