@@ -48,6 +48,7 @@ import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
 import AdminSetup from '../components/AdminSetup';
 import PDFGuidelines from '../components/PDFGuidelines';
 import AdsManagement from '../components/AdsManagement';
+import SupportManagement from '../components/SupportManagement';
 import FinesManagement from '../components/FinesManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
@@ -199,7 +200,8 @@ const ProjectDashboard = () => {
       category: 'Security',
       items: [
         { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' },
-        { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' }
+        { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' },
+        { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' }
       ]
     }
   ];
@@ -2325,6 +2327,12 @@ const ProjectDashboard = () => {
             {activeTab === 'fines' && (
               <PermissionGate entity="fines" action="read" showMessage={true}>
                 <FinesManagement projectId={projectId} />
+              </PermissionGate>
+            )}
+
+            {activeTab === 'support' && (
+              <PermissionGate entity="support" action="read" showMessage={true}>
+                <SupportManagement />
               </PermissionGate>
             )}
 
