@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useParams } from 'react-router-dom'
 import { 
   collection, 
   query, 
   orderBy, 
   onSnapshot, 
   doc, 
-  updateDoc, 
-  serverTimestamp,
-  addDoc
+  updateDoc
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { MessageCircle, XCircle, User, Mail, Calendar, Filter, Search } from 'lucide-react'
 
 const SupportManagement = () => {
+  const { projectId } = useParams()
   const [supportChats, setSupportChats] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedChat, setSelectedChat] = useState(null)
@@ -52,7 +52,13 @@ const SupportManagement = () => {
 
   // Load support chats
   useEffect(() => {
-    const supportChatsRef = collection(db, 'supportChats')
+    if (!projectId) {
+      console.error('No project ID available')
+      setLoading(false)
+      return
+    }
+    
+    const supportChatsRef = collection(db, `projects/${projectId}/supportChats`)
     const q = query(supportChatsRef, orderBy('updatedAt', 'desc'))
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -65,7 +71,7 @@ const SupportManagement = () => {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [projectId])
 
   // Handle chat selection
   const handleChatSelect = (chat) => {
@@ -76,10 +82,15 @@ const SupportManagement = () => {
   // Handle status update
   const handleStatusUpdate = async (chatId, newStatus) => {
     try {
-      const chatRef = doc(db, 'supportChats', chatId)
+      if (!projectId) {
+        console.error('No project ID available')
+        return
+      }
+      
+      const chatRef = doc(db, `projects/${projectId}/supportChats`, chatId)
       await updateDoc(chatRef, {
         status: newStatus,
-        updatedAt: serverTimestamp()
+        updatedAt: new Date()
       })
     } catch (error) {
       console.error('Error updating chat status:', error)
@@ -92,24 +103,40 @@ const SupportManagement = () => {
 
     setSendingMessage(true)
     try {
-      const messagesRef = collection(db, 'supportChats', selectedChat.id, 'messages')
-      await addDoc(messagesRef, {
-        content: newMessage.trim(),
-        type: 'text',
+      if (!projectId) {
+        console.error('No project ID available')
+        setSendingMessage(false)
+        return
+      }
+      
+      const chatRef = doc(db, `projects/${projectId}/supportChats`, selectedChat.id)
+      const newMessageObj = {
+        id: Date.now().toString(),
+        text: newMessage.trim(),
         senderId: 'admin',
         senderName: 'Support Team',
         senderType: 'admin',
-        timestamp: serverTimestamp(),
-        readBy: ['admin']
+        timestamp: new Date(),
+        type: 'text'
+      }
+      
+      // Get current messages and add new one
+      const currentMessages = selectedChat.messages || []
+      const updatedMessages = [...currentMessages, newMessageObj]
+      
+      await updateDoc(chatRef, {
+        messages: updatedMessages,
+        lastMessageAt: new Date(),
+        updatedAt: new Date()
       })
 
-      // Update chat last message
-      const chatRef = doc(db, 'supportChats', selectedChat.id)
-      await updateDoc(chatRef, {
-        lastMessage: newMessage.trim(),
-        lastMessageTime: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      })
+      // Update the selectedChat state to show the new message immediately
+      setSelectedChat(prev => ({
+        ...prev,
+        messages: updatedMessages,
+        lastMessageAt: new Date(),
+        updatedAt: new Date()
+      }))
 
       setNewMessage('')
     } catch (error) {
@@ -343,14 +370,44 @@ const SupportManagement = () => {
             </div>
 
             {/* Chat Messages Area */}
-            <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+            <div className="flex-1 p-4 overflow-y-auto bg-gray-50" ref={(el) => {
+              if (el) {
+                el.scrollTop = el.scrollHeight;
+              }
+            }}>
               <div className="space-y-4">
-                {/* Placeholder for messages - in a real implementation, you'd load and display messages here */}
-                <div className="text-center text-gray-500 py-8">
-                  <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>Chat messages will be displayed here</p>
-                  <p className="text-sm">This would integrate with the SupportChat component</p>
-                </div>
+                {selectedChat.messages && selectedChat.messages.length > 0 ? (
+                  selectedChat.messages.map((message, index) => (
+                    <div
+                      key={message.id || index}
+                      className={`flex ${message.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          message.senderType === 'admin'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-900 border border-gray-200'
+                        }`}
+                      >
+                        <div className="text-sm font-medium mb-1">
+                          {message.senderName || (message.senderType === 'admin' ? 'Support Team' : 'User')}
+                        </div>
+                        <div className="text-sm">{message.text}</div>
+                        <div className={`text-xs mt-1 ${
+                          message.senderType === 'admin' ? 'text-blue-100' : 'text-gray-500'
+                        }`}>
+                          {message.timestamp ? new Date(message.timestamp).toLocaleString() : 'Just now'}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No messages yet</p>
+                    <p className="text-sm">Start the conversation by sending a message</p>
+                  </div>
+                )}
               </div>
             </div>
 

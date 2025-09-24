@@ -120,6 +120,7 @@ export const AdminAuthProvider = ({ children }) => {
         orders: ['read', 'write', 'delete'],
         gate_pass: ['read', 'write', 'delete'],
         guidelines: ['read', 'write', 'delete'],
+        support: ['read', 'write', 'delete'],
         admin_accounts: ['read']
       };
       
