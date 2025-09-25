@@ -137,6 +137,83 @@ const AdminManagement = () => {
     }));
   };
 
+  const handleSelectAllForEntity = (entity) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [entity]: Object.values(PERMISSION_ACTIONS)
+      }
+    }));
+  };
+
+  const handleDeselectAllForEntity = (entity) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [entity]: []
+      }
+    }));
+  };
+
+  const handleSelectAllPermissions = () => {
+    const allPermissions = {};
+    Object.values(PERMISSION_ENTITIES).forEach(entity => {
+      allPermissions[entity] = Object.values(PERMISSION_ACTIONS);
+    });
+    setFormData(prev => ({
+      ...prev,
+      permissions: allPermissions
+    }));
+  };
+
+  const handleDeselectAllPermissions = () => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: {}
+    }));
+  };
+
+  // Approval permission handlers
+  const handleApprovalSelectAllForEntity = (entity) => {
+    setApprovalData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [entity]: Object.values(PERMISSION_ACTIONS)
+      }
+    }));
+  };
+
+  const handleApprovalDeselectAllForEntity = (entity) => {
+    setApprovalData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [entity]: []
+      }
+    }));
+  };
+
+  const handleApprovalSelectAllPermissions = () => {
+    const allPermissions = {};
+    Object.values(PERMISSION_ENTITIES).forEach(entity => {
+      allPermissions[entity] = Object.values(PERMISSION_ACTIONS);
+    });
+    setApprovalData(prev => ({
+      ...prev,
+      permissions: allPermissions
+    }));
+  };
+
+  const handleApprovalDeselectAllPermissions = () => {
+    setApprovalData(prev => ({
+      ...prev,
+      permissions: {}
+    }));
+  };
+
   const resetForm = () => {
     setFormData({
       firstName: '',
@@ -591,6 +668,10 @@ const AdminManagement = () => {
           onInputChange={handleInputChange}
           onProjectToggle={handleProjectToggle}
           onPermissionToggle={handlePermissionToggle}
+          onSelectAllForEntity={handleSelectAllForEntity}
+          onDeselectAllForEntity={handleDeselectAllForEntity}
+          onSelectAllPermissions={handleSelectAllPermissions}
+          onDeselectAllPermissions={handleDeselectAllPermissions}
           onSubmit={handleSubmit}
           onClose={closeModals}
           submitting={submitting}
@@ -629,6 +710,10 @@ const AdminManagement = () => {
               }
             }));
           }}
+          onSelectAllForEntity={handleApprovalSelectAllForEntity}
+          onDeselectAllForEntity={handleApprovalDeselectAllForEntity}
+          onSelectAllPermissions={handleApprovalSelectAllPermissions}
+          onDeselectAllPermissions={handleApprovalDeselectAllPermissions}
           onApprove={handleApprove}
           onClose={closeAllModals}
           submitting={submitting}
@@ -669,6 +754,10 @@ const AdminForm = ({
   onInputChange,
   onProjectToggle,
   onPermissionToggle,
+  onSelectAllForEntity,
+  onDeselectAllForEntity,
+  onSelectAllPermissions,
+  onDeselectAllPermissions,
   onSubmit,
   onClose,
   submitting
@@ -825,15 +914,51 @@ const AdminForm = ({
           {/* Custom Permissions */}
           {formData.accountType === ADMIN_TYPES.CUSTOM && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Permissions *
-              </label>
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Permissions *
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={onSelectAllPermissions}
+                    className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDeselectAllPermissions}
+                    className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
               <div className="space-y-4">
                 {Object.entries(PERMISSION_ENTITIES).map(([entityKey, entityValue]) => (
                   <div key={entityKey} className="border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2 capitalize">
-                      {entityValue.replace('_', ' ')}
-                    </h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-900 capitalize">
+                        {entityValue.replace('_', ' ')}
+                      </h4>
+                      <div className="flex space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => onSelectAllForEntity(entityValue)}
+                          className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeselectAllForEntity(entityValue)}
+                          className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {Object.values(PERMISSION_ACTIONS).map((action) => (
                         <label key={action} className="flex items-center">
