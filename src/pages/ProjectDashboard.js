@@ -34,6 +34,7 @@ import {
   Settings,
   FileText,
   Building,
+  Shield,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -50,6 +51,7 @@ import PDFGuidelines from '../components/PDFGuidelines';
 import AdsManagement from '../components/AdsManagement';
 import SupportManagement from '../components/SupportManagement';
 import FinesManagement from '../components/FinesManagement';
+import GuardsManagement from '../components/GuardsManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -201,6 +203,7 @@ const ProjectDashboard = () => {
       items: [
         { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' },
         { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' },
+        { id: 'guards', name: 'Guards', icon: Shield, description: 'Guard account management', permission: 'guards' },
         { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' }
       ]
     }
@@ -2333,6 +2336,12 @@ const ProjectDashboard = () => {
             {activeTab === 'support' && (
               <PermissionGate entity="support" action="read" showMessage={true}>
                 <SupportManagement />
+              </PermissionGate>
+            )}
+
+            {activeTab === 'guards' && (
+              <PermissionGate entity="guards" action="read" showMessage={true}>
+                <GuardsManagement projectId={projectId} />
               </PermissionGate>
             )}
 

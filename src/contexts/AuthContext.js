@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is an approved admin
+  // Check if user is an approved admin or guard
   const checkAdminStatus = async (user) => {
     if (!user) return false;
     
@@ -32,7 +32,27 @@ export function AuthProvider({ children }) {
         return adminData.isActive !== false; // Return true if active (or undefined)
       }
       
-      // If not in approved admins, check if they're pending
+      // If not an admin, check if user is a guard
+      console.log('Not an admin, checking for guard account...');
+      
+      // Search for guard in all projects
+      const projectsRef = collection(db, 'projects');
+      const projectsSnap = await getDocs(projectsRef);
+      
+      for (const projectDoc of projectsSnap.docs) {
+        const guardsRef = collection(db, 'projects', projectDoc.id, 'guards');
+        const guardsQuery = query(guardsRef, where('firebaseUid', '==', user.uid));
+        const guardsSnap = await getDocs(guardsQuery);
+        
+        if (!guardsSnap.empty) {
+          const guardData = guardsSnap.docs[0].data();
+          console.log('Guard account found in project:', projectDoc.id);
+          // Guards are automatically approved
+          return true;
+        }
+      }
+      
+      // If not a guard, check if they're pending admin
       const pendingRef = collection(db, 'pendingAdmins');
       const q = query(pendingRef, where('firebaseUid', '==', user.uid));
       const pendingSnap = await getDocs(q);
@@ -48,7 +68,7 @@ export function AuthProvider({ children }) {
         }
       }
       
-      return false; // Not found in either collection
+      return false; // Not found in any collection
     } catch (error) {
       // Don't log as error for pending/rejected status - this is expected behavior
       if (!error.message.includes('pending approval') && !error.message.includes('rejected')) {

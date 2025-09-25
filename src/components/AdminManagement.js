@@ -24,6 +24,7 @@ const AdminManagement = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [activeTab, setActiveTab] = useState('approved'); // 'approved' or 'pending'
@@ -63,6 +64,7 @@ const AdminManagement = () => {
     try {
       setLoading(true);
       setError(null);
+      setSuccessMessage(null);
       
       const [adminsData, pendingData, projectsData] = await Promise.all([
         getAllAdmins(),
@@ -76,7 +78,8 @@ const AdminManagement = () => {
       setPendingAdmins(pendingData.filter(admin => admin.status === 'pending'));
       setProjects(projectsData);
     } catch (err) {
-      setError(err.message);
+      console.error('Error loading data:', err);
+      setError(`Failed to load data: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -85,6 +88,25 @@ const AdminManagement = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Auto-dismiss notifications
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Filter admins
   const filteredAdmins = admins.filter(admin => {
@@ -137,17 +159,18 @@ const AdminManagement = () => {
     }));
   };
 
-  const handleSelectAllForEntity = (entity) => {
+  const handleSelectAllPermissions = (entity) => {
+    const allActions = Object.values(PERMISSION_ACTIONS);
     setFormData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [entity]: Object.values(PERMISSION_ACTIONS)
+        [entity]: allActions
       }
     }));
   };
 
-  const handleDeselectAllForEntity = (entity) => {
+  const handleDeselectAllPermissions = (entity) => {
     setFormData(prev => ({
       ...prev,
       permissions: {
@@ -157,36 +180,30 @@ const AdminManagement = () => {
     }));
   };
 
-  const handleSelectAllPermissions = () => {
-    const allPermissions = {};
-    Object.values(PERMISSION_ENTITIES).forEach(entity => {
-      allPermissions[entity] = Object.values(PERMISSION_ACTIONS);
-    });
-    setFormData(prev => ({
-      ...prev,
-      permissions: allPermissions
-    }));
+  const isAllPermissionsSelected = (entity) => {
+    const allActions = Object.values(PERMISSION_ACTIONS);
+    const selectedActions = formData.permissions[entity] || [];
+    return allActions.every(action => selectedActions.includes(action));
   };
 
-  const handleDeselectAllPermissions = () => {
-    setFormData(prev => ({
-      ...prev,
-      permissions: {}
-    }));
+  const isAnyPermissionSelected = (entity) => {
+    const selectedActions = formData.permissions[entity] || [];
+    return selectedActions.length > 0;
   };
 
-  // Approval permission handlers
-  const handleApprovalSelectAllForEntity = (entity) => {
+  // Approval-specific helper functions
+  const handleApprovalSelectAllPermissions = (entity) => {
+    const allActions = Object.values(PERMISSION_ACTIONS);
     setApprovalData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [entity]: Object.values(PERMISSION_ACTIONS)
+        [entity]: allActions
       }
     }));
   };
 
-  const handleApprovalDeselectAllForEntity = (entity) => {
+  const handleApprovalDeselectAllPermissions = (entity) => {
     setApprovalData(prev => ({
       ...prev,
       permissions: {
@@ -196,22 +213,91 @@ const AdminManagement = () => {
     }));
   };
 
-  const handleApprovalSelectAllPermissions = () => {
+  const isApprovalAllPermissionsSelected = (entity) => {
+    const allActions = Object.values(PERMISSION_ACTIONS);
+    const selectedActions = approvalData.permissions[entity] || [];
+    return allActions.every(action => selectedActions.includes(action));
+  };
+
+  const isApprovalAnyPermissionSelected = (entity) => {
+    const selectedActions = approvalData.permissions[entity] || [];
+    return selectedActions.length > 0;
+  };
+
+  // Select all permissions for all services
+  const handleSelectAllServices = () => {
+    const allEntities = Object.values(PERMISSION_ENTITIES);
+    const allActions = Object.values(PERMISSION_ACTIONS);
     const allPermissions = {};
-    Object.values(PERMISSION_ENTITIES).forEach(entity => {
-      allPermissions[entity] = Object.values(PERMISSION_ACTIONS);
+    
+    allEntities.forEach(entity => {
+      allPermissions[entity] = [...allActions];
     });
-    setApprovalData(prev => ({
+    
+    setFormData(prev => ({
       ...prev,
       permissions: allPermissions
     }));
   };
 
-  const handleApprovalDeselectAllPermissions = () => {
-    setApprovalData(prev => ({
+  // Deselect all permissions for all services
+  const handleDeselectAllServices = () => {
+    setFormData(prev => ({
       ...prev,
       permissions: {}
     }));
+  };
+
+  // Check if all services have all permissions selected
+  const isAllServicesSelected = () => {
+    const allEntities = Object.values(PERMISSION_ENTITIES);
+    const allActions = Object.values(PERMISSION_ACTIONS);
+    
+    return allEntities.every(entity => {
+      const selectedActions = formData.permissions[entity] || [];
+      return allActions.every(action => selectedActions.includes(action));
+    });
+  };
+
+  // Check if any service has any permissions selected
+  const isAnyServiceSelected = () => {
+    const allEntities = Object.values(PERMISSION_ENTITIES);
+    return allEntities.some(entity => {
+      const selectedActions = formData.permissions[entity] || [];
+      return selectedActions.length > 0;
+    });
+  };
+
+  // Validate that all required permissions are assigned
+  const validatePermissions = (permissions) => {
+    const allEntities = Object.values(PERMISSION_ENTITIES);
+    const allActions = Object.values(PERMISSION_ACTIONS);
+    
+    // Check if any entity has permissions assigned
+    const hasAnyPermissions = allEntities.some(entity => 
+      permissions[entity] && permissions[entity].length > 0
+    );
+    
+    if (!hasAnyPermissions) {
+      return { isValid: false, message: 'At least one permission must be assigned' };
+    }
+    
+    // Check if all assigned permissions are valid
+    for (const [entity, actions] of Object.entries(permissions)) {
+      if (actions && actions.length > 0) {
+        if (!allEntities.includes(entity)) {
+          return { isValid: false, message: `Invalid entity: ${entity}` };
+        }
+        
+        for (const action of actions) {
+          if (!allActions.includes(action)) {
+            return { isValid: false, message: `Invalid action: ${action} for entity: ${entity}` };
+          }
+        }
+      }
+    }
+    
+    return { isValid: true };
   };
 
   const resetForm = () => {
@@ -258,11 +344,25 @@ const AdminManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Clear previous errors and messages
+    setFormErrors({});
+    setError(null);
+    setSuccessMessage(null);
+    
     // Validate form data
     const validation = validateAdminData(formData);
     if (!validation.isValid) {
       setFormErrors(validation.errors);
       return;
+    }
+
+    // Additional permission validation for custom accounts
+    if (formData.accountType === ADMIN_TYPES.CUSTOM) {
+      const permissionValidation = validatePermissions(formData.permissions);
+      if (!permissionValidation.isValid) {
+        setFormErrors(prev => ({ ...prev, permissions: permissionValidation.message }));
+        return;
+      }
     }
 
     try {
@@ -274,17 +374,18 @@ const AdminManagement = () => {
         setAdmins(prev => prev.map(admin => 
           admin.id === editingAdmin.id ? { ...admin, ...formData } : admin
         ));
-        alert('Admin updated successfully!');
+        setSuccessMessage('Admin updated successfully!');
+        closeAllModals();
       } else {
         // Create new admin
         const newAdmin = await createAdmin(formData);
         setAdmins(prev => [newAdmin, ...prev]);
-        // Alert is now shown in the service
+        setSuccessMessage('Admin created successfully!');
+        closeAllModals();
       }
-      
-      closeAllModals();
     } catch (err) {
-      setError(err.message);
+      console.error('Error submitting form:', err);
+      setError(`Failed to ${editingAdmin ? 'update' : 'create'} admin: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -292,23 +393,30 @@ const AdminManagement = () => {
 
   const handleDelete = async (adminId) => {
     try {
+      setError(null);
+      setSuccessMessage(null);
       await deleteAdmin(adminId);
       setAdmins(prev => prev.filter(admin => admin.id !== adminId));
       setDeleteConfirm(null);
+      setSuccessMessage('Admin deleted successfully!');
     } catch (err) {
-      setError(err.message);
+      console.error('Error deleting admin:', err);
+      setError(`Failed to delete admin: ${err.message}`);
     }
   };
 
   const handleToggleActive = async (adminId, isActive) => {
     try {
+      setError(null);
+      setSuccessMessage(null);
       await updateAdmin(adminId, { isActive: !isActive });
       setAdmins(prev => prev.map(admin => 
         admin.id === adminId ? { ...admin, isActive: !isActive } : admin
       ));
-      alert(`Admin ${!isActive ? 'activated' : 'deactivated'} successfully!`);
+      setSuccessMessage(`Admin ${!isActive ? 'activated' : 'deactivated'} successfully!`);
     } catch (err) {
-      setError(err.message);
+      console.error('Error toggling admin status:', err);
+      setError(`Failed to ${!isActive ? 'activate' : 'deactivate'} admin: ${err.message}`);
     }
   };
 
@@ -331,15 +439,27 @@ const AdminManagement = () => {
   };
 
   const handleApprove = async () => {
-    // Validate approval data
-    const validation = validateApprovalData(approvalData);
-    if (!validation.isValid) {
-      setApprovalErrors(validation.errors);
-      return;
-    }
-
     try {
       setSubmitting(true);
+      setError(null);
+      setSuccessMessage(null);
+      setApprovalErrors({});
+      
+      // Validate approval data
+      const validation = validateApprovalData(approvalData);
+      if (!validation.isValid) {
+        setApprovalErrors(validation.errors);
+        return;
+      }
+
+      // Additional permission validation for custom accounts
+      if (approvalData.accountType === ADMIN_TYPES.CUSTOM) {
+        const permissionValidation = validatePermissions(approvalData.permissions);
+        if (!permissionValidation.isValid) {
+          setApprovalErrors(prev => ({ ...prev, permissions: permissionValidation.message }));
+          return;
+        }
+      }
       
       await approvePendingAdmin(selectedPendingAdmin.id, {
         ...approvalData,
@@ -348,11 +468,12 @@ const AdminManagement = () => {
       
       // Refresh data
       await loadData();
+      setSuccessMessage('Admin request approved successfully!');
       closeAllModals();
-      alert('Admin request approved successfully!');
       
     } catch (err) {
-      setError(err.message);
+      console.error('Error approving admin:', err);
+      setError(`Failed to approve admin: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -361,16 +482,24 @@ const AdminManagement = () => {
   const handleReject = async () => {
     try {
       setSubmitting(true);
+      setError(null);
+      setSuccessMessage(null);
+      
+      if (!rejectionReason.trim()) {
+        setError('Please provide a reason for rejection');
+        return;
+      }
       
       await rejectPendingAdmin(selectedPendingAdmin.id, 'current-super-admin', rejectionReason);
       
       // Refresh data
       await loadData();
+      setSuccessMessage('Admin request rejected successfully!');
       closeAllModals();
-      alert('Admin request rejected.');
       
     } catch (err) {
-      setError(err.message);
+      console.error('Error rejecting admin:', err);
+      setError(`Failed to reject admin: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -429,6 +558,57 @@ const AdminManagement = () => {
           <p className="text-gray-600">Manage admin accounts, permissions, and pending requests</p>
         </div>
       </div>
+
+      {/* Notifications */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">{successMessage}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-green-400 hover:text-green-600"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -668,10 +848,14 @@ const AdminManagement = () => {
           onInputChange={handleInputChange}
           onProjectToggle={handleProjectToggle}
           onPermissionToggle={handlePermissionToggle}
-          onSelectAllForEntity={handleSelectAllForEntity}
-          onDeselectAllForEntity={handleDeselectAllForEntity}
           onSelectAllPermissions={handleSelectAllPermissions}
           onDeselectAllPermissions={handleDeselectAllPermissions}
+          isAllPermissionsSelected={isAllPermissionsSelected}
+          isAnyPermissionSelected={isAnyPermissionSelected}
+          onSelectAllServices={handleSelectAllServices}
+          onDeselectAllServices={handleDeselectAllServices}
+          isAllServicesSelected={isAllServicesSelected}
+          isAnyServiceSelected={isAnyServiceSelected}
           onSubmit={handleSubmit}
           onClose={closeModals}
           submitting={submitting}
@@ -710,10 +894,10 @@ const AdminManagement = () => {
               }
             }));
           }}
-          onSelectAllForEntity={handleApprovalSelectAllForEntity}
-          onDeselectAllForEntity={handleApprovalDeselectAllForEntity}
           onSelectAllPermissions={handleApprovalSelectAllPermissions}
           onDeselectAllPermissions={handleApprovalDeselectAllPermissions}
+          isAllPermissionsSelected={isApprovalAllPermissionsSelected}
+          isAnyPermissionSelected={isApprovalAnyPermissionSelected}
           onApprove={handleApprove}
           onClose={closeAllModals}
           submitting={submitting}
@@ -754,10 +938,14 @@ const AdminForm = ({
   onInputChange,
   onProjectToggle,
   onPermissionToggle,
-  onSelectAllForEntity,
-  onDeselectAllForEntity,
   onSelectAllPermissions,
   onDeselectAllPermissions,
+  isAllPermissionsSelected,
+  isAnyPermissionSelected,
+  onSelectAllServices,
+  onDeselectAllServices,
+  isAllServicesSelected,
+  isAnyServiceSelected,
   onSubmit,
   onClose,
   submitting
@@ -918,45 +1106,58 @@ const AdminForm = ({
                 <label className="block text-sm font-medium text-gray-700">
                   Permissions *
                 </label>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                   <button
                     type="button"
-                    onClick={onSelectAllPermissions}
-                    className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                    onClick={isAllServicesSelected() ? onDeselectAllServices : onSelectAllServices}
+                    className={`px-3 py-1 text-sm rounded-lg border transition-colors ${
+                      isAllServicesSelected() 
+                        ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
+                        : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                    }`}
                   >
-                    Select All
+                    {isAllServicesSelected() ? 'Deselect All Services' : 'Select All Services'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={onDeselectAllPermissions}
-                    className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                  >
-                    Deselect All
-                  </button>
+                  {isAnyServiceSelected() && !isAllServicesSelected() && (
+                    <button
+                      type="button"
+                      onClick={onDeselectAllServices}
+                      className="px-3 py-1 text-sm text-red-600 hover:text-red-800 underline"
+                    >
+                      Clear All
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="space-y-4">
                 {Object.entries(PERMISSION_ENTITIES).map(([entityKey, entityValue]) => (
                   <div key={entityKey} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium text-gray-900 capitalize">
                         {entityValue.replace('_', ' ')}
                       </h4>
-                      <div className="flex space-x-1">
-                        <button
-                          type="button"
-                          onClick={() => onSelectAllForEntity(entityValue)}
-                          className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                        >
-                          All
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeselectAllForEntity(entityValue)}
-                          className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-                        >
-                          None
-                        </button>
+                      <div className="flex items-center space-x-2">
+                        <label className="flex items-center text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={isAllPermissionsSelected(entityValue)}
+                            onChange={() => isAllPermissionsSelected(entityValue) 
+                              ? onDeselectAllPermissions(entityValue)
+                              : onSelectAllPermissions(entityValue)
+                            }
+                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2">Select All</span>
+                        </label>
+                        {isAnyPermissionSelected(entityValue) && !isAllPermissionsSelected(entityValue) && (
+                          <button
+                            type="button"
+                            onClick={() => onDeselectAllPermissions(entityValue)}
+                            className="text-xs text-red-600 hover:text-red-800 underline"
+                          >
+                            Clear All
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1013,6 +1214,10 @@ const ApprovalModal = ({
   onInputChange,
   onProjectToggle,
   onPermissionToggle,
+  onSelectAllPermissions,
+  onDeselectAllPermissions,
+  isAllPermissionsSelected,
+  isAnyPermissionSelected,
   onApprove,
   onClose,
   submitting
@@ -1083,9 +1288,34 @@ const ApprovalModal = ({
               <div className="space-y-4">
                 {Object.entries(PERMISSION_ENTITIES).map(([entityKey, entityValue]) => (
                   <div key={entityKey} className="border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2 capitalize">
-                      {entityValue.replace('_', ' ')}
-                    </h4>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-900 capitalize">
+                        {entityValue.replace('_', ' ')}
+                      </h4>
+                      <div className="flex items-center space-x-2">
+                        <label className="flex items-center text-sm text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={isAllPermissionsSelected(entityValue)}
+                            onChange={() => isAllPermissionsSelected(entityValue) 
+                              ? onDeselectAllPermissions(entityValue)
+                              : onSelectAllPermissions(entityValue)
+                            }
+                            className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2">Select All</span>
+                        </label>
+                        {isAnyPermissionSelected(entityValue) && !isAllPermissionsSelected(entityValue) && (
+                          <button
+                            type="button"
+                            onClick={() => onDeselectAllPermissions(entityValue)}
+                            className="text-xs text-red-600 hover:text-red-800 underline"
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {Object.values(PERMISSION_ACTIONS).map((action) => (
                         <label key={action} className="flex items-center">

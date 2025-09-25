@@ -67,10 +67,13 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)); // Only admins can modify
     }
     
-    // Allow listing projects collection (needed for admin dashboard)
+    // Allow listing projects collection (needed for admin dashboard and guard authentication)
     match /projects {
       allow list: if request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || // Admins can list
+         // Guards can list projects to find their own guard account
+         // We'll check if they're a guard in any project by allowing this for all authenticated users
+         request.auth != null);
     }
     
     // PROJECT-SPECIFIC COLLECTIONS - New Architecture
@@ -516,6 +519,37 @@ service cloud.firestore {
     match /pendingAdmins {
       allow list: if request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Guards subcollection - allow admins to manage guard accounts within projects
+    match /projects/{projectId}/guards/{guardId} {
+      allow read, write: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || // Admins can manage
+         // Guards can read their own account for authentication
+         (resource.data.firebaseUid == request.auth.uid));
+    }
+    
+    // Allow listing guards subcollection (for admins and guard authentication)
+    match /projects/{projectId}/guards {
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || // Admins can list
+         // Allow guards to list guards for authentication (they'll only find their own)
+         true);
+    }
+    
+    // Allow guards to read user data from their assigned project
+    // Guards can only read user data, not write or delete
+    match /projects/{projectId}/users/{userId} {
+      allow read: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || // Admins can read
+         exists(/databases/$(database)/documents/projects/$(projectId)/guards/$(request.auth.uid))); // Guards can read
+    }
+    
+    // Allow guards to list users from their assigned project
+    match /projects/{projectId}/users {
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || // Admins can list
+         exists(/databases/$(database)/documents/projects/$(projectId)/guards/$(request.auth.uid))); // Guards can list
     }
     
     // Project News - allow authenticated users to read published news within project

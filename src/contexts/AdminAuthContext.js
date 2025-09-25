@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 
@@ -39,27 +39,75 @@ export const AdminAuthProvider = ({ children }) => {
           setError(null);
         }
         
-        // Get admin data from Firestore using Firebase UID
+        // First check if user is an admin
         const adminRef = doc(db, 'admins', currentUser.uid);
         const adminSnap = await getDoc(adminRef);
         
-        if (isMounted) {
-          if (adminSnap.exists()) {
-            const adminData = adminSnap.data();
-            console.log('AdminAuthContext: Admin data loaded successfully', { 
-              id: adminSnap.id, 
-              accountType: adminData.accountType,
-              isActive: adminData.isActive,
-              assignedProjects: adminData.assignedProjects 
-            });
+        if (adminSnap.exists()) {
+          const adminData = adminSnap.data();
+          console.log('AdminAuthContext: Admin data loaded successfully', { 
+            id: adminSnap.id, 
+            accountType: adminData.accountType,
+            isActive: adminData.isActive,
+            assignedProjects: adminData.assignedProjects 
+          });
+          
+          if (isMounted) {
             setCurrentAdmin({
               id: adminSnap.id,
               ...adminData
             });
+          }
+        } else {
+          // If not an admin, check if user is a guard
+          console.log('AdminAuthContext: Not an admin, checking for guard account...');
+          
+          // Search for guard in all projects
+          const projectsRef = collection(db, 'projects');
+          const projectsSnap = await getDocs(projectsRef);
+          
+          let guardFound = false;
+          let guardData = null;
+          let guardProjectId = null;
+          
+          for (const projectDoc of projectsSnap.docs) {
+            const guardsRef = collection(db, 'projects', projectDoc.id, 'guards');
+            const guardsQuery = query(guardsRef, where('firebaseUid', '==', currentUser.uid));
+            const guardsSnap = await getDocs(guardsQuery);
+            
+            if (!guardsSnap.empty) {
+              const guardDoc = guardsSnap.docs[0];
+              guardData = guardDoc.data();
+              guardProjectId = projectDoc.id;
+              guardFound = true;
+              console.log('AdminAuthContext: Guard found in project:', projectDoc.id);
+              break;
+            }
+          }
+          
+          if (guardFound && guardData) {
+            console.log('AdminAuthContext: Guard data loaded successfully', { 
+              id: guardData.id,
+              projectId: guardProjectId,
+              email: guardData.email,
+              role: guardData.role
+            });
+            
+            if (isMounted) {
+              setCurrentAdmin({
+                id: currentUser.uid,
+                ...guardData,
+                projectId: guardProjectId,
+                accountType: 'guard',
+                isActive: true // Guards are automatically active
+              });
+            }
           } else {
-            console.log('AdminAuthContext: Admin account not found for UID:', currentUser.uid);
-            setCurrentAdmin(null);
-            setError('Admin account not found');
+            console.log('AdminAuthContext: Neither admin nor guard account found for UID:', currentUser.uid);
+            if (isMounted) {
+              setCurrentAdmin(null);
+              setError('Access denied. Your account is not approved or active.');
+            }
           }
         }
       } catch (err) {
@@ -99,6 +147,16 @@ export const AdminAuthProvider = ({ children }) => {
   const hasPermission = useCallback((entity, action) => {
     if (!currentAdmin) return false;
     
+    // Handle guard permissions
+    if (currentAdmin.accountType === 'guard') {
+      // Guards can only read user data from their assigned project
+      if (entity === 'users' && action === 'read') {
+        return true;
+      }
+      // Guards cannot access any other entities
+      return false;
+    }
+    
     if (currentAdmin.accountType === 'super_admin') {
       return true;
     }
@@ -123,6 +181,7 @@ export const AdminAuthProvider = ({ children }) => {
         ads: ['read', 'write', 'delete'],
         fines: ['read', 'write', 'delete'],
         support: ['read', 'write', 'delete'],
+        guards: ['read', 'write', 'delete'],
         admin_accounts: ['read']
       };
       
@@ -144,8 +203,13 @@ export const AdminAuthProvider = ({ children }) => {
       return true;
     }
     
+    // Guards can only access their assigned project
+    if (currentAdmin.accountType === 'guard') {
+      return currentAdmin.projectId === projectId;
+    }
+    
     return currentAdmin.assignedProjects?.includes(projectId) || false;
-  }, [currentAdmin?.accountType, currentAdmin?.assignedProjects]);
+  }, [currentAdmin?.accountType, currentAdmin?.assignedProjects, currentAdmin?.projectId]);
 
   // Get filtered projects for current admin
   const getFilteredProjects = useCallback((allProjects) => {
