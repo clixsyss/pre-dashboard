@@ -44,6 +44,7 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
     image: null,
     imageUrl: '',
     status: 'draft', // 'available' or 'draft'
+    timeSlotInterval: 30, // Default 30 minutes
     availability: {
       sunday: { available: true, startTime: '09:00', endTime: '17:00' },
       monday: { available: true, startTime: '09:00', endTime: '17:00' },
@@ -218,6 +219,7 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
       image: null,
       imageUrl: '',
       status: 'draft',
+      timeSlotInterval: 30,
       availability: {
         sunday: { available: true, startTime: '09:00', endTime: '17:00' },
         monday: { available: true, startTime: '09:00', endTime: '17:00' },
@@ -241,6 +243,7 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
       image: null,
       imageUrl: category.imageUrl,
       status: category.status || 'draft',
+      timeSlotInterval: category.timeSlotInterval || 30,
       availability: category.availability
     });
     setShowModal(true);
@@ -520,6 +523,29 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
                     />
                     <span className="status-label available">Available</span>
                   </label>
+                </div>
+              </div>
+
+              {/* Time Slot Configuration */}
+              <div className="form-group">
+                <label className="form-section-label">Time Slot Configuration</label>
+                <div className="time-slot-config">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="timeSlotInterval">Time Slot Interval (minutes)</label>
+                      <select
+                        id="timeSlotInterval"
+                        value={formData.timeSlotInterval}
+                        onChange={(e) => setFormData(prev => ({ ...prev, timeSlotInterval: parseInt(e.target.value) }))}
+                        className="form-input"
+                      >
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="45">45 minutes</option>
+                        <option value="60">60 minutes</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
 

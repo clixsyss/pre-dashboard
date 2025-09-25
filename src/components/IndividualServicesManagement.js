@@ -107,6 +107,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
       newErrors.price = 'Please enter a valid price';
     }
 
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -212,6 +213,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
       setErrors({ submit: 'Failed to delete service. Please try again.' });
     }
   };
+
 
   // Clear success message
   useEffect(() => {
@@ -398,7 +400,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
               </div>
 
               <div className="form-group">
-                <label htmlFor="price">Price (AED) *</label>
+                <label htmlFor="price">Price (EGP) *</label>
                 <div className="price-input">
                   <DollarSign className="h-4 w-4" />
                   <input
@@ -415,6 +417,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
                 </div>
                 {errors.price && <span className="error-text">{errors.price}</span>}
               </div>
+
 
               {/* Status Section */}
               <div className="form-group">
@@ -458,5 +461,80 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
     </div>
   );
 };
+
+// Add CSS styles
+const styles = `
+  .form-section {
+    margin: 24px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+  }
+
+  .form-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 8px 0;
+  }
+
+  .form-section-description {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0 0 16px 0;
+  }
+
+  .time-slot-preview {
+    margin-top: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+  }
+
+  .preview-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .preview-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .preview-slot {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
+}
 
 export default IndividualServicesManagement;

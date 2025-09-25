@@ -388,6 +388,36 @@ const ServiceBookingsManagement = ({ projectId }) => {
     }
   };
 
+  // Generate time slot options based on category configuration
+  const generateTimeSlotOptions = (booking) => {
+    if (!booking || !booking.categoryTimeSlotInterval) return [];
+    
+    // Use category's time slot configuration
+    const startTime = booking.categoryStartTime || '09:00';
+    const endTime = booking.categoryEndTime || '17:00';
+    const interval = booking.categoryTimeSlotInterval || 30;
+    
+    const slots = [];
+    // Use a fixed date to avoid timezone issues
+    const baseDate = new Date('2000-01-01T00:00:00');
+    const start = new Date(baseDate);
+    start.setHours(parseInt(startTime.split(':')[0]), parseInt(startTime.split(':')[1]), 0, 0);
+    
+    const end = new Date(baseDate);
+    end.setHours(parseInt(endTime.split(':')[0]), parseInt(endTime.split(':')[1]), 0, 0);
+    
+    while (start < end) {
+      slots.push(start.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      }));
+      start.setMinutes(start.getMinutes() + interval);
+    }
+    
+    return slots;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -568,6 +598,9 @@ const ServiceBookingsManagement = ({ projectId }) => {
                         <span className="flex items-center">
                           <Calendar className="w-4 h-4 mr-1" />
                           {formatDate(booking.selectedDate)}
+                          {booking.selectedTime && (
+                            <span className="ml-1 text-gray-400">• {booking.selectedTime}</span>
+                          )}
                         </span>
                         <span className="flex items-center">
                           <DollarSign className="w-4 h-4 mr-1" />
@@ -753,12 +786,16 @@ const ServiceBookingsManagement = ({ projectId }) => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Time</label>
-                    <input
-                      type="time"
+                    <select
                       value={updateData.selectedTime}
                       onChange={(e) => setUpdateData({...updateData, selectedTime: e.target.value})}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    >
+                      <option value="">Select time slot</option>
+                      {generateTimeSlotOptions(selectedBooking).map((time) => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Reason for Changes</label>
@@ -868,7 +905,15 @@ const ServiceBookingsManagement = ({ projectId }) => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Scheduled Time:</span>
-                        <span className="font-medium">{selectedBooking.selectedTime || 'Not specified'}</span>
+                        <span className="font-medium">
+                          {selectedBooking.selectedTime ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                              {selectedBooking.selectedTime}
+                            </span>
+                          ) : (
+                            'Not specified'
+                          )}
+                        </span>
                       </div>
                     </div>
                   </div>
