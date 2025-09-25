@@ -390,13 +390,24 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
   // Generate time slot options based on category configuration
   const generateTimeSlotOptions = (booking) => {
-    if (!booking || !booking.categoryTimeSlotInterval) return [];
+    if (!booking) return [];
     
-    // Use category's time slot configuration
-    const startTime = booking.categoryStartTime || '09:00';
-    const endTime = booking.categoryEndTime || '17:00';
-    const interval = booking.categoryTimeSlotInterval || 30;
+    // Check if booking has new category-level time slot configuration
+    if (booking.categoryTimeSlotInterval) {
+      // Use category's time slot configuration from booking
+      const startTime = booking.categoryStartTime || '09:00';
+      const endTime = booking.categoryEndTime || '17:00';
+      const interval = booking.categoryTimeSlotInterval || 30;
+      
+      return generateTimeSlots(startTime, endTime, interval);
+    }
     
+    // Fallback: Use default time slots for older bookings
+    return generateTimeSlots('09:00', '17:00', 30);
+  };
+
+  // Helper function to generate time slots
+  const generateTimeSlots = (startTime, endTime, interval) => {
     const slots = [];
     // Use a fixed date to avoid timezone issues
     const baseDate = new Date('2000-01-01T00:00:00');
