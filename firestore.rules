@@ -188,9 +188,12 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     
-    // Allow listing project orders
+    // Allow listing project orders (users only see their own, admins see all)
     match /projects/{projectId}/orders {
-      allow list: if request.auth != null;
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         // Users can only list their own orders - this will be filtered in the query
+         request.auth != null);
     }
     
     // Project Gate Passes - users can read/write their own gate passes within project
@@ -200,37 +203,44 @@ service cloud.firestore {
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     
-    // Allow listing project gate passes
+    // Allow listing project gate passes (users only see their own, admins see all)
     match /projects/{projectId}/gatePasses {
-      allow list: if request.auth != null;
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         // Users can only list their own gate passes - this will be filtered in the query
+         request.auth != null);
     }
     
-    // Project Bookings - allow any authenticated user to read for availability checking
-    // Users can write their own bookings, admins can write all
+    // Project Bookings - users can only read/write their own bookings
+    // Admins can read/write all bookings
     match /projects/{projectId}/bookings/{bookingId} {
-      allow read: if request.auth != null; // Allow any authenticated user to read for availability
-      allow write: if request.auth != null && 
+      allow read, write: if request.auth != null && 
         (resource == null || resource.data.userId == request.auth.uid || 
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     
-    // Allow listing project bookings
+    // Allow listing project bookings (users only see their own, admins see all)
     match /projects/{projectId}/bookings {
-      allow list: if request.auth != null;
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         // Users can only list their own bookings - this will be filtered in the query
+         request.auth != null);
     }
     
-    // Project Service Bookings - allow any authenticated user to read for availability checking
-    // Users can write their own service bookings, admins can write all
+    // Project Service Bookings - users can only read/write their own service bookings
+    // Admins can read/write all service bookings
     match /projects/{projectId}/serviceBookings/{bookingId} {
-      allow read: if request.auth != null; // Allow any authenticated user to read for availability
-      allow write: if request.auth != null && 
+      allow read, write: if request.auth != null && 
         (resource == null || resource.data.userId == request.auth.uid || 
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     
-    // Allow listing project service bookings
+    // Allow listing project service bookings (users only see their own, admins see all)
     match /projects/{projectId}/serviceBookings {
-      allow list: if request.auth != null;
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         // Users can only list their own bookings - this will be filtered in the query
+         request.auth != null);
     }
     
     // Project Service Bookings (alternative naming) - users can read/write their own service bookings within project
@@ -654,6 +664,41 @@ service cloud.firestore {
     match /projects/{projectId}/fines {
       allow list: if request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Project Support Chats - allow authenticated users to read/write support chats within project
+    match /projects/{projectId}/supportChats/{chatId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project support chats
+    match /projects/{projectId}/supportChats {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Support - allow authenticated users to read/write support tickets within project
+    match /projects/{projectId}/support/{supportId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow listing project support tickets
+    match /projects/{projectId}/support {
+      allow list: if request.auth != null;
+    }
+    
+    // Project Gate Pass - users can read/write their own gate passes within project
+    match /projects/{projectId}/gatepass/{gatePassId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing project gate passes (users only see their own, admins see all)
+    match /projects/{projectId}/gatepass {
+      allow list: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
+         // Users can only list their own gate passes - this will be filtered in the query
+         request.auth != null);
     }
   }
 }

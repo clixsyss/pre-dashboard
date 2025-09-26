@@ -380,27 +380,27 @@ const ProjectDashboard = () => {
     ).length || 0;
     setPendingGatePassCount(pendingGatePass);
 
-    // Debug logging
-    console.log('Notification counts:', {
-      pendingUsersCount,
-      upcomingBookingsCount,
-      pendingServiceRequestsCount,
-      pendingOrdersCount,
-      unreadNotificationsCount,
-      openComplaintsCount,
-      openSupportTicketsCount,
-      pendingFinesCount,
-      pendingGatePassCount,
-      projectBookings: projectBookings?.length || 0,
-      projectOrders: projectOrders?.length || 0,
-      notifications: notifications?.length || 0,
-      complaints: complaints?.length || 0,
-      supportTickets: supportTickets?.length || 0,
-      fines: fines?.length || 0,
-      gatePasses: gatePasses?.length || 0,
-      serviceBookings: serviceBookings?.length || 0,
-      serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
-    });
+    // Debug logging (uncomment for debugging)
+    // console.log('Notification counts:', {
+    //   pendingUsersCount,
+    //   upcomingBookingsCount,
+    //   pendingServiceRequestsCount,
+    //   pendingOrdersCount,
+    //   unreadNotificationsCount,
+    //   openComplaintsCount,
+    //   openSupportTicketsCount,
+    //   pendingFinesCount,
+    //   pendingGatePassCount,
+    //   projectBookings: projectBookings?.length || 0,
+    //   projectOrders: projectOrders?.length || 0,
+    //   notifications: notifications?.length || 0,
+    //   complaints: complaints?.length || 0,
+    //   supportTickets: supportTickets?.length || 0,
+    //   fines: fines?.length || 0,
+    //   gatePasses: gatePasses?.length || 0,
+    //   serviceBookings: serviceBookings?.length || 0,
+    //   serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
+    // });
   }, [projectUsers, projectBookings, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings]);
 
   // Count pending users (legacy function for compatibility)
