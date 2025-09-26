@@ -38,6 +38,7 @@ const Users = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active'); // active, deleted, all
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -50,7 +51,15 @@ const Users = () => {
 
   const filterUsers = useCallback(() => {
     let filtered = users;
-    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter });
+    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter, statusFilter });
+
+    // Apply status filter (active, deleted, all)
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(user => !user.isDeleted);
+    } else if (statusFilter === 'deleted') {
+      filtered = filtered.filter(user => user.isDeleted);
+    }
+    // If statusFilter === 'all', show all users
 
     // Apply search filter
     if (searchTerm) {
@@ -77,7 +86,7 @@ const Users = () => {
 
     console.log('Filtered users result:', filtered.length);
     setFilteredUsers(filtered);
-  }, [users, searchTerm, roleFilter]);
+  }, [users, searchTerm, roleFilter, statusFilter]);
 
   useEffect(() => {
     fetchUsers();
@@ -111,14 +120,39 @@ const Users = () => {
     if (!userToDelete) return;
     
     try {
-      await deleteDoc(doc(db, 'users', userToDelete.id));
+      // Perform soft delete - mark user as deleted and remove from all projects
+      const softDeleteData = {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: localStorage.getItem('adminUserId') || 'admin',
+        // Clear all projects to disable access to all projects
+        projects: [],
+        // Update registration status to indicate deletion
+        registrationStatus: 'deleted',
+        updatedAt: new Date()
+      };
+
+      // Update user document with soft delete data
+      await userService.updateUser(userToDelete.id, softDeleteData);
       
-      // Remove from local state
-      setUsers(users.filter(user => user.id !== userToDelete.id));
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userToDelete.id 
+            ? { ...user, ...softDeleteData }
+            : user
+        )
+      );
+
       setShowDeleteModal(false);
       setUserToDelete(null);
+      
+      // Refresh filtered users
+      filterUsers();
+      
+      console.log('User soft deleted successfully');
     } catch (err) {
-      console.error('Error deleting user:', err);
+      console.error('Error soft deleting user:', err);
       showError('Failed to delete user');
     }
   };
@@ -224,6 +258,41 @@ const Users = () => {
     }
   };
 
+  const handleRestoreUser = async (user) => {
+    try {
+      const restoreData = {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        restoredAt: new Date(),
+        restoredBy: localStorage.getItem('adminUserId') || 'admin',
+        // Restore registration status to pending for re-approval
+        registrationStatus: 'pending',
+        updatedAt: new Date()
+      };
+
+      // Update user in Firestore
+      await userService.updateUser(user.id, restoreData);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === user.id 
+            ? { ...u, ...restoreData }
+            : u
+        )
+      );
+
+      // Refresh filtered users
+      filterUsers();
+      
+      console.log('User restored successfully');
+    } catch (error) {
+      console.error('Error restoring user:', error);
+      showError('Failed to restore user. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -290,6 +359,19 @@ const Users = () => {
               <option value="user">User</option>
               <option value="admin">Admin</option>
               <option value="moderator">Moderator</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="sm:w-48">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="active">Active Users</option>
+              <option value="deleted">Deleted Users</option>
+              <option value="all">All Users</option>
             </select>
           </div>
         </div>
@@ -409,7 +491,12 @@ const Users = () => {
                       {user.role || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {user.isSuspended ? (
+                      {user.isDeleted ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <UserX className="h-3 w-3 mr-1" />
+                          Deleted
+                        </span>
+                      ) : user.isSuspended ? (
                         <div className="flex items-center space-x-2">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <UserX className="h-3 w-3 mr-1" />
@@ -437,37 +524,54 @@ const Users = () => {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => openUserModal(user)}
-                          className="text-gray-600 hover:text-gray-900 p-1 rounded"
-                          title="Edit User"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        {user.isSuspended ? (
+                        
+                        {/* Only show edit/suspend/delete actions for non-deleted users */}
+                        {!user.isDeleted && (
+                          <>
+                            <button
+                              onClick={() => openUserModal(user)}
+                              className="text-gray-600 hover:text-gray-900 p-1 rounded"
+                              title="Edit User"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            {user.isSuspended ? (
+                              <button
+                                onClick={() => handleUnsuspendUser(user)}
+                                className="text-green-600 hover:text-green-900 p-1 rounded"
+                                title="Unsuspend User"
+                              >
+                                <UserCheck className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openSuspendModal(user)}
+                                className="text-orange-600 hover:text-orange-900 p-1 rounded"
+                                title="Suspend User"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openDeleteModal(user)}
+                              className="text-red-600 hover:text-red-900 p-1 rounded"
+                              title="Delete User"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Show restore option for deleted users */}
+                        {user.isDeleted && (
                           <button
-                            onClick={() => handleUnsuspendUser(user)}
+                            onClick={() => handleRestoreUser(user)}
                             className="text-green-600 hover:text-green-900 p-1 rounded"
-                            title="Unsuspend User"
+                            title="Restore User"
                           >
                             <UserCheck className="h-4 w-4" />
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => openSuspendModal(user)}
-                            className="text-orange-600 hover:text-orange-900 p-1 rounded"
-                            title="Suspend User"
-                          >
-                            <UserX className="h-4 w-4" />
-                          </button>
                         )}
-                        <button
-                          onClick={() => openDeleteModal(user)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded"
-                          title="Delete User"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -673,7 +777,21 @@ const Users = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Account Status</label>
-                    {selectedUser.isSuspended ? (
+                    {selectedUser.isDeleted ? (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <UserX className="h-3 w-3 mr-1" />
+                          Deleted
+                        </span>
+                        <div className="mt-2 space-y-1 text-sm text-gray-600">
+                          <div><strong>Deleted At:</strong> {selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : 'N/A'}</div>
+                          <div><strong>Deleted By:</strong> {selectedUser.deletedBy || 'N/A'}</div>
+                          {selectedUser.restoredAt && (
+                            <div><strong>Restored At:</strong> {new Date(selectedUser.restoredAt).toLocaleString()}</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : selectedUser.isSuspended ? (
                       <div className="mt-1">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                           <UserX className="h-3 w-3 mr-1" />
@@ -777,8 +895,8 @@ const Users = () => {
                 <h3 className="text-lg font-medium text-gray-900">Delete User</h3>
                 <div className="mt-2 px-7 py-3">
                   <p className="text-sm text-gray-500">
-                    Are you sure you want to delete <strong>{userToDelete.displayName || userToDelete.email}</strong>? 
-                    This action cannot be undone.
+                    Are you sure you want to delete <strong>{userToDelete.firstName} {userToDelete.lastName}</strong>? 
+                    This will disable their access to all projects but preserve their account data.
                   </p>
                 </div>
                 <div className="items-center px-4 py-3">

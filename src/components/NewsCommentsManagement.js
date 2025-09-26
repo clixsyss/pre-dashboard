@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   MessageSquare, 
-  Filter, 
   Search, 
   Trash2, 
   RotateCcw, 
   Eye, 
-  EyeOff,
   AlertTriangle,
   User,
-  Calendar,
-  MoreVertical,
   Shield
 } from 'lucide-react';
 import { 
-  getNewsComments, 
   getAllProjectComments, 
   deleteComment, 
   restoreComment, 
