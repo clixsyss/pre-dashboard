@@ -73,6 +73,24 @@ const ProjectDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
+  const [pendingBookingsCount, setPendingBookingsCount] = useState(0);
+  const [upcomingBookingsCount, setUpcomingBookingsCount] = useState(0);
+  const [pendingServiceRequestsCount, setPendingServiceRequestsCount] = useState(0);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [openComplaintsCount, setOpenComplaintsCount] = useState(0);
+  const [openSupportTicketsCount, setOpenSupportTicketsCount] = useState(0);
+  const [pendingFinesCount, setPendingFinesCount] = useState(0);
+  const [pendingGatePassCount, setPendingGatePassCount] = useState(0);
+  
+  // Data state for notification counts
+  const [notifications, setNotifications] = useState([]);
+  const [complaints, setComplaints] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [fines, setFines] = useState([]);
+  const [gatePasses, setGatePasses] = useState([]);
+  const [serviceBookings, setServiceBookings] = useState([]);
+  
   const { currentAdmin, hasPermission, hasProjectAccess } = useAdminAuth();
   const navigate = useNavigate();
 
@@ -308,22 +326,208 @@ const ProjectDashboard = () => {
     }
   }, [searchTerm, statusFilter, userStatusFilter, projectUsers]);
 
-  // Count pending users
-  const updatePendingUsersCount = useCallback(() => {
+  // Update all notification counts
+  const updateAllNotificationCounts = useCallback(() => {
+    // Pending users count
     const pendingCount = projectUsers.filter(user => 
       user.approvalStatus === 'pending' && !user.isDeleted
     ).length;
     setPendingUsersCount(pendingCount);
-  }, [projectUsers]);
+
+    // Upcoming bookings count (court/academy bookings that are upcoming)
+    const upcomingBookings = getUpcomingBookings().length;
+    setUpcomingBookingsCount(upcomingBookings);
+
+    // Pending service requests count (service bookings that are pending)
+    const pendingServiceRequests = serviceBookings?.filter(booking => 
+      booking.status === 'pending'
+    ).length || 0;
+    setPendingServiceRequestsCount(pendingServiceRequests);
+
+    // Pending orders count (orders that need processing)
+    const pendingOrders = projectOrders?.filter(order => 
+      order.status === 'pending' || order.status === 'processing'
+    ).length || 0;
+    setPendingOrdersCount(pendingOrders);
+
+    // Unread notifications count (assuming notifications have a read status)
+    const unreadNotifications = notifications?.filter(notification => 
+      !notification.read || notification.read === false
+    ).length || 0;
+    setUnreadNotificationsCount(unreadNotifications);
+
+    // Open complaints count (complaints that are not closed)
+    const openComplaints = complaints?.filter(complaint => 
+      complaint.status === 'open' || complaint.status === 'pending' || complaint.status === 'in_progress'
+    ).length || 0;
+    setOpenComplaintsCount(openComplaints);
+
+    // Open support tickets count (support chats that are open)
+    const openSupportTickets = supportTickets?.filter(ticket => 
+      ticket.status === 'open' || !ticket.status
+    ).length || 0;
+    setOpenSupportTicketsCount(openSupportTickets);
+
+    // Pending fines count (fines that are issued but not paid)
+    const pendingFines = fines?.filter(fine => 
+      fine.status === 'issued' || fine.status === 'disputed'
+    ).length || 0;
+    setPendingFinesCount(pendingFines);
+
+    // Pending gate pass count (gate passes that need approval)
+    const pendingGatePass = gatePasses?.filter(pass => 
+      pass.status === 'pending' || pass.status === 'requested'
+    ).length || 0;
+    setPendingGatePassCount(pendingGatePass);
+
+    // Debug logging
+    console.log('Notification counts:', {
+      pendingUsersCount,
+      upcomingBookingsCount,
+      pendingServiceRequestsCount,
+      pendingOrdersCount,
+      unreadNotificationsCount,
+      openComplaintsCount,
+      openSupportTicketsCount,
+      pendingFinesCount,
+      pendingGatePassCount,
+      projectBookings: projectBookings?.length || 0,
+      projectOrders: projectOrders?.length || 0,
+      notifications: notifications?.length || 0,
+      complaints: complaints?.length || 0,
+      supportTickets: supportTickets?.length || 0,
+      fines: fines?.length || 0,
+      gatePasses: gatePasses?.length || 0,
+      serviceBookings: serviceBookings?.length || 0,
+      serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
+    });
+  }, [projectUsers, projectBookings, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings]);
+
+  // Count pending users (legacy function for compatibility)
+  const updatePendingUsersCount = useCallback(() => {
+    updateAllNotificationCounts();
+  }, [updateAllNotificationCounts]);
+
+  // Get notification count for a specific service
+  const getNotificationCount = useCallback((serviceId) => {
+    switch (serviceId) {
+      case 'users':
+        return pendingUsersCount;
+      case 'services':
+        return pendingServiceRequestsCount; // Pending service requests
+      case 'bookings':
+        return upcomingBookingsCount; // Upcoming court/academy bookings
+      case 'orders':
+        return pendingOrdersCount;
+      case 'events': // notifications
+        return unreadNotificationsCount;
+      case 'complaints':
+        return openComplaintsCount;
+      case 'support':
+        return openSupportTicketsCount;
+      case 'fines':
+        return pendingFinesCount;
+      case 'gatepass':
+        return pendingGatePassCount;
+      default:
+        return 0;
+    }
+  }, [pendingUsersCount, pendingServiceRequestsCount, upcomingBookingsCount, pendingOrdersCount, unreadNotificationsCount, openComplaintsCount, openSupportTicketsCount, pendingFinesCount, pendingGatePassCount]);
 
   useEffect(() => {
     filterUsers();
   }, [filterUsers]);
 
-  // Update pending users count when project users change
+  // Update all notification counts when data changes
+  useEffect(() => {
+    updateAllNotificationCounts();
+  }, [updateAllNotificationCounts]);
+
+  // Update pending users count when project users change (legacy)
   useEffect(() => {
     updatePendingUsersCount();
   }, [updatePendingUsersCount]);
+
+  // Fetch additional data for notification counts
+  const fetchComplaints = useCallback(async (projectId) => {
+    try {
+      const complaintsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/complaints`), orderBy('createdAt', 'desc'))
+      );
+      const complaintsData = complaintsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setComplaints(complaintsData);
+    } catch (error) {
+      console.error('Error fetching complaints:', error);
+      setComplaints([]);
+    }
+  }, []);
+
+  const fetchSupportTickets = useCallback(async (projectId) => {
+    try {
+      const supportSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/support`), orderBy('createdAt', 'desc'))
+      );
+      const supportData = supportSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setSupportTickets(supportData);
+    } catch (error) {
+      console.error('Error fetching support tickets:', error);
+      setSupportTickets([]);
+    }
+  }, []);
+
+  const fetchFines = useCallback(async (projectId) => {
+    try {
+      const finesSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/fines`), orderBy('createdAt', 'desc'))
+      );
+      const finesData = finesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setFines(finesData);
+    } catch (error) {
+      console.error('Error fetching fines:', error);
+      setFines([]);
+    }
+  }, []);
+
+  const fetchGatePasses = useCallback(async (projectId) => {
+    try {
+      const gatePassSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/gatepass`), orderBy('createdAt', 'desc'))
+      );
+      const gatePassData = gatePassSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGatePasses(gatePassData);
+    } catch (error) {
+      console.error('Error fetching gate passes:', error);
+      setGatePasses([]);
+    }
+  }, []);
+
+  const fetchServiceBookings = useCallback(async (projectId) => {
+    try {
+      const serviceBookingsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/serviceBookings`), orderBy('createdAt', 'desc'))
+      );
+      const serviceBookingsData = serviceBookingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setServiceBookings(serviceBookingsData);
+    } catch (error) {
+      console.error('Error fetching service bookings:', error);
+      setServiceBookings([]);
+    }
+  }, []);
 
   // Load all data upfront for instant dashboard experience
   useEffect(() => {
@@ -334,7 +538,12 @@ const ProjectDashboard = () => {
           await Promise.all([
             fetchBookings(projectId),
             fetchOrders(projectId),
-            fetchNotifications(projectId)
+            fetchNotifications(projectId),
+            fetchComplaints(projectId),
+            fetchSupportTickets(projectId),
+            fetchFines(projectId),
+            fetchGatePasses(projectId),
+            fetchServiceBookings(projectId)
           ]);
           console.log('All dashboard data loaded successfully');
         } catch (error) {
@@ -344,7 +553,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications]);
+  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings]);
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
@@ -354,13 +563,18 @@ const ProjectDashboard = () => {
       await Promise.all([
         fetchBookings(projectId),
         fetchOrders(projectId),
-        fetchNotifications(projectId)
+        fetchNotifications(projectId),
+        fetchComplaints(projectId),
+        fetchSupportTickets(projectId),
+        fetchFines(projectId),
+        fetchGatePasses(projectId),
+        fetchServiceBookings(projectId)
       ]);
       console.log('All data refreshed successfully');
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
-  }, [projectId, fetchBookings, fetchOrders, fetchNotifications]);
+  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings]);
 
   // Reset filters when switching tabs (no data fetching needed)
   useEffect(() => {
@@ -1264,9 +1478,9 @@ const ProjectDashboard = () => {
                         <div className="flex-1">
                           <div className="font-semibold text-base flex items-center justify-between">
                             {item.name}
-                            {item.id === 'users' && pendingUsersCount > 0 && (
+                            {getNotificationCount(item.id) > 0 && (
                               <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse shadow-lg">
-                                {pendingUsersCount}
+                                {getNotificationCount(item.id)}
                               </span>
                             )}
                           </div>
