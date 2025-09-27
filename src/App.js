@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -8,7 +8,6 @@ import Users from './pages/Users';
 import Projects from './pages/Projects';
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
-import TestComponent from './components/TestComponent';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminManagement from './components/AdminManagement';
 import Layout from './components/Layout';
@@ -16,78 +15,8 @@ import NotificationContainer from './components/NotificationContainer';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { currentUser, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-pre-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
-          <p className="text-pre-black text-lg">Loading...</p>
-          <p className="text-gray-500 text-sm mt-2">Please wait while we verify your authentication</p>
-        </div>
-      </div>
-    );
-  }
 
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-};
-
-// Admin Protected Route Component
-const AdminProtectedRoute = ({ children }) => {
-  const { currentAdmin, loading } = useAdminAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-pre-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
-          <p className="text-pre-black text-lg">Loading...</p>
-          <p className="text-gray-500 text-sm mt-2">Please wait while we verify your admin access</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentAdmin) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
-};
-
-// Super Admin Protected Route Component
-const SuperAdminProtectedRoute = ({ children }) => {
-  const { currentAdmin, loading, isSuperAdmin } = useAdminAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-pre-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pre-red mx-auto mb-4"></div>
-          <p className="text-pre-black text-lg">Loading...</p>
-          <p className="text-gray-500 text-sm mt-2">Please wait while we verify your admin access</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentAdmin) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!isSuperAdmin()) {
-    return <Navigate to="/project-selection" replace />;
-  }
-
-  return children;
-};
 
 // Main App Router Component - handles routing based on admin type
 const AppRouter = () => {
@@ -105,7 +34,7 @@ const AppRouter = () => {
     const result = isSuperAdmin();
     console.log('AppRouter: isSuperAdmin check result:', result);
     return result;
-  }, [currentAdmin?.accountType]);
+  }, [isSuperAdmin]);
 
   if (loading) {
     console.log('AppRouter: Still loading admin data...');

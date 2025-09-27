@@ -667,7 +667,7 @@ const ProjectDashboard = () => {
   };
 
   // Separate upcoming and past bookings
-  const getUpcomingBookings = () => {
+  const getUpcomingBookings = useCallback(() => {
     const filtered = getFilteredBookings();
     const now = new Date();
 
@@ -691,7 +691,7 @@ const ProjectDashboard = () => {
       // If no date but status is pending or confirmed, consider it upcoming
       return booking.status === 'pending' || booking.status === 'confirmed';
     });
-  };
+  }, [getFilteredBookings]);
 
   const getPastBookings = () => {
     const filtered = getFilteredBookings();

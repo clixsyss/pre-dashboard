@@ -193,7 +193,7 @@ export const AdminAuthProvider = ({ children }) => {
     }
     
     return false;
-  }, [currentAdmin?.accountType, currentAdmin?.permissions]);
+  }, [currentAdmin]);
 
   // Check if admin has access to project
   const hasProjectAccess = useCallback((projectId) => {

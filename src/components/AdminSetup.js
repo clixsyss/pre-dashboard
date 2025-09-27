@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +10,7 @@ const AdminSetup = () => {
   const [message, setMessage] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     if (!currentUser) return;
     
     try {
@@ -36,7 +36,7 @@ const AdminSetup = () => {
       console.error('Error checking admin status:', error);
       setMessage('❌ Error checking admin status');
     }
-  };
+  }, [currentUser]);
 
   const addAsAdmin = async () => {
     if (!currentUser) return;

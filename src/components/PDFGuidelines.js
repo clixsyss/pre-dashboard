@@ -1,19 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Plus, 
   Edit, 
   Trash2, 
   Search, 
-  Filter, 
   FileText, 
   Calendar,
-  User,
   Eye,
   Save,
   X,
   AlertCircle,
-  CheckCircle,
-  Clock,
   Upload,
   Download,
   File
@@ -82,7 +77,7 @@ const PDFGuidelines = ({ projectId }) => {
     filterGuidelines();
   }, [pdfGuidelines, searchTerm, categoryFilter]);
 
-  const fetchPDFGuidelines = async () => {
+  const fetchPDFGuidelines = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -94,9 +89,9 @@ const PDFGuidelines = ({ projectId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
-  const filterGuidelines = () => {
+  const filterGuidelines = useCallback(() => {
     let filtered = pdfGuidelines;
 
     // Filter by search term
@@ -115,7 +110,7 @@ const PDFGuidelines = ({ projectId }) => {
     }
 
     setFilteredGuidelines(filtered);
-  };
+  }, [pdfGuidelines, searchTerm, categoryFilter]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);

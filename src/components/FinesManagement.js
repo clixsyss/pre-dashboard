@@ -9,7 +9,6 @@ import {
   XCircle, 
   AlertTriangle,
   DollarSign,
-  Calendar,
   User,
   Upload,
   X
@@ -85,6 +84,16 @@ const FinesManagement = ({ projectId }) => {
     }
   }, [projectId]);
 
+  // Setup real-time chat listener
+  const setupChatListener = useCallback((fineId) => {
+    return onFineChange(projectId, fineId, (updatedFine) => {
+      if (updatedFine) {
+        setChatMessages(updatedFine.messages || []);
+        setSelectedFine(updatedFine);
+      }
+    });
+  }, [projectId]);
+
   useEffect(() => {
     loadFines();
   }, [loadFines]);
@@ -102,7 +111,7 @@ const FinesManagement = ({ projectId }) => {
         unsubscribe();
       }
     };
-  }, [showChat, selectedFine]);
+  }, [showChat, selectedFine, setupChatListener]);
 
   // Filter fines
   useEffect(() => {
@@ -293,16 +302,6 @@ const FinesManagement = ({ projectId }) => {
     }
     setSelectedImage(null);
     setImagePreview('');
-  };
-
-  // Setup real-time chat listener
-  const setupChatListener = (fineId) => {
-    return onFineChange(projectId, fineId, (updatedFine) => {
-      if (updatedFine) {
-        setChatMessages(updatedFine.messages || []);
-        setSelectedFine(updatedFine);
-      }
-    });
   };
 
   // Format currency

@@ -11,12 +11,10 @@ import {
   Phone,
   Mail,
   Award,
-  Upload,
-  Image,
   Camera
 } from 'lucide-react';
 import { useAcademyStore } from '../stores/academyStore';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
 
 const AcademiesManagement = ({ projectId }) => {

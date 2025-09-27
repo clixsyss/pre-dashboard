@@ -23,7 +23,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { storage } from '../config/firebase';
 
 const CourtsManagement = ({ projectId }) => {
-  const { success, error: showError } = useUINotificationStore();
+  const { error: showError } = useUINotificationStore();
   const {
     courts,
     loading,

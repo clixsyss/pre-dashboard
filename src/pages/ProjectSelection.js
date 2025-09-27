@@ -18,7 +18,6 @@ const ProjectSelection = () => {
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProject, setSelectedProject] = useState(null);
   const navigate = useNavigate();
   const { currentAdmin, getFilteredProjects, loading: adminLoading } = useAdminAuth();
   const { logout } = useAuth();
@@ -135,7 +134,6 @@ const ProjectSelection = () => {
   }, [searchTerm, projects, currentAdmin?.assignedProjects]);
 
   const handleProjectSelect = (project) => {
-    setSelectedProject(project);
     // Store selected project in localStorage for persistence
     localStorage.setItem('adminSelectedProject', JSON.stringify(project));
     // Navigate to project management page

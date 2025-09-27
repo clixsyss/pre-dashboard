@@ -12,8 +12,6 @@ import {
   UserX,
   UserCheck
 } from 'lucide-react';
-import { doc } from 'firebase/firestore';
-import { db } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
 import userService from '../services/userService';
 
