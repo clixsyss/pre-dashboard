@@ -479,7 +479,7 @@ const ProjectDashboard = () => {
     //   serviceBookings: serviceBookings?.length || 0,
     //   serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
     // });
-  }, [projectUsers, projectBookings, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, getUpcomingBookings]);
+  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, getUpcomingBookings]);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
