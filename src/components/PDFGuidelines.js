@@ -65,18 +65,6 @@ const PDFGuidelines = ({ projectId }) => {
     { value: 'high', label: 'High', color: 'bg-red-100 text-red-800' }
   ];
 
-  // Load guidelines on component mount
-  useEffect(() => {
-    if (projectId) {
-      fetchPDFGuidelines();
-    }
-  }, [projectId, fetchPDFGuidelines]);
-
-  // Filter guidelines when search term or category changes
-  useEffect(() => {
-    filterGuidelines();
-  }, [pdfGuidelines, searchTerm, categoryFilter, filterGuidelines]);
-
   const fetchPDFGuidelines = useCallback(async () => {
     try {
       setLoading(true);
@@ -111,6 +99,18 @@ const PDFGuidelines = ({ projectId }) => {
 
     setFilteredGuidelines(filtered);
   }, [pdfGuidelines, searchTerm, categoryFilter]);
+
+  // Load guidelines on component mount
+  useEffect(() => {
+    if (projectId) {
+      fetchPDFGuidelines();
+    }
+  }, [projectId, fetchPDFGuidelines]);
+
+  // Filter guidelines when search term or category changes
+  useEffect(() => {
+    filterGuidelines();
+  }, [pdfGuidelines, searchTerm, categoryFilter, filterGuidelines]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);

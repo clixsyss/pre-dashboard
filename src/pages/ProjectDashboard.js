@@ -325,6 +325,85 @@ const ProjectDashboard = () => {
     }
   }, [searchTerm, statusFilter, userStatusFilter, projectUsers]);
 
+  // Filter bookings based on search and filters
+  const getFilteredBookings = useCallback(() => {
+    if (!projectBookings || projectBookings.length === 0) return [];
+        
+    let filtered = [...projectBookings];
+
+    if (bookingSearchTerm) {
+      filtered = filtered.filter(booking =>
+        (booking.userName && booking.userName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
+        (booking.userEmail && booking.userEmail.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
+        (booking.date && booking.date.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
+        (booking.courtName && booking.courtName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
+        (booking.academyName && booking.academyName.toLowerCase().includes(bookingSearchTerm.toLowerCase()))
+      );
+    }
+
+    if (bookingServiceFilter !== 'all') {
+      filtered = filtered.filter(booking => {
+        if (bookingServiceFilter === 'court') {
+          // Check if it's a court booking
+          return booking.type === 'court' || booking.courtId || booking.courtName;
+        } else if (bookingServiceFilter === 'academy') {
+          // Check if it's an academy booking
+          return booking.type === 'academy' || booking.academyId || booking.academyName;
+        }
+        return true;
+      });
+    }
+
+    if (courtFilter !== 'all') {
+      filtered = filtered.filter(booking => {
+        // Only filter court bookings
+        const isCourt = booking.type === 'court' || booking.courtId || booking.courtName;
+        return isCourt && booking.courtName === courtFilter;
+      });
+    }
+
+    if (academyFilter !== 'all') {
+      filtered = filtered.filter(booking => {
+        // Only filter academy bookings
+        const isAcademy = booking.type === 'academy' || booking.academyId || booking.academyName;
+        return isAcademy && (booking.academyName === academyFilter || booking.academyId === academyFilter);
+      });
+    }
+
+    if (bookingStatusFilter !== 'all') {
+      filtered = filtered.filter(booking => booking.status === bookingStatusFilter);
+    }
+
+    return filtered;
+  }, [projectBookings, bookingSearchTerm, bookingServiceFilter, courtFilter, academyFilter, bookingStatusFilter]);
+
+  // Separate upcoming and past bookings
+  const getUpcomingBookings = useCallback(() => {
+    const filtered = getFilteredBookings();
+    const now = new Date();
+
+    return filtered.filter(booking => {
+      // Skip completed or cancelled bookings
+      if (booking.status === 'completed' || booking.status === 'cancelled') {
+        return false;
+      }
+
+      // If booking has a date, check if it's in the future
+      if (booking.date) {
+        try {
+          const bookingDate = new Date(booking.date);
+          return bookingDate >= now;
+        } catch (error) {
+          // If date parsing fails, consider it upcoming
+          return true;
+        }
+      }
+
+      // If no date but status is pending or confirmed, consider it upcoming
+      return booking.status === 'pending' || booking.status === 'confirmed';
+    });
+  }, [getFilteredBookings]);
+
   // Update all notification counts
   const updateAllNotificationCounts = useCallback(() => {
     // Pending users count
@@ -613,85 +692,6 @@ const ProjectDashboard = () => {
       console.log('Store names found:', getUniqueStoreNames());
     }
   }, [projectOrders, getUniqueStoreNames]);
-
-  // Filter bookings based on search and filters
-  const getFilteredBookings = useCallback(() => {
-    if (!projectBookings || projectBookings.length === 0) return [];
-
-    let filtered = [...projectBookings];
-
-    if (bookingSearchTerm) {
-      filtered = filtered.filter(booking =>
-        (booking.userName && booking.userName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.userEmail && booking.userEmail.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.date && booking.date.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.courtName && booking.courtName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.academyName && booking.academyName.toLowerCase().includes(bookingSearchTerm.toLowerCase()))
-      );
-    }
-
-    if (bookingServiceFilter !== 'all') {
-      filtered = filtered.filter(booking => {
-        if (bookingServiceFilter === 'court') {
-          // Check if it's a court booking
-          return booking.type === 'court' || booking.courtId || booking.courtName;
-        } else if (bookingServiceFilter === 'academy') {
-          // Check if it's an academy booking
-          return booking.type === 'academy' || booking.academyId || booking.academyName;
-        }
-        return true;
-      });
-    }
-
-    if (courtFilter !== 'all') {
-      filtered = filtered.filter(booking => {
-        // Only filter court bookings
-        const isCourt = booking.type === 'court' || booking.courtId || booking.courtName;
-        return isCourt && booking.courtName === courtFilter;
-      });
-    }
-
-    if (academyFilter !== 'all') {
-      filtered = filtered.filter(booking => {
-        // Only filter academy bookings
-        const isAcademy = booking.type === 'academy' || booking.academyId || booking.academyName;
-        return isAcademy && (booking.academyName === academyFilter || booking.academyId === academyFilter);
-      });
-    }
-
-    if (bookingStatusFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.status === bookingStatusFilter);
-    }
-
-    return filtered;
-  }, [projectBookings, bookingSearchTerm, bookingServiceFilter, courtFilter, academyFilter, bookingStatusFilter]);
-
-  // Separate upcoming and past bookings
-  const getUpcomingBookings = useCallback(() => {
-    const filtered = getFilteredBookings();
-    const now = new Date();
-
-    return filtered.filter(booking => {
-      // Skip completed or cancelled bookings
-      if (booking.status === 'completed' || booking.status === 'cancelled') {
-        return false;
-      }
-
-      // If booking has a date, check if it's in the future
-      if (booking.date) {
-        try {
-          const bookingDate = new Date(booking.date);
-          return bookingDate >= now;
-        } catch (error) {
-          // If date parsing fails, consider it upcoming
-          return true;
-        }
-      }
-
-      // If no date but status is pending or confirmed, consider it upcoming
-      return booking.status === 'pending' || booking.status === 'confirmed';
-    });
-  }, [getFilteredBookings]);
 
   const getPastBookings = () => {
     const filtered = getFilteredBookings();
