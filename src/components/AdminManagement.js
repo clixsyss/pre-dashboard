@@ -314,10 +314,6 @@ const AdminManagement = () => {
     setFormErrors({});
   };
 
-  const openCreateModal = () => {
-    resetForm();
-    setShowCreateModal(true);
-  };
 
   const openEditModal = (admin) => {
     setFormData({

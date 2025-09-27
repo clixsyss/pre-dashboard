@@ -45,7 +45,6 @@ export function AuthProvider({ children }) {
         const guardsSnap = await getDocs(guardsQuery);
         
         if (!guardsSnap.empty) {
-          const guardData = guardsSnap.docs[0].data();
           console.log('Guard account found in project:', projectDoc.id);
           // Guards are automatically approved
           return true;

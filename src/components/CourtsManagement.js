@@ -16,15 +16,14 @@ import {
   X,
   AlertCircle,
   CheckCircle,
-  Upload,
-  Image,
-  Camera
+  Camera,
+  Image
 } from 'lucide-react';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
 
 const CourtsManagement = ({ projectId }) => {
-  const { success, error: showError, warning, info } = useUINotificationStore();
+  const { success, error: showError } = useUINotificationStore();
   const {
     courts,
     loading,

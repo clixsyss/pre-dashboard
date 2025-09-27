@@ -22,7 +22,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getComprehensiveUserDetails, getUserDetails, getUserProjects } from '../services/userService';
+import { getUserDetails, getUserProjects } from '../services/userService';
 
 const ServiceBookingRequests = ({ projectId }) => {
   const [bookings, setBookings] = useState([]);

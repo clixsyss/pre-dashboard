@@ -10,11 +10,9 @@ import {
   Phone,
   X,
   UserX,
-  UserCheck,
-  Clock,
-  AlertTriangle
+  UserCheck
 } from 'lucide-react';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
 import userService from '../services/userService';
@@ -197,7 +195,6 @@ const Users = () => {
       }
 
       // Update user in Firestore
-      const userRef = doc(db, 'users', userToSuspend.id);
       await userService.updateUser(userToSuspend.id, suspensionData);
       
       // Update local state

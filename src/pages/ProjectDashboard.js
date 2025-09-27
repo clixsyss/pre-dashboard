@@ -36,7 +36,7 @@ import {
   Building,
   Shield,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -73,7 +73,6 @@ const ProjectDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
-  const [pendingBookingsCount, setPendingBookingsCount] = useState(0);
   const [upcomingBookingsCount, setUpcomingBookingsCount] = useState(0);
   const [pendingServiceRequestsCount, setPendingServiceRequestsCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -84,7 +83,7 @@ const ProjectDashboard = () => {
   const [pendingGatePassCount, setPendingGatePassCount] = useState(0);
   
   // Data state for notification counts
-  const [notifications, setNotifications] = useState([]);
+  const [notifications] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
   const [fines, setFines] = useState([]);

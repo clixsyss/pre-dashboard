@@ -72,7 +72,7 @@ const AdminSetup = () => {
 
   React.useEffect(() => {
     checkAdminStatus();
-  }, [currentUser]);
+  }, [currentUser, checkAdminStatus]);
 
   if (!currentUser) {
     return (

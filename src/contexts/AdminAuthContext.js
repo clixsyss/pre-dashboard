@@ -209,7 +209,7 @@ export const AdminAuthProvider = ({ children }) => {
     }
     
     return currentAdmin.assignedProjects?.includes(projectId) || false;
-  }, [currentAdmin?.accountType, currentAdmin?.assignedProjects, currentAdmin?.projectId]);
+  }, [currentAdmin]);
 
   // Get filtered projects for current admin
   const getFilteredProjects = useCallback((allProjects) => {
@@ -224,7 +224,7 @@ export const AdminAuthProvider = ({ children }) => {
     return allProjects.filter(project => 
       currentAdmin.assignedProjects?.includes(project.id)
     );
-  }, [currentAdmin?.accountType, currentAdmin?.assignedProjects]);
+  }, [currentAdmin]);
 
   // Check if admin is super admin
   const isSuperAdmin = useCallback(() => {

@@ -13,14 +13,12 @@ import {
   Clock,
   Users,
   Target,
-  Zap,
   CheckCircle,
   XCircle
 } from 'lucide-react';
 import { useNotificationStore } from '../stores/notificationStore';
 
 const NotificationManagement = ({ projectId }) => {
-  const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');

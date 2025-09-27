@@ -8,8 +8,7 @@ import {
   query, 
   where, 
   orderBy, 
-  onSnapshot,
-  serverTimestamp 
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   ref, 
@@ -312,7 +311,7 @@ export const searchUsers = async (projectId, searchTerm) => {
   }
 };
 
-export default {
+const finesService = {
   createFine,
   getFines,
   getUserFines,
@@ -326,3 +325,5 @@ export default {
   deleteFineImage,
   searchUsers
 };
+
+export default finesService;

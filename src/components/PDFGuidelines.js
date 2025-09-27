@@ -16,14 +16,12 @@ import {
   Clock,
   Upload,
   Download,
-  File,
-  Image as ImageIcon
+  File
 } from 'lucide-react';
 import {
   getPDFGuidelines,
   createPDFGuideline,
   updatePDFGuideline,
-  deletePDFGuideline,
   deleteGuideline
 } from '../services/projectGuidelinesService';
 import { uploadPDF, deletePDF, formatFileSize, validatePDFFile } from '../services/pdfUploadService';

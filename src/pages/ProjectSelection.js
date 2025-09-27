@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Building2, 
@@ -20,7 +20,7 @@ const ProjectSelection = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const navigate = useNavigate();
-  const { currentAdmin, getFilteredProjects, hasPermission, isSuperAdmin, loading: adminLoading } = useAdminAuth();
+  const { currentAdmin, getFilteredProjects, loading: adminLoading } = useAdminAuth();
   const { logout } = useAuth();
 
   const handleLogout = async () => {
@@ -32,36 +32,7 @@ const ProjectSelection = () => {
     }
   };
 
-  useEffect(() => {
-    console.log('ProjectSelection: useEffect triggered - currentAdmin:', !!currentAdmin, 'adminLoading:', adminLoading);
-    if (currentAdmin && !adminLoading) {
-      console.log('ProjectSelection: Loading projects for admin:', currentAdmin.email);
-      fetchProjects();
-    }
-  }, [currentAdmin?.id, adminLoading]);
-
-  // Simple search effect
-  useEffect(() => {
-    if (!projects.length) return;
-    
-    // Get admin's assigned projects
-    const adminProjects = projects.filter(project => 
-      currentAdmin?.assignedProjects?.includes(project.id)
-    );
-    
-    // Apply search filter
-    if (searchTerm) {
-      const filtered = adminProjects.filter(project => 
-        project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.location?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredProjects(filtered);
-    } else {
-      setFilteredProjects(adminProjects);
-    }
-  }, [searchTerm, projects, currentAdmin?.assignedProjects]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     if (!currentAdmin) {
       console.log('ProjectSelection: No admin data available, skipping project fetch');
       return;
@@ -132,7 +103,36 @@ const ProjectSelection = () => {
       setLoading(false);
       console.log('ProjectSelection: Loading complete');
     }
-  };
+  }, [currentAdmin]);
+
+  useEffect(() => {
+    console.log('ProjectSelection: useEffect triggered - currentAdmin:', !!currentAdmin, 'adminLoading:', adminLoading);
+    if (currentAdmin && !adminLoading) {
+      console.log('ProjectSelection: Loading projects for admin:', currentAdmin.email);
+      fetchProjects();
+    }
+  }, [currentAdmin, adminLoading, fetchProjects]);
+
+  // Simple search effect
+  useEffect(() => {
+    if (!projects.length) return;
+    
+    // Get admin's assigned projects
+    const adminProjects = projects.filter(project => 
+      currentAdmin?.assignedProjects?.includes(project.id)
+    );
+    
+    // Apply search filter
+    if (searchTerm) {
+      const filtered = adminProjects.filter(project => 
+        project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.location?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredProjects(filtered);
+    } else {
+      setFilteredProjects(adminProjects);
+    }
+  }, [searchTerm, projects, currentAdmin?.assignedProjects]);
 
   const handleProjectSelect = (project) => {
     setSelectedProject(project);

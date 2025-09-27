@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
   Menu, 
   X, 
-  Home, 
   Building2,
   LogOut,
   Settings,

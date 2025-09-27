@@ -7,25 +7,20 @@ import {
   deleteDoc, 
   doc, 
   query, 
-  where, 
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signOut,
-  signInWithEmailAndPassword
+  signOut
 } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 import { 
   Plus, 
   Search, 
-  Eye, 
   Edit, 
   Trash2, 
-  Mail, 
-  Phone, 
   User, 
   Key,
   AlertCircle,

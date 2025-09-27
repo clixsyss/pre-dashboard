@@ -5,7 +5,6 @@ import {
   Filter, 
   Eye, 
   MessageCircle, 
-  Edit, 
   CheckCircle, 
   XCircle, 
   AlertTriangle,
@@ -17,10 +16,8 @@ import {
 } from 'lucide-react';
 import { 
   getFines, 
-  getFinesByStatus, 
   createFine, 
   updateFineStatus, 
-  updateFineDetails,
   searchUsers,
   uploadFineImage,
   addMessage,
@@ -905,7 +902,7 @@ const FinesManagement = ({ projectId }) => {
                           <div className="mt-2">
                             <img 
                               src={message.imageUrl} 
-                              alt="Attached image" 
+                              alt="Attached file" 
                               className="max-w-xs rounded-lg cursor-pointer hover:opacity-90"
                               onClick={() => window.open(message.imageUrl, '_blank')}
                             />
@@ -929,7 +926,7 @@ const FinesManagement = ({ projectId }) => {
                   <div className="mb-3 relative inline-block">
                     <img 
                       src={imagePreview} 
-                      alt="Selected image" 
+                      alt="Selected file" 
                       className="max-w-xs max-h-32 rounded-lg border"
                     />
                     <button
