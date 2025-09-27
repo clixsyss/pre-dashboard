@@ -400,7 +400,7 @@ const ProjectDashboard = () => {
     //   serviceBookings: serviceBookings?.length || 0,
     //   serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
     // });
-  }, [projectUsers, projectBookings, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings]);
+  }, [projectUsers, projectBookings, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, getUpcomingBookings]);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
@@ -615,7 +615,7 @@ const ProjectDashboard = () => {
   }, [projectOrders, getUniqueStoreNames]);
 
   // Filter bookings based on search and filters
-  const getFilteredBookings = () => {
+  const getFilteredBookings = useCallback(() => {
     if (!projectBookings || projectBookings.length === 0) return [];
 
     let filtered = [...projectBookings];
@@ -664,7 +664,7 @@ const ProjectDashboard = () => {
     }
 
     return filtered;
-  };
+  }, [projectBookings, bookingSearchTerm, bookingServiceFilter, courtFilter, academyFilter, bookingStatusFilter]);
 
   // Separate upcoming and past bookings
   const getUpcomingBookings = useCallback(() => {

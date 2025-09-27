@@ -70,12 +70,12 @@ const PDFGuidelines = ({ projectId }) => {
     if (projectId) {
       fetchPDFGuidelines();
     }
-  }, [projectId]);
+  }, [projectId, fetchPDFGuidelines]);
 
   // Filter guidelines when search term or category changes
   useEffect(() => {
     filterGuidelines();
-  }, [pdfGuidelines, searchTerm, categoryFilter]);
+  }, [pdfGuidelines, searchTerm, categoryFilter, filterGuidelines]);
 
   const fetchPDFGuidelines = useCallback(async () => {
     try {
