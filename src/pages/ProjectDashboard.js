@@ -45,6 +45,7 @@ import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
 import ServicesManagement from '../components/ServicesManagement';
+import RequestsManagement from '../components/RequestsManagement';
 import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
 import AdminSetup from '../components/AdminSetup';
 import PDFGuidelines from '../components/PDFGuidelines';
@@ -72,6 +73,7 @@ const ProjectDashboard = () => {
   const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
+  const [requestsSubTab, setRequestsSubTab] = useState('categories');
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
   const [upcomingBookingsCount, setUpcomingBookingsCount] = useState(0);
   const [pendingServiceRequestsCount, setPendingServiceRequestsCount] = useState(0);
@@ -196,6 +198,7 @@ const ProjectDashboard = () => {
       category: 'Facilities & Services',
       items: [
         { id: 'services', name: 'Services', icon: Wrench, description: 'Service categories & bookings', permission: 'services' },
+        { id: 'requests', name: 'Requests', icon: FileText, description: 'Request categories & submissions', permission: 'requests' },
         { id: 'academies', name: 'Academies', icon: School, description: 'Academy programs', permission: 'academies' },
         { id: 'courts', name: 'Courts', icon: MapPin, description: 'Court bookings', permission: 'courts' },
         { id: 'bookings', name: 'Bookings', icon: Calendar, description: 'All bookings overview', permission: 'bookings' }
@@ -2772,6 +2775,61 @@ const ProjectDashboard = () => {
                     {servicesSubTab === 'bookings' && (
                       <ServiceBookingsManagement projectId={projectId} />
                     )}
+                  </div>
+                </div>
+              </PermissionGate>
+            )}
+
+            {activeTab === 'requests' && (
+              <PermissionGate entity="requests" action="read" showMessage={true}>
+                <div className="services-management">
+                  {/* Requests Header */}
+                  <div className="page-header bg-gradient-to-r from-red-600 to-red-700 text-white">
+                    <div className="header-content">
+                      <div className="header-left">
+                        <div className="header-icon">
+                          <FileText className="h-6 w-6" />
+                        </div>
+                        <div className="header-text">
+                          <h1>Requests Management</h1>
+                          <p>Manage request categories, form fields, and user submissions</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requests Navigation Cards */}
+                  <div className="services-nav-grid">
+                    <div 
+                      className={`nav-card ${requestsSubTab === 'categories' ? 'active' : ''}`}
+                      onClick={() => setRequestsSubTab('categories')}
+                    >
+                      <div className="nav-card-icon">
+                        <Building className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>Request Categories</h3>
+                        <p>Manage request categories and form fields</p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`nav-card ${requestsSubTab === 'submissions' ? 'active' : ''}`}
+                      onClick={() => setRequestsSubTab('submissions')}
+                    >
+                      <div className="nav-card-icon">
+                        <MessageCircle className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>Request Submissions</h3>
+                        <p>View and manage user request submissions</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requests Content */}
+                  <div className="services-content">
+                    <RequestsManagement projectId={projectId} activeTab={requestsSubTab} />
                   </div>
                 </div>
               </PermissionGate>
