@@ -15,7 +15,9 @@ import {
   Hash,
   DollarSign,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Phone,
+  Mail
 } from 'lucide-react';
 import { 
   collection, 
@@ -43,6 +45,8 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [showFieldsModal, setShowFieldsModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [showFieldEditModal, setShowFieldEditModal] = useState(false);
   
   const [formData, setFormData] = useState({
     englishTitle: '',
@@ -52,6 +56,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
     status: 'draft', // 'available' or 'draft'
     fields: [], // Array of field objects
     allowMediaUpload: false,
+    mediaRequired: false,
     description: ''
   });
 
@@ -70,7 +75,9 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
     { value: 'text', label: 'Text', icon: Type },
     { value: 'number', label: 'Number', icon: Hash },
     { value: 'currency', label: 'Currency', icon: DollarSign },
-    { value: 'description', label: 'Description (Long Text)', icon: FileText }
+    { value: 'description', label: 'Description (Long Text)', icon: FileText },
+    { value: 'phone', label: 'Phone Number', icon: Phone },
+    { value: 'email', label: 'Email Address', icon: Mail }
   ];
 
   // Fetch categories
@@ -150,6 +157,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
         status: formData.status,
         fields: formData.fields,
         allowMediaUpload: formData.allowMediaUpload,
+        mediaRequired: formData.allowMediaUpload ? formData.mediaRequired : false,
         description: formData.description.trim(),
         createdAt: editingCategory ? editingCategory.createdAt : serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -187,6 +195,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
       status: 'draft',
       fields: [],
       allowMediaUpload: false,
+      mediaRequired: false,
       description: ''
     });
     setEditingCategory(null);
@@ -203,6 +212,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
       status: category.status || 'draft',
       fields: category.fields || [],
       allowMediaUpload: category.allowMediaUpload || false,
+      mediaRequired: category.mediaRequired || false,
       description: category.description || ''
     });
     setEditingCategory(category);
@@ -265,6 +275,108 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
   const openFieldsModal = (category) => {
     setSelectedCategory(category);
     setShowFieldsModal(true);
+  };
+
+  // Handle field editing
+  const handleEditField = (field) => {
+    setEditingField(field);
+    setFieldFormData({
+      fieldName: field.fieldName,
+      fieldType: field.fieldType,
+      required: field.required,
+      placeholder: field.placeholder || ''
+    });
+    setShowFieldEditModal(true);
+  };
+
+  const handleUpdateField = () => {
+    if (!editingField || !fieldFormData.fieldName.trim()) {
+      setErrors({ fieldName: 'Field name is required' });
+      return;
+    }
+
+    const updatedField = {
+      ...editingField,
+      fieldName: fieldFormData.fieldName.trim(),
+      fieldType: fieldFormData.fieldType,
+      required: fieldFormData.required,
+      placeholder: fieldFormData.placeholder.trim()
+    };
+
+    // Update the field in the selected category
+    setSelectedCategory(prev => ({
+      ...prev,
+      fields: prev.fields.map(field => 
+        field.id === editingField.id ? updatedField : field
+      )
+    }));
+
+    // Update the field in the main form data if we're editing a category
+    if (editingCategory && editingCategory.id === selectedCategory.id) {
+      setFormData(prev => ({
+        ...prev,
+        fields: prev.fields.map(field => 
+          field.id === editingField.id ? updatedField : field
+        )
+      }));
+    }
+
+    // Reset form
+    setFieldFormData({
+      fieldName: '',
+      fieldType: 'text',
+      required: false,
+      placeholder: ''
+    });
+    setEditingField(null);
+    setShowFieldEditModal(false);
+    setErrors({});
+  };
+
+  const handleDeleteField = async (fieldId) => {
+    if (!window.confirm('Are you sure you want to delete this field?')) return;
+
+    // Remove field from selected category
+    setSelectedCategory(prev => ({
+      ...prev,
+      fields: prev.fields.filter(field => field.id !== fieldId)
+    }));
+
+    // Update the field in the main form data if we're editing a category
+    if (editingCategory && editingCategory.id === selectedCategory.id) {
+      setFormData(prev => ({
+        ...prev,
+        fields: prev.fields.filter(field => field.id !== fieldId)
+      }));
+    }
+
+    // Save the updated category
+    try {
+      await updateDoc(doc(db, `projects/${projectId}/requestCategories`, selectedCategory.id), {
+        fields: selectedCategory.fields.filter(field => field.id !== fieldId),
+        updatedAt: serverTimestamp()
+      });
+      setSuccess('Field deleted successfully!');
+      fetchCategories();
+    } catch (error) {
+      console.error('Error deleting field:', error);
+      setErrors({ delete: 'Failed to delete field' });
+    }
+  };
+
+  const handleSaveFields = async () => {
+    try {
+      await updateDoc(doc(db, `projects/${projectId}/requestCategories`, selectedCategory.id), {
+        fields: selectedCategory.fields,
+        updatedAt: serverTimestamp()
+      });
+      setSuccess('Fields updated successfully!');
+      setShowFieldsModal(false);
+      fetchCategories();
+    } catch (error) {
+      console.error('Error saving fields:', error);
+      setErrors({ save: 'Failed to save fields' });
+    }
   };
 
   const getFieldTypeIcon = (fieldType) => {
@@ -523,6 +635,30 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
                 </button>
               </div>
 
+              {formData.allowMediaUpload && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Media Required
+                    </label>
+                    <p className="text-sm text-gray-500">If enabled, users must attach at least one file</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, mediaRequired: !prev.mediaRequired }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      formData.mediaRequired ? 'bg-red-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData.mediaRequired ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
               {/* Form Fields */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -679,6 +815,22 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
                           )}
                         </div>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditField(field)}
+                          className="text-blue-600 hover:text-blue-800 p-1"
+                          title="Edit field"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteField(field.id)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Delete field"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -688,14 +840,117 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
                   </div>
                 )}
               </div>
-              <div className="flex justify-end pt-4 border-t border-gray-200 mt-6">
+              <div className="flex justify-between pt-4 border-t border-gray-200 mt-6">
                 <button
                   onClick={() => setShowFieldsModal(false)}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                 >
                   Close
                 </button>
+                <button
+                  onClick={handleSaveFields}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Save Changes
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Field Edit Modal */}
+      {showFieldEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Edit Field
+              </h3>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Field Name *
+                </label>
+                <input
+                  type="text"
+                  value={fieldFormData.fieldName}
+                  onChange={(e) => setFieldFormData(prev => ({ ...prev, fieldName: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Enter field name"
+                />
+                {errors.fieldName && (
+                  <p className="text-red-500 text-xs mt-1">{errors.fieldName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Field Type
+                </label>
+                <select
+                  value={fieldFormData.fieldType}
+                  onChange={(e) => setFieldFormData(prev => ({ ...prev, fieldType: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                >
+                  {fieldTypes.map(type => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Placeholder Text
+                </label>
+                <input
+                  type="text"
+                  value={fieldFormData.placeholder}
+                  onChange={(e) => setFieldFormData(prev => ({ ...prev, placeholder: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Enter placeholder text"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={fieldFormData.required}
+                    onChange={(e) => setFieldFormData(prev => ({ ...prev, required: e.target.checked }))}
+                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Required field</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowFieldEditModal(false);
+                  setEditingField(null);
+                  setFieldFormData({
+                    fieldName: '',
+                    fieldType: 'text',
+                    required: false,
+                    placeholder: ''
+                  });
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateField}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Update Field
+              </button>
             </div>
           </div>
         </div>

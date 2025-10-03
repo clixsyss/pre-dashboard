@@ -79,6 +79,8 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
         id: doc.id,
         ...doc.data()
       }));
+      
+      
       setSubmissions(submissionsData);
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -437,8 +439,8 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
                     <p className="text-sm text-gray-900">{selectedSubmission.userEmail || 'Not provided'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Phone</label>
-                    <p className="text-sm text-gray-900">{selectedSubmission.userPhone || 'Not provided'}</p>
+                    <label className="text-sm font-medium text-gray-500">Mobile</label>
+                    <p className="text-sm text-gray-900">{selectedSubmission.userPhone || selectedSubmission.userMobile || 'Not provided'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Submitted</label>
@@ -451,16 +453,46 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
               <div>
                 <h4 className="font-medium text-gray-900 mb-3">Form Data</h4>
                 <div className="space-y-4">
-                  {selectedSubmission.formData && Object.entries(selectedSubmission.formData).map(([key, value]) => (
-                    <div key={key} className="border border-gray-200 rounded-lg p-4">
-                      <label className="text-sm font-medium text-gray-500 capitalize">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
-                      </label>
-                      <p className="text-sm text-gray-900 mt-1">
-                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : value}
-                      </p>
-                    </div>
-                  ))}
+                  {selectedSubmission.formData && Object.entries(selectedSubmission.formData).map(([key, value]) => {
+                    // Debug: Log the submission data structure
+                    console.log('Debug submission data:', {
+                      key,
+                      value,
+                      hasFieldMetadata: !!selectedSubmission.fieldMetadata,
+                      fieldMetadata: selectedSubmission.fieldMetadata,
+                      submissionKeys: Object.keys(selectedSubmission)
+                    });
+                    
+                    // Find the field metadata for this field ID
+                    const fieldMetadata = selectedSubmission.fieldMetadata?.find(field => field.id === key);
+                    const fieldName = fieldMetadata?.fieldName || key.replace(/([A-Z])/g, ' $1').trim();
+                    const fieldType = fieldMetadata?.fieldType || 'text';
+                    const isRequired = fieldMetadata?.required || false;
+                    
+                    
+                    return (
+                      <div key={key} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-sm font-medium text-gray-500">
+                            {fieldName}
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            {isRequired && (
+                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                Required
+                              </span>
+                            )}
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              {fieldType}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-900 mt-1">
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : (value || 'Not provided')}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

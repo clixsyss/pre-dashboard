@@ -79,6 +79,18 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
     
+    // Allow complaint file uploads for authenticated users
+    match /complaints/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow project-specific complaint file uploads for authenticated users
+    match /projects/{projectId}/complaints/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
     // Allow PDF guidelines uploads for admins
     match /projects/{projectId}/guidelines/{fileName} {
       allow read: if request.auth != null;
@@ -112,6 +124,48 @@ service firebase.storage {
     
     // Temporary: Allow authenticated users to upload fine evidence images (for testing)
     match /projects/{projectId}/fines/{fineId}/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow user document uploads (National ID, Profile Pictures)
+    match /users/{userId}/documents/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow user profile picture uploads
+    match /users/{userId}/profile/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow user document uploads (National ID, Profile Pictures)
+    match /users/{userId}/documents/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow user profile picture uploads
+    match /users/{userId}/profile/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow request submission media uploads for authenticated users
+    match /projects/{projectId}/requestSubmissions/{submissionId}/media/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow request category image uploads for admins
+    match /projects/{projectId}/requestCategories/{categoryId}/image/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Temporary: Allow authenticated users to upload request category images (for testing)
+    match /projects/{projectId}/requestCategories/{categoryId}/image/{fileName} {
       allow write: if request.auth != null;
     }
     
