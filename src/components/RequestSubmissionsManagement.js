@@ -12,8 +12,10 @@ import {
   User,
   FileText,
   Image as ImageIcon,
-  Paperclip
+  Paperclip,
+  MessageCircle
 } from 'lucide-react';
+import AdminRequestChat from './AdminRequestChat';
 import { 
   collection, 
   getDocs, 
@@ -35,6 +37,8 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
   const [categories, setCategories] = useState([]);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatSubmission, setChatSubmission] = useState(null);
 
   // Fetch categories for filter
   const fetchCategories = useCallback(async () => {
@@ -135,6 +139,29 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
   const viewSubmission = (submission) => {
     setSelectedSubmission(submission);
     setShowModal(true);
+  };
+
+  // Open chat for submission
+  const openChat = (submission) => {
+    setChatSubmission(submission);
+    setShowChat(true);
+  };
+
+  // Close chat
+  const closeChat = () => {
+    setShowChat(false);
+    setChatSubmission(null);
+  };
+
+  // Handle status update from chat
+  const handleStatusUpdate = (submissionId, newStatus) => {
+    setSubmissions(prev => 
+      prev.map(sub => 
+        sub.id === submissionId 
+          ? { ...sub, status: newStatus, updatedAt: new Date() }
+          : sub
+      )
+    );
   };
 
   // Get status color
@@ -354,6 +381,13 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
                         >
                           <Eye className="h-4 w-4 mr-1" />
                           View
+                        </button>
+                        <button
+                          onClick={() => openChat(submission)}
+                          className="text-green-600 hover:text-green-900 flex items-center"
+                        >
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          Chat
                         </button>
                         {submission.status === 'pending' && (
                           <>
@@ -590,6 +624,17 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
             </div>
           </div>
         </div>
+      )}
+
+      {/* Admin Chat Modal */}
+      {showChat && chatSubmission && (
+        <AdminRequestChat
+          projectId={projectId}
+          requestId={chatSubmission.id}
+          requestData={chatSubmission}
+          onBack={closeChat}
+          onStatusUpdate={handleStatusUpdate}
+        />
       )}
     </div>
   );
