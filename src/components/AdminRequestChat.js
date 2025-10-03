@@ -2,19 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft,
   Send,
-  Paperclip,
   Download,
-  FileText,
   DollarSign,
   Plus,
   X,
   CheckCircle,
   Clock,
   User,
-  MessageCircle,
   Receipt,
-  Eye,
-  Trash2
+  Eye
 } from 'lucide-react';
 import { 
   collection, 
@@ -24,8 +20,7 @@ import {
   addDoc, 
   serverTimestamp,
   doc,
-  updateDoc,
-  where
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
