@@ -1,3 +1,4 @@
+rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     // Allow authenticated users to read all files
@@ -52,6 +53,30 @@ service firebase.storage {
     // Temporary: Allow authenticated users to upload news media (for testing)
     // TODO: Remove this rule once admin authentication is properly set up
     match /news/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow chat image uploads for authenticated users
+    match /projects/{projectId}/serviceBookings/{bookingId}/images/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow support chat image uploads for authenticated users
+    match /projects/{projectId}/supportChats/{chatId}/images/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow violation chat image uploads for authenticated users
+    match /projects/{projectId}/violations/{violationId}/images/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow request chat image uploads for authenticated users
+    match /projects/{projectId}/requestSubmissions/{submissionId}/images/{fileName} {
+      allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
     
@@ -166,6 +191,18 @@ service firebase.storage {
     
     // Temporary: Allow authenticated users to upload request category images (for testing)
     match /projects/{projectId}/requestCategories/{categoryId}/image/{fileName} {
+      allow write: if request.auth != null;
+    }
+    
+    // Allow service category image uploads for admins
+    match /serviceCategories/{categoryId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Temporary: Allow authenticated users to upload service category images (for testing)
+    match /serviceCategories/{categoryId}/{fileName} {
       allow write: if request.auth != null;
     }
     
