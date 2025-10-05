@@ -5,17 +5,12 @@ import {
   Trash2, 
   Upload, 
   Image, 
-  Clock,
-  Calendar,
   X,
-  Wrench,
   Settings,
   FileText,
   Type,
   Hash,
   DollarSign,
-  ToggleLeft,
-  ToggleRight,
   Phone,
   Mail
 } from 'lucide-react';
@@ -33,8 +28,7 @@ import {
 import { 
   ref as storageRef, 
   uploadBytes, 
-  getDownloadURL, 
-  deleteObject 
+  getDownloadURL
 } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 
