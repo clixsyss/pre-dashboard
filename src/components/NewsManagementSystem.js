@@ -65,6 +65,7 @@ const NewsManagementSystem = ({ projectId }) => {
     category: 'general',
     featured: false,
     isPublished: false,
+    interactionsEnabled: true,
     mediaFile: null,
     mediaType: 'image',
     linkUrl: '',
@@ -166,6 +167,7 @@ const NewsManagementSystem = ({ projectId }) => {
         category: formData.category,
         featured: formData.featured,
         isPublished: formData.isPublished,
+        interactionsEnabled: formData.interactionsEnabled,
         authorId: 'admin', // You can get this from auth context
         authorName: 'Admin',
         createdAt: editingItem ? editingItem.createdAt : serverTimestamp(),
@@ -250,6 +252,7 @@ const NewsManagementSystem = ({ projectId }) => {
       category: item.category || 'general',
       featured: item.featured || false,
       isPublished: item.isPublished || false,
+      interactionsEnabled: item.interactionsEnabled !== false, // Default to true if undefined
       mediaFile: null,
       mediaType: item.mediaType || 'image',
       linkUrl: item.linkUrl || '',
@@ -310,6 +313,28 @@ const NewsManagementSystem = ({ projectId }) => {
     }
   };
 
+  const toggleInteractions = async (item) => {
+    if (!projectId) return;
+    
+    try {
+      const newStatus = !(item.interactionsEnabled !== false); // Default to true if undefined
+      await updateDoc(doc(db, `projects/${projectId}/news`, item.id), {
+        interactionsEnabled: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      fetchNews();
+      
+      if (newStatus) {
+        success('News interactions enabled!');
+      } else {
+        warning('News interactions disabled!');
+      }
+    } catch (error) {
+      console.error('Error toggling interactions:', error);
+      showError('Error updating interaction settings. Please try again.');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       title: '',
@@ -318,6 +343,7 @@ const NewsManagementSystem = ({ projectId }) => {
       category: 'general',
       featured: false,
       isPublished: false,
+      interactionsEnabled: true,
       mediaFile: null,
       mediaType: 'image',
       linkUrl: '',
@@ -997,6 +1023,35 @@ const NewsManagementSystem = ({ projectId }) => {
                           <Star className={`h-4 w-4 ${item.featured ? 'fill-current' : ''}`} />
                         </button>
                         <button
+                          onClick={() => toggleInteractions(item)}
+                          className={`p-1 rounded transition-colors ${
+                            (item.interactionsEnabled !== false) 
+                              ? 'text-purple-600 hover:text-purple-700' 
+                              : 'text-gray-400 hover:text-purple-600'
+                          }`}
+                          title={
+                            (item.interactionsEnabled !== false)
+                              ? 'Disable interactions (comments & reactions)'
+                              : 'Enable interactions (comments & reactions)'
+                          }
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {(item.interactionsEnabled !== false) ? (
+                              // Chat bubble with checkmark (enabled)
+                              <>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4" />
+                              </>
+                            ) : (
+                              // Chat bubble with X (disabled)
+                              <>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 6l12 12M6 18L18 6" />
+                              </>
+                            )}
+                          </svg>
+                        </button>
+                        <button
                           onClick={() => openCommentsModal(item)}
                           className="text-green-600 hover:text-green-800 transition-colors p-1 rounded"
                           title="View Comments"
@@ -1176,7 +1231,7 @@ const NewsManagementSystem = ({ projectId }) => {
               </div>
 
               {/* Options */}
-              <div className="flex items-center space-x-6">
+              <div className="flex flex-wrap items-center gap-6">
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -1208,6 +1263,19 @@ const NewsManagementSystem = ({ projectId }) => {
                   />
                   <label htmlFor="isPublished" className="ml-2 text-sm font-medium text-gray-700">
                     Publish immediately
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="interactionsEnabled"
+                    checked={formData.interactionsEnabled}
+                    onChange={(e) => setFormData({ ...formData, interactionsEnabled: e.target.checked })}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="interactionsEnabled" className="ml-2 text-sm font-medium text-gray-700">
+                    Enable interactions (comments & reactions)
                   </label>
                 </div>
               </div>
