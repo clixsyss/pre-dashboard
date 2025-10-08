@@ -35,6 +35,7 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active'); // active, deleted, all
+  const [approvalFilter, setApprovalFilter] = useState('all'); // all, pending, approved, rejected
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -44,10 +45,13 @@ const Users = () => {
   const [suspensionReason, setSuspensionReason] = useState('');
   const [suspensionDuration, setSuspensionDuration] = useState('7'); // days
   const [suspensionType, setSuspensionType] = useState('temporary'); // temporary or permanent
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [userToDecline, setUserToDecline] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
 
   const filterUsers = useCallback(() => {
     let filtered = users;
-    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter, statusFilter });
+    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter, statusFilter, approvalFilter });
 
     // Apply status filter (active, deleted, all)
     if (statusFilter === 'active') {
@@ -56,6 +60,14 @@ const Users = () => {
       filtered = filtered.filter(user => user.isDeleted);
     }
     // If statusFilter === 'all', show all users
+
+    // Apply approval filter
+    if (approvalFilter !== 'all') {
+      filtered = filtered.filter(user => {
+        const userApprovalStatus = user.approvalStatus || 'pending';
+        return userApprovalStatus === approvalFilter;
+      });
+    }
 
     // Apply search filter
     if (searchTerm) {
@@ -82,7 +94,7 @@ const Users = () => {
 
     console.log('Filtered users result:', filtered.length);
     setFilteredUsers(filtered);
-  }, [users, searchTerm, roleFilter, statusFilter]);
+  }, [users, searchTerm, roleFilter, statusFilter, approvalFilter]);
 
   useEffect(() => {
     fetchUsers();
@@ -288,6 +300,86 @@ const Users = () => {
     }
   };
 
+  const handleApproveUser = async (user) => {
+    try {
+      const approvalData = {
+        approvalStatus: 'approved',
+        approvedBy: localStorage.getItem('adminUserId') || 'admin',
+        approvedAt: new Date(),
+        registrationStatus: 'completed',
+        updatedAt: new Date()
+      };
+
+      // Update user in Firestore
+      await userService.updateUser(user.id, approvalData);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === user.id 
+            ? { ...u, ...approvalData }
+            : u
+        )
+      );
+
+      // Refresh filtered users
+      filterUsers();
+      
+      console.log('User approved successfully');
+    } catch (error) {
+      console.error('Error approving user:', error);
+      showError('Failed to approve user. Please try again.');
+    }
+  };
+
+  const openDeclineModal = (user) => {
+    setUserToDecline(user);
+    setDeclineReason('');
+    setShowDeclineModal(true);
+  };
+
+  const handleDeclineUser = async () => {
+    if (!userToDecline || !declineReason.trim()) {
+      showError('Please provide a reason for declining the user');
+      return;
+    }
+
+    try {
+      const declineData = {
+        approvalStatus: 'rejected',
+        rejectedBy: localStorage.getItem('adminUserId') || 'admin',
+        rejectedAt: new Date(),
+        rejectionReason: declineReason.trim(),
+        registrationStatus: 'rejected',
+        updatedAt: new Date()
+      };
+
+      // Update user in Firestore
+      await userService.updateUser(userToDecline.id, declineData);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.id === userToDecline.id 
+            ? { ...u, ...declineData }
+            : u
+        )
+      );
+
+      setShowDeclineModal(false);
+      setUserToDecline(null);
+      setDeclineReason('');
+      
+      // Refresh filtered users
+      filterUsers();
+      
+      console.log('User declined successfully');
+    } catch (error) {
+      console.error('Error declining user:', error);
+      showError('Failed to decline user. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -369,6 +461,20 @@ const Users = () => {
               <option value="all">All Users</option>
             </select>
           </div>
+
+          {/* Approval Filter */}
+          <div className="sm:w-48">
+            <select
+              value={approvalFilter}
+              onChange={(e) => setApprovalFilter(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="all">All Approvals</option>
+              <option value="pending">Pending Approval</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
         </div>
 
         {/* Results Count */}
@@ -394,6 +500,9 @@ const Users = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Approval
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -485,6 +594,32 @@ const Users = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {user.role || 'N/A'}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const approvalStatus = user.approvalStatus || 'pending';
+                        if (approvalStatus === 'approved') {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <UserCheck className="h-3 w-3 mr-1" />
+                              Approved
+                            </span>
+                          );
+                        } else if (approvalStatus === 'rejected') {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <X className="h-3 w-3 mr-1" />
+                              Rejected
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Pending
+                            </span>
+                          );
+                        }
+                      })()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {user.isDeleted ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -520,8 +655,28 @@ const Users = () => {
                           <Eye className="h-4 w-4" />
                         </button>
                         
-                        {/* Only show edit/suspend/delete actions for non-deleted users */}
-                        {!user.isDeleted && (
+                        {/* Show approve/decline buttons for pending users */}
+                        {!user.isDeleted && (user.approvalStatus || 'pending') === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveUser(user)}
+                              className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700"
+                              title="Approve User"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => openDeclineModal(user)}
+                              className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+                              title="Decline User"
+                            >
+                              Decline
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Only show edit/suspend/delete actions for non-deleted, approved users */}
+                        {!user.isDeleted && (user.approvalStatus || 'pending') === 'approved' && (
                           <>
                             <button
                               onClick={() => openUserModal(user)}
@@ -573,8 +728,8 @@ const Users = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
-                    {searchTerm || roleFilter !== 'all' ? 'No users match your filters' : 'No users found'}
+                  <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
+                    {searchTerm || roleFilter !== 'all' || approvalFilter !== 'all' ? 'No users match your filters' : 'No users found'}
                   </td>
                 </tr>
               )}
@@ -744,6 +899,36 @@ const Users = () => {
                   </div>
                   
                   <div>
+                    <label className="block text-sm font-medium text-gray-700">Approval Status</label>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedUser.approvalStatus === 'approved' 
+                        ? 'bg-green-100 text-green-800'
+                        : selectedUser.approvalStatus === 'rejected'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedUser.approvalStatus || 'pending'}
+                    </span>
+                    {selectedUser.approvalStatus === 'approved' && selectedUser.approvedBy && (
+                      <div className="mt-1 text-xs text-gray-600">
+                        <div>Approved by: {selectedUser.approvedBy}</div>
+                        {selectedUser.approvedAt && (
+                          <div>At: {new Date(selectedUser.approvedAt).toLocaleString()}</div>
+                        )}
+                      </div>
+                    )}
+                    {selectedUser.approvalStatus === 'rejected' && selectedUser.rejectionReason && (
+                      <div className="mt-1 text-xs text-gray-600">
+                        <div>Rejected by: {selectedUser.rejectedBy || 'N/A'}</div>
+                        {selectedUser.rejectedAt && (
+                          <div>At: {new Date(selectedUser.rejectedAt).toLocaleString()}</div>
+                        )}
+                        <div className="mt-1"><strong>Reason:</strong> {selectedUser.rejectionReason}</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div>
                     <label className="block text-sm font-medium text-gray-700">Registration Step</label>
                     <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.registrationStep || 'N/A'}</p>
                   </div>
@@ -865,10 +1050,34 @@ const Users = () => {
                 </div>
               )}
               
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex justify-between items-center">
+                {/* Approval Actions for Pending Users */}
+                {!selectedUser.isDeleted && (selectedUser.approvalStatus || 'pending') === 'pending' && (
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => {
+                        handleApproveUser(selectedUser);
+                        setShowUserModal(false);
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                    >
+                      ✓ Approve User
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowUserModal(false);
+                        openDeclineModal(selectedUser);
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                    >
+                      ✗ Decline User
+                    </button>
+                  </div>
+                )}
+                
                 <button
                   onClick={() => setShowUserModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="ml-auto px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Close
                 </button>
@@ -1007,6 +1216,56 @@ const Users = () => {
                   className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm font-medium hover:bg-orange-700"
                 >
                   Suspend User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decline User Modal */}
+      {showDeclineModal && userToDecline && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <X className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="mt-3 text-center">
+                <h3 className="text-lg font-medium text-gray-900">Decline User Registration</h3>
+                <div className="mt-2 px-7 py-3">
+                  <p className="text-sm text-gray-500">
+                    Decline registration for <strong>{userToDecline.firstName} {userToDecline.lastName}</strong>?
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Declining *
+                </label>
+                <textarea
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="Enter reason for declining the registration..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                  rows="4"
+                  required
+                />
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeclineModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeclineUser}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                >
+                  Decline User
                 </button>
               </div>
             </div>
