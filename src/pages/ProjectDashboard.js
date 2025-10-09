@@ -175,6 +175,18 @@ const ProjectDashboard = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   
+  // Edit user modal state
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(false);
+  const [editUserData, setEditUserData] = useState(null);
+  
+  // Edit user file upload state
+  const [editFrontIdFile, setEditFrontIdFile] = useState(null);
+  const [editBackIdFile, setEditBackIdFile] = useState(null);
+  const [editFrontIdPreview, setEditFrontIdPreview] = useState(null);
+  const [editBackIdPreview, setEditBackIdPreview] = useState(null);
+  const [editUploadingFiles, setEditUploadingFiles] = useState(false);
+  
   // Suspension modal state
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [userToSuspend, setUserToSuspend] = useState(null);
@@ -1163,11 +1175,28 @@ const ProjectDashboard = () => {
         setShowUserModal(true);
         break;
       case 'edit':
-        // Navigate to user edit page or open edit modal
-        console.log('Edit user:', user);
-        // For now, we'll use the view modal - you can implement edit functionality later
-        setSelectedUser(user);
-        setShowUserModal(true);
+        // Open edit modal with user data
+        const userProject = user.projects?.find(p => p.projectId === projectId);
+        setEditUserData({
+          id: user.id,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          mobile: user.mobile || '',
+          nationalId: user.nationalId || '',
+          dateOfBirth: user.dateOfBirth || '',
+          gender: user.gender || 'male',
+          projectUnit: userProject?.unit || '',
+          projectRole: userProject?.role || 'owner',
+          currentFrontIdUrl: user.documents?.frontIdUrl || '',
+          currentBackIdUrl: user.documents?.backIdUrl || ''
+        });
+        // Reset edit file uploads
+        setEditFrontIdFile(null);
+        setEditBackIdFile(null);
+        setEditFrontIdPreview(null);
+        setEditBackIdPreview(null);
+        setShowEditUserModal(true);
         break;
       case 'suspend':
         setUserToSuspend(user);
@@ -1474,6 +1503,196 @@ const ProjectDashboard = () => {
     } catch (error) {
       console.error('Error resending password email:', error);
       alert(`Failed to send password reset email: ${error.message}`);
+    }
+  };
+
+  const handleEditUser = async () => {
+    // Validate required fields
+    if (!editUserData.firstName || !editUserData.lastName || !editUserData.email || !editUserData.mobile || !editUserData.projectUnit || !editUserData.nationalId) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editUserData.email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    setEditingUser(true);
+
+    try {
+      const userDocRef = doc(db, 'users', editUserData.id);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+
+      const currentUserData = userDoc.data();
+      
+      // Update basic user information
+      const updateData = {
+        firstName: editUserData.firstName,
+        lastName: editUserData.lastName,
+        fullName: `${editUserData.firstName} ${editUserData.lastName}`,
+        email: editUserData.email,
+        mobile: editUserData.mobile,
+        nationalId: editUserData.nationalId,
+        dateOfBirth: editUserData.dateOfBirth || '',
+        gender: editUserData.gender || 'male',
+        updatedAt: new Date().toISOString()
+      };
+
+      // Update project-specific information in the projects array
+      const updatedProjects = currentUserData.projects.map(project => 
+        project.projectId === projectId
+          ? {
+              ...project,
+              unit: editUserData.projectUnit,
+              role: editUserData.projectRole,
+              updatedAt: new Date().toISOString()
+            }
+          : project
+      );
+
+      updateData.projects = updatedProjects;
+
+      // Upload new ID documents if provided
+      if (editFrontIdFile || editBackIdFile) {
+        console.log('Uploading new ID documents...');
+        const uploadedUrls = await uploadEditIdDocuments(editUserData.id);
+        
+        // Update documents URLs
+        updateData.documents = {
+          frontIdUrl: uploadedUrls.frontIdUrl,
+          backIdUrl: uploadedUrls.backIdUrl,
+          profilePictureUrl: currentUserData.documents?.profilePictureUrl || ''
+        };
+      }
+
+      // Save to Firestore
+      await updateDoc(userDocRef, updateData);
+
+      // Update local state
+      setProjectUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === editUserData.id
+            ? { ...u, ...updateData }
+            : u
+        )
+      );
+
+      setFilteredUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === editUserData.id
+            ? { ...u, ...updateData }
+            : u
+        )
+      );
+
+      // Reset edit modal state
+      setShowEditUserModal(false);
+      setEditUserData(null);
+      setEditFrontIdFile(null);
+      setEditBackIdFile(null);
+      setEditFrontIdPreview(null);
+      setEditBackIdPreview(null);
+      
+      const successMessage = (editFrontIdFile || editBackIdFile)
+        ? 'User updated successfully with new ID documents!'
+        : 'User updated successfully!';
+      
+      alert(successMessage);
+      console.log('User updated:', editUserData.id);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert(`Failed to update user: ${error.message}`);
+    } finally {
+      setEditingUser(false);
+    }
+  };
+
+  const handleEditUserInputChange = (field, value) => {
+    setEditUserData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Handle file upload for edit modal
+  const handleEditFileUpload = (file, type) => {
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        alert('Please upload a valid image file (JPEG, PNG, or WebP)');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (type === 'front') {
+          setEditFrontIdFile(file);
+          setEditFrontIdPreview(reader.result);
+        } else {
+          setEditBackIdFile(file);
+          setEditBackIdPreview(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove uploaded file from edit modal
+  const handleEditRemoveFile = (type) => {
+    if (type === 'front') {
+      setEditFrontIdFile(null);
+      setEditFrontIdPreview(null);
+    } else {
+      setEditBackIdFile(null);
+      setEditBackIdPreview(null);
+    }
+  };
+
+  // Upload files for edit modal
+  const uploadEditIdDocuments = async (userId) => {
+    const uploadedUrls = {
+      frontIdUrl: editUserData.currentFrontIdUrl || '',
+      backIdUrl: editUserData.currentBackIdUrl || ''
+    };
+
+    try {
+      setEditUploadingFiles(true);
+
+      // Upload new front ID if provided
+      if (editFrontIdFile) {
+        const frontIdRef = ref(storage, `users/${userId}/documents/front_id_${Date.now()}.${editFrontIdFile.name.split('.').pop()}`);
+        await uploadBytes(frontIdRef, editFrontIdFile);
+        uploadedUrls.frontIdUrl = await getDownloadURL(frontIdRef);
+      }
+
+      // Upload new back ID if provided
+      if (editBackIdFile) {
+        const backIdRef = ref(storage, `users/${userId}/documents/back_id_${Date.now()}.${editBackIdFile.name.split('.').pop()}`);
+        await uploadBytes(backIdRef, editBackIdFile);
+        uploadedUrls.backIdUrl = await getDownloadURL(backIdRef);
+      }
+
+      return uploadedUrls;
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      throw new Error('Failed to upload ID documents');
+    } finally {
+      setEditUploadingFiles(false);
     }
   };
 
@@ -5454,6 +5673,7 @@ const ProjectDashboard = () => {
                     <PermissionGate entity="users" action="write">
                       <button
                         onClick={() => {
+                          setShowUserModal(false);
                           handleUserAction('edit', selectedUser);
                         }}
                         className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center"
@@ -5612,6 +5832,385 @@ const ProjectDashboard = () => {
               >
                 Suspend User
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && editUserData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[95vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                    <Edit className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">Edit User</h3>
+                    <p className="text-sm text-gray-500 mt-1">Update user information</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowEditUserModal(false);
+                    setEditUserData(null);
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Personal Information */}
+              <div className="bg-gray-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-600" />
+                  Personal Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={editUserData.firstName}
+                      onChange={(e) => handleEditUserInputChange('firstName', e.target.value)}
+                      placeholder="Enter first name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={editUserData.lastName}
+                      onChange={(e) => handleEditUserInputChange('lastName', e.target.value)}
+                      placeholder="Enter last name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={editUserData.email}
+                      onChange={(e) => handleEditUserInputChange('email', e.target.value)}
+                      placeholder="user@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mobile *
+                    </label>
+                    <input
+                      type="tel"
+                      value={editUserData.mobile}
+                      onChange={(e) => handleEditUserInputChange('mobile', e.target.value)}
+                      placeholder="01234567890"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      National ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={editUserData.nationalId}
+                      onChange={(e) => handleEditUserInputChange('nationalId', e.target.value)}
+                      placeholder="Enter national ID"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date of Birth
+                    </label>
+                    <input
+                      type="date"
+                      value={editUserData.dateOfBirth}
+                      onChange={(e) => handleEditUserInputChange('dateOfBirth', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Gender *
+                    </label>
+                    <select
+                      value={editUserData.gender}
+                      onChange={(e) => handleEditUserInputChange('gender', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Information */}
+              <div className="bg-green-50 rounded-xl p-6 border border-green-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-green-600" />
+                  Project Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unit Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={editUserData.projectUnit}
+                      onChange={(e) => handleEditUserInputChange('projectUnit', e.target.value)}
+                      placeholder="e.g., A101, B205"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Role *
+                    </label>
+                    <select
+                      value={editUserData.projectRole}
+                      onChange={(e) => handleEditUserInputChange('projectRole', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="owner">Owner</option>
+                      <option value="tenant">Tenant</option>
+                      <option value="resident">Resident</option>
+                      <option value="family">Family</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ID Documents Upload/Replace */}
+              <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                  National ID Documents
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  {(editUserData.currentFrontIdUrl || editUserData.currentBackIdUrl) 
+                    ? 'Current documents shown below. Upload new files to replace them.'
+                    : 'No documents uploaded yet. Add them now.'}
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Front ID Upload/Replace */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Front National ID
+                    </label>
+                    {editFrontIdPreview ? (
+                      <div className="relative">
+                        <img
+                          src={editFrontIdPreview}
+                          alt="New Front ID Preview"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-purple-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleEditRemoveFile('front')}
+                          className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          New Upload
+                        </div>
+                      </div>
+                    ) : editUserData.currentFrontIdUrl ? (
+                      <div className="relative">
+                        <img
+                          src={editUserData.currentFrontIdUrl}
+                          alt="Current Front ID"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-gray-300"
+                        />
+                        <div className="absolute bottom-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          Current Document
+                        </div>
+                        <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-40 transition-all cursor-pointer rounded-lg">
+                          <div className="opacity-0 hover:opacity-100 transition-opacity">
+                            <div className="bg-white rounded-lg px-4 py-2 text-sm font-medium text-gray-700">
+                              Click to Replace
+                            </div>
+                          </div>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={(e) => handleEditFileUpload(e.target.files[0], 'front')}
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-purple-300 rounded-lg cursor-pointer bg-white hover:bg-purple-50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-12 h-12 text-purple-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-600">
+                            <span className="font-semibold">Click to upload</span>
+                          </p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG or WebP (Max 5MB)</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleEditFileUpload(e.target.files[0], 'front')}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Back ID Upload/Replace */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Back National ID
+                    </label>
+                    {editBackIdPreview ? (
+                      <div className="relative">
+                        <img
+                          src={editBackIdPreview}
+                          alt="New Back ID Preview"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-purple-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleEditRemoveFile('back')}
+                          className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          New Upload
+                        </div>
+                      </div>
+                    ) : editUserData.currentBackIdUrl ? (
+                      <div className="relative">
+                        <img
+                          src={editUserData.currentBackIdUrl}
+                          alt="Current Back ID"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-gray-300"
+                        />
+                        <div className="absolute bottom-2 left-2 bg-gray-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          Current Document
+                        </div>
+                        <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-40 transition-all cursor-pointer rounded-lg">
+                          <div className="opacity-0 hover:opacity-100 transition-opacity">
+                            <div className="bg-white rounded-lg px-4 py-2 text-sm font-medium text-gray-700">
+                              Click to Replace
+                            </div>
+                          </div>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={(e) => handleEditFileUpload(e.target.files[0], 'back')}
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-purple-300 rounded-lg cursor-pointer bg-white hover:bg-purple-50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-12 h-12 text-purple-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-600">
+                            <span className="font-semibold">Click to upload</span>
+                          </p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG or WebP (Max 5MB)</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleEditFileUpload(e.target.files[0], 'back')}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  {(editFrontIdFile || editBackIdFile) && (
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4 text-purple-600" />
+                      <span>
+                        {editFrontIdFile && editBackIdFile ? 'Both documents will be replaced' : 
+                         editFrontIdFile ? 'Front ID will be replaced' : 
+                         'Back ID will be replaced'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowEditUserModal(false);
+                      setEditUserData(null);
+                      setEditFrontIdFile(null);
+                      setEditBackIdFile(null);
+                      setEditFrontIdPreview(null);
+                      setEditBackIdPreview(null);
+                    }}
+                    disabled={editingUser || editUploadingFiles}
+                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditUser}
+                    disabled={editingUser || editUploadingFiles}
+                    className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {editingUser || editUploadingFiles ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {editUploadingFiles ? 'Uploading Documents...' : 'Updating...'}
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Update User
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
