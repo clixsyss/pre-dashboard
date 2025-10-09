@@ -36,8 +36,12 @@ import {
   Building,
   Shield,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../config/firebase';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
@@ -195,6 +199,13 @@ const ProjectDashboard = () => {
     validityStartDate: '',
     validityEndDate: ''
   });
+  
+  // File upload state
+  const [frontIdFile, setFrontIdFile] = useState(null);
+  const [backIdFile, setBackIdFile] = useState(null);
+  const [frontIdPreview, setFrontIdPreview] = useState(null);
+  const [backIdPreview, setBackIdPreview] = useState(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
 
 
@@ -337,7 +348,16 @@ const ProjectDashboard = () => {
       }
 
       if (userStatusFilter !== 'all') {
-        filtered = filtered.filter(user => user.approvalStatus === userStatusFilter);
+        if (userStatusFilter === 'awaiting_password') {
+          // Filter for admin-created users awaiting password setup
+          filtered = filtered.filter(user => 
+            user.createdByAdmin && 
+            user.registrationStatus === 'in_progress' && 
+            user.registrationStep === 'awaiting_password'
+          );
+        } else {
+          filtered = filtered.filter(user => user.approvalStatus === userStatusFilter);
+        }
       }
 
       setFilteredUsers(filtered);
@@ -1165,6 +1185,11 @@ const ProjectDashboard = () => {
       case 'reject':
         handleRejectUser(user);
         break;
+      case 'resend_email':
+        if (window.confirm(`Resend password setup email to ${user.email}?`)) {
+          handleResendPasswordEmail(user);
+        }
+        break;
       case 'remove':
         if (window.confirm(`Are you sure you want to remove ${user.firstName} ${user.lastName} from this project? This will not delete their account.`)) {
           handleRemoveUserFromProject(user);
@@ -1402,6 +1427,56 @@ const ProjectDashboard = () => {
     }
   };
 
+  const handleResendPasswordEmail = async (user) => {
+    try {
+      // Create secondary Firebase instance to avoid interfering with admin session
+      const secondaryApp = initializeApp({
+        apiKey: "AIzaSyDpYVhP_uLDecqds0VD7g409N_AMj-OMF8",
+        authDomain: "pre-group.firebaseapp.com",
+        projectId: "pre-group",
+        storageBucket: "pre-group.firebasestorage.app",
+        messagingSenderId: "871778209250",
+        appId: "1:871778209250:web:79e726a4f5b5579bfc7dbb"
+      }, `resend-${Date.now()}`);
+
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      // Send password reset email
+      const continueUrl = window.location.origin + '/password-reset-success.html';
+      
+      await sendPasswordResetEmail(secondaryAuth, user.email, {
+        url: continueUrl,
+        handleCodeInApp: false,
+      });
+      
+      // Clean up secondary app
+      await deleteApp(secondaryApp);
+      
+      // Update user document to track email resend
+      const userDocRef = doc(db, 'users', user.id);
+      await updateDoc(userDocRef, {
+        passwordResetSentAt: serverTimestamp(),
+        passwordResetCount: (user.passwordResetCount || 0) + 1,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Update local state
+      setProjectUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === user.id
+            ? { ...u, passwordResetSentAt: new Date(), passwordResetCount: (u.passwordResetCount || 0) + 1 }
+            : u
+        )
+      );
+
+      alert(`✅ Password reset email sent successfully to:\n${user.email}\n\nThe user should receive it within a few seconds.`);
+      console.log('✅ Password reset email resent to:', user.email);
+    } catch (error) {
+      console.error('Error resending password email:', error);
+      alert(`Failed to send password reset email: ${error.message}`);
+    }
+  };
+
   const handleAddNewUser = async () => {
     // Validate required fields
     if (!newUserData.firstName || !newUserData.lastName || !newUserData.email || !newUserData.mobile || !newUserData.projectUnit || !newUserData.nationalId) {
@@ -1435,16 +1510,60 @@ const ProjectDashboard = () => {
     setAddingUser(true);
 
     try {
-      // Note: User will be created in Firestore only
-      // They need to sign up using the mobile app to create their auth account
-      // Or admin can create auth account separately through Firebase Console
-      
-      // For now, we'll create a placeholder authUid
-      // The user will need to complete registration through the app
-      const placeholderAuthUid = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      // Step 1: Create a secondary Firebase app instance for user creation
+      // This prevents logging out the admin
+      const secondaryApp = initializeApp({
+        apiKey: "AIzaSyDpYVhP_uLDecqds0VD7g409N_AMj-OMF8",
+        authDomain: "pre-group.firebaseapp.com",
+        projectId: "pre-group",
+        storageBucket: "pre-group.firebasestorage.app",
+        messagingSenderId: "871778209250",
+        appId: "1:871778209250:web:79e726a4f5b5579bfc7dbb"
+      }, `secondary-${Date.now()}`);
 
-      // Create user document in Firestore matching exact structure
-      const userData = {
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      // Step 2: Create user in Firebase Authentication with temporary password
+      const temporaryPassword = `Temp${Math.random().toString(36).substring(2, 10)}${Date.now()}!@#`;
+      
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(
+          secondaryAuth,
+          newUserData.email,
+          temporaryPassword
+        );
+      } catch (authError) {
+        if (authError.code === 'auth/email-already-in-use') {
+          throw new Error('This email is already registered. Please use a different email.');
+        }
+        throw authError;
+      }
+
+      const authUid = userCredential.user.uid;
+      console.log('User created in Auth:', authUid);
+
+      // Step 3: Send password reset email immediately (using secondary auth)
+      try {
+        // URL where user will be redirected after setting password
+        const continueUrl = window.location.origin + '/password-reset-success.html';
+        
+        await sendPasswordResetEmail(secondaryAuth, newUserData.email, {
+          url: continueUrl,
+          handleCodeInApp: false,
+        });
+        console.log('✅ Password reset email sent to:', newUserData.email);
+      } catch (emailError) {
+        console.error('Failed to send password reset email:', emailError);
+        // Continue anyway - user can request password reset later
+      }
+
+      // Step 4: Delete the secondary app to clean up
+      await deleteApp(secondaryApp);
+      console.log('Secondary app instance deleted');
+
+      // Step 5: Create user document in Firestore using authUid as document ID
+      const initialUserData = {
         // Personal Information
         firstName: newUserData.firstName,
         lastName: newUserData.lastName,
@@ -1455,19 +1574,22 @@ const ProjectDashboard = () => {
         dateOfBirth: newUserData.dateOfBirth || '',
         gender: newUserData.gender || 'male',
         
-        // Authentication - placeholder until user signs up
-        authUid: placeholderAuthUid,
+        // Authentication
+        authUid: authUid,
         emailVerified: false,
-        pendingRegistration: true, // Flag to indicate user needs to complete signup
+        passwordResetSent: true, // Flag to indicate password reset email was sent
+        passwordResetSentAt: serverTimestamp(),
+        passwordResetCount: 1,
         
         // Status fields
         approvalStatus: 'approved',
         approvedAt: serverTimestamp(),
         approvedBy: currentAdmin?.uid || 'system',
-        registrationStatus: 'completed',
-        registrationStep: 'personal_complete',
-        isProfileComplete: true,
+        registrationStatus: 'in_progress', // Will change to 'completed' when user sets password
+        registrationStep: 'awaiting_password',
+        isProfileComplete: false, // Will be true when user completes password setup
         isSuspended: false,
+        createdByAdmin: true,
         
         // Projects array - matching exact structure
         projects: [{
@@ -1495,7 +1617,7 @@ const ProjectDashboard = () => {
         unsuspendedAt: null,
         unsuspendedBy: null,
         
-        // Documents placeholder (empty until user uploads)
+        // Documents placeholder
         documents: {
           backIdUrl: '',
           frontIdUrl: '',
@@ -1505,25 +1627,42 @@ const ProjectDashboard = () => {
 
       // Add temporary user specific fields
       if (newUserData.accountType === 'temporary') {
-        userData.isTemporary = true;
-        userData.validityStartDate = new Date(newUserData.validityStartDate);
-        userData.validityEndDate = new Date(newUserData.validityEndDate);
-        userData.accountType = 'temporary';
+        initialUserData.isTemporary = true;
+        initialUserData.validityStartDate = new Date(newUserData.validityStartDate);
+        initialUserData.validityEndDate = new Date(newUserData.validityEndDate);
+        initialUserData.accountType = 'temporary';
       } else {
-        userData.isTemporary = false;
-        userData.accountType = 'permanent';
+        initialUserData.isTemporary = false;
+        initialUserData.accountType = 'permanent';
       }
 
-      // Add user to Firestore
-      const usersRef = collection(db, 'users');
-      const userDocRef = await addDoc(usersRef, userData);
+      // Create user document in Firestore with authUid as document ID
+      const userDocRef = doc(db, 'users', authUid);
+      await setDoc(userDocRef, initialUserData);
+      console.log('User document created with ID:', authUid);
 
-      console.log('User created successfully:', userDocRef.id);
+      // Upload ID documents if provided
+      if (frontIdFile || backIdFile) {
+        console.log('Uploading ID documents...');
+        const uploadedUrls = await uploadIdDocuments(authUid);
+        
+        // Update user document with uploaded URLs
+        await updateDoc(userDocRef, {
+          documents: {
+            frontIdUrl: uploadedUrls.frontIdUrl || '',
+            backIdUrl: uploadedUrls.backIdUrl || '',
+            profilePictureUrl: ''
+          },
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log('ID documents uploaded successfully');
+      }
 
       // Update local state
       const newUser = {
-        id: userDocRef.id,
-        ...userData
+        id: authUid,
+        ...initialUserData
       };
       
       setProjectUsers(prevUsers => [...prevUsers, newUser]);
@@ -1545,8 +1684,20 @@ const ProjectDashboard = () => {
         validityEndDate: ''
       });
       
+      // Reset file uploads
+      setFrontIdFile(null);
+      setBackIdFile(null);
+      setFrontIdPreview(null);
+      setBackIdPreview(null);
+      
       setShowAddUserModal(false);
-      alert(`User profile created successfully!\n\nNext steps:\n1. User should download and install the mobile app\n2. User signs up with email: ${newUserData.email}\n3. User completes registration to activate their account\n\nThe user information has been pre-approved.`);
+      
+      // Show success message with instructions
+      const successMessage = frontIdFile || backIdFile 
+        ? `✅ User Created Successfully!\n\n📧 Email Sent To: ${newUserData.email}\n\nWhat happened:\n• User account created in Firebase\n• Password reset email sent automatically\n• ID documents uploaded\n• Profile pre-approved\n\nWhat the user should do:\n1. Check their email inbox (${newUserData.email})\n2. Click the password reset link\n3. Set their new password\n4. Download the mobile app and login\n\n${newUserData.accountType === 'temporary' ? `⚠️ Account expires: ${new Date(newUserData.validityEndDate).toLocaleDateString()}` : ''}`
+        : `✅ User Created Successfully!\n\n📧 Email Sent To: ${newUserData.email}\n\nWhat happened:\n• User account created in Firebase\n• Password reset email sent automatically\n• Profile pre-approved\n\nWhat the user should do:\n1. Check their email inbox (${newUserData.email})\n2. Click the password reset link\n3. Set their new password\n4. Download the mobile app and login\n5. Upload ID documents during first login\n\n${newUserData.accountType === 'temporary' ? `⚠️ Account expires: ${new Date(newUserData.validityEndDate).toLocaleDateString()}` : ''}`;
+      
+      alert(successMessage);
     } catch (error) {
       console.error('Error creating user:', error);
       alert(`Failed to create user: ${error.message}`);
@@ -1560,6 +1711,81 @@ const ProjectDashboard = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  // Handle file upload for ID documents
+  const handleFileUpload = (file, type) => {
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        alert('Please upload a valid image file (JPEG, PNG, or WebP)');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (type === 'front') {
+          setFrontIdFile(file);
+          setFrontIdPreview(reader.result);
+        } else {
+          setBackIdFile(file);
+          setBackIdPreview(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove uploaded file
+  const handleRemoveFile = (type) => {
+    if (type === 'front') {
+      setFrontIdFile(null);
+      setFrontIdPreview(null);
+    } else {
+      setBackIdFile(null);
+      setBackIdPreview(null);
+    }
+  };
+
+  // Upload files to Firebase Storage
+  const uploadIdDocuments = async (userId) => {
+    const uploadedUrls = {
+      frontIdUrl: '',
+      backIdUrl: ''
+    };
+
+    try {
+      setUploadingFiles(true);
+
+      // Upload front ID
+      if (frontIdFile) {
+        const frontIdRef = ref(storage, `users/${userId}/documents/front_id_${Date.now()}.${frontIdFile.name.split('.').pop()}`);
+        await uploadBytes(frontIdRef, frontIdFile);
+        uploadedUrls.frontIdUrl = await getDownloadURL(frontIdRef);
+      }
+
+      // Upload back ID
+      if (backIdFile) {
+        const backIdRef = ref(storage, `users/${userId}/documents/back_id_${Date.now()}.${backIdFile.name.split('.').pop()}`);
+        await uploadBytes(backIdRef, backIdFile);
+        uploadedUrls.backIdUrl = await getDownloadURL(backIdRef);
+      }
+
+      return uploadedUrls;
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      throw new Error('Failed to upload ID documents');
+    } finally {
+      setUploadingFiles(false);
+    }
   };
 
 
@@ -1870,10 +2096,10 @@ const ProjectDashboard = () => {
 
                   {/* User Status Tabs */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1">
-                    <div className="flex space-x-1">
+                    <div className="grid grid-cols-5 gap-1">
                       <button
                         onClick={() => setUserStatusFilter('all')}
-                        className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                           userStatusFilter === 'all'
                             ? 'bg-blue-100 text-blue-700'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1883,7 +2109,7 @@ const ProjectDashboard = () => {
                       </button>
                       <button
                         onClick={() => setUserStatusFilter('pending')}
-                        className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                           userStatusFilter === 'pending'
                             ? 'bg-amber-100 text-amber-700'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1893,7 +2119,7 @@ const ProjectDashboard = () => {
                       </button>
                       <button
                         onClick={() => setUserStatusFilter('approved')}
-                        className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                           userStatusFilter === 'approved'
                             ? 'bg-green-100 text-green-700'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -1903,13 +2129,27 @@ const ProjectDashboard = () => {
                       </button>
                       <button
                         onClick={() => setUserStatusFilter('rejected')}
-                        className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                           userStatusFilter === 'rejected'
                             ? 'bg-red-100 text-red-700'
                             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                         }`}
                       >
                         Rejected ({projectUsers.filter(user => user.approvalStatus === 'rejected').length})
+                      </button>
+                      <button
+                        onClick={() => setUserStatusFilter('awaiting_password')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          userStatusFilter === 'awaiting_password'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Awaiting Password ({projectUsers.filter(user => 
+                          user.createdByAdmin && 
+                          user.registrationStatus === 'in_progress' && 
+                          user.registrationStep === 'awaiting_password'
+                        ).length})
                       </button>
                     </div>
             </div>
@@ -2056,12 +2296,30 @@ const ProjectDashboard = () => {
                                     <span className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
                                       user.registrationStatus === 'completed'
                                         ? 'bg-blue-100 text-blue-700'
-                              : user.registrationStatus === 'pending'
+                              : user.registrationStatus === 'in_progress'
+                                          ? 'bg-yellow-100 text-yellow-700'
+                                          : user.registrationStatus === 'pending'
                                           ? 'bg-yellow-100 text-yellow-700'
                                           : 'bg-gray-100 text-gray-700'
                               }`}>
                               {user.registrationStatus}
                             </span>
+                                    {/* Show awaiting password indicator for admin-created users */}
+                                    {user.createdByAdmin && user.registrationStatus === 'in_progress' && user.registrationStep === 'awaiting_password' && (
+                                      <div className="mt-1">
+                                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">
+                                          <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                          </svg>
+                                          Awaiting Password
+                                        </span>
+                                        {user.passwordResetCount > 1 && (
+                                          <span className="block text-xs text-gray-500 mt-1">
+                                            Email sent {user.passwordResetCount}x
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                           </td>
@@ -2076,6 +2334,21 @@ const ProjectDashboard = () => {
                                 <Eye className="h-4 w-4" />
                               </button>
                                   </PermissionGate>
+                                  
+                                  {/* Resend Email for Admin-Created Users Awaiting Password */}
+                                  {user.createdByAdmin && user.registrationStatus === 'in_progress' && user.registrationStep === 'awaiting_password' && (
+                                    <PermissionGate entity="users" action="write">
+                                      <button
+                                        onClick={() => handleUserAction('resend_email', user)}
+                                        className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
+                                        title="Resend Password Setup Email"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
+                                      </button>
+                                    </PermissionGate>
+                                  )}
                                   
                                   {/* Approval Actions for Pending Users */}
                                   {user.approvalStatus === 'pending' && (
@@ -5037,6 +5310,57 @@ const ProjectDashboard = () => {
                         </div>
                       </div>
                     </div>
+                  ) : selectedUser.createdByAdmin && selectedUser.registrationStatus === 'in_progress' && selectedUser.registrationStep === 'awaiting_password' ? (
+                    <div className="bg-white rounded-lg p-4 border border-purple-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-purple-100 text-purple-800">
+                          <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Awaiting Password Setup
+                        </span>
+                        <PermissionGate entity="users" action="write">
+                          <button
+                            onClick={() => {
+                              handleResendPasswordEmail(selectedUser);
+                            }}
+                            className="px-3 py-1 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+                          >
+                            <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Resend Email
+                          </button>
+                        </PermissionGate>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Status:</span>
+                          <p className="text-gray-600 mt-1">User was created by admin and needs to set their password</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Email:</span>
+                          <p className="text-gray-600 mt-1">{selectedUser.email}</p>
+                        </div>
+                        {selectedUser.passwordResetSentAt && (
+                          <div>
+                            <span className="font-medium text-gray-700">Last Email Sent:</span>
+                            <p className="text-gray-600 mt-1">
+                              {selectedUser.passwordResetSentAt.toDate ? 
+                                selectedUser.passwordResetSentAt.toDate().toLocaleString() :
+                                new Date(selectedUser.passwordResetSentAt).toLocaleString()
+                              }
+                            </p>
+                          </div>
+                        )}
+                        {selectedUser.passwordResetCount && (
+                          <div>
+                            <span className="font-medium text-gray-700">Email Sent Count:</span>
+                            <p className="text-gray-600 mt-1">{selectedUser.passwordResetCount} time(s)</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div className="bg-white rounded-lg p-4 border border-green-200">
                       <div className="flex items-center">
@@ -5555,6 +5879,105 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
+              {/* ID Documents Upload */}
+              <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                  National ID Documents 
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">Upload ID documents now or let the user upload during signup</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Front ID Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Front National ID
+                    </label>
+                    {frontIdPreview ? (
+                      <div className="relative">
+                        <img
+                          src={frontIdPreview}
+                          alt="Front ID Preview"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-purple-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile('front')}
+                          className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          ✓ Uploaded
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-purple-300 rounded-lg cursor-pointer bg-white hover:bg-purple-50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-12 h-12 text-purple-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-600">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG or WebP (Max 5MB)</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleFileUpload(e.target.files[0], 'front')}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Back ID Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Back National ID
+                    </label>
+                    {backIdPreview ? (
+                      <div className="relative">
+                        <img
+                          src={backIdPreview}
+                          alt="Back ID Preview"
+                          className="w-full h-48 object-cover rounded-lg border-2 border-purple-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile('back')}
+                          className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+                          ✓ Uploaded
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-purple-300 rounded-lg cursor-pointer bg-white hover:bg-purple-50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-12 h-12 text-purple-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-600">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG or WebP (Max 5MB)</p>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleFileUpload(e.target.files[0], 'back')}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Important Information */}
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                 <div className="flex items-start">
@@ -5565,13 +5988,38 @@ const ProjectDashboard = () => {
                     <h5 className="text-sm font-semibold text-blue-900 mb-1">Important Information</h5>
                     <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                       <li>User profile will be created and <strong>pre-approved</strong></li>
-                      <li>User must complete signup through the <strong>mobile app</strong> to activate account</li>
+                      <li><strong>✅ Password reset email will be sent automatically</strong> to the user</li>
+                      <li>User clicks email link, sets password, and can login immediately</li>
                       <li>Required fields: First Name, Last Name, Email, Mobile, National ID, Unit</li>
-                      <li>Documents (ID photos, profile picture) can be uploaded by user during signup</li>
+                      <li>ID documents are optional - user can upload during first login if not provided</li>
                       {newUserData.accountType === 'temporary' && (
-                        <li className="font-semibold">Temporary accounts will become inaccessible after the end date</li>
+                        <li className="font-semibold">⚠️ Temporary accounts will become inaccessible after the end date</li>
                       )}
                     </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Process Flow */}
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <div className="flex items-start">
+                  <svg className="h-5 w-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <div className="flex-1">
+                    <h5 className="text-sm font-semibold text-green-900 mb-1">📧 Automated Email Process</h5>
+                    <p className="text-sm text-green-800 mb-2">
+                      When you click "Create User", the following happens automatically:
+                    </p>
+                    <ol className="text-sm text-green-800 space-y-1 list-decimal list-inside">
+                      <li>User account created in Firebase Authentication</li>
+                      <li><strong>Password reset email sent to: {newUserData.email || '[email will be shown]'}</strong></li>
+                      <li>User profile saved in database with all information</li>
+                      <li>ID documents uploaded to secure storage (if provided)</li>
+                    </ol>
+                    <p className="text-sm text-green-800 mt-3 font-medium">
+                      ✨ The user will receive the email within seconds and can set their password immediately!
+                    </p>
                   </div>
                 </div>
               </div>
@@ -5579,34 +6027,55 @@ const ProjectDashboard = () => {
 
             {/* Modal Footer */}
             <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
-              <div className="flex items-center justify-end space-x-3">
-                <button
-                  onClick={() => setShowAddUserModal(false)}
-                  disabled={addingUser}
-                  className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddNewUser}
-                  disabled={addingUser}
-                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                >
-                  {addingUser ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Creating User...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create User
-                    </>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  {(frontIdFile || backIdFile) && (
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4 text-purple-600" />
+                      <span>
+                        {frontIdFile && backIdFile ? 'Both ID documents ready to upload' : 
+                         frontIdFile ? 'Front ID ready to upload' : 
+                         'Back ID ready to upload'}
+                      </span>
+                    </div>
                   )}
-                </button>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowAddUserModal(false);
+                      // Reset files on cancel
+                      setFrontIdFile(null);
+                      setBackIdFile(null);
+                      setFrontIdPreview(null);
+                      setBackIdPreview(null);
+                    }}
+                    disabled={addingUser || uploadingFiles}
+                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddNewUser}
+                    disabled={addingUser || uploadingFiles}
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {addingUser || uploadingFiles ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {uploadingFiles ? 'Uploading Documents...' : 'Creating User...'}
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create User
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
