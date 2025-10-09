@@ -36,7 +36,7 @@ import {
   Building,
   Shield,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import CourtsManagement from '../components/CourtsManagement';
 import AcademiesManagement from '../components/AcademiesManagement';
@@ -177,6 +177,24 @@ const ProjectDashboard = () => {
   const [suspensionReason, setSuspensionReason] = useState('');
   const [suspensionDuration, setSuspensionDuration] = useState('7'); // days
   const [suspensionType, setSuspensionType] = useState('temporary'); // temporary or permanent
+
+  // Add User modal state
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addingUser, setAddingUser] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    mobile: '',
+    nationalId: '',
+    dateOfBirth: '',
+    gender: 'male', // male, female, other
+    projectUnit: '', // unit for the specific project
+    projectRole: 'owner', // owner, tenant, resident, family
+    accountType: 'permanent', // permanent or temporary
+    validityStartDate: '',
+    validityEndDate: ''
+  });
 
 
 
@@ -1384,6 +1402,166 @@ const ProjectDashboard = () => {
     }
   };
 
+  const handleAddNewUser = async () => {
+    // Validate required fields
+    if (!newUserData.firstName || !newUserData.lastName || !newUserData.email || !newUserData.mobile || !newUserData.projectUnit || !newUserData.nationalId) {
+      alert('Please fill in all required fields (First Name, Last Name, Email, Mobile, Unit, and National ID)');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newUserData.email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    // Validate temporary user fields
+    if (newUserData.accountType === 'temporary') {
+      if (!newUserData.validityStartDate || !newUserData.validityEndDate) {
+        alert('Please set validity dates for temporary user');
+        return;
+      }
+      
+      const startDate = new Date(newUserData.validityStartDate);
+      const endDate = new Date(newUserData.validityEndDate);
+      
+      if (endDate <= startDate) {
+        alert('End date must be after start date');
+        return;
+      }
+    }
+
+    setAddingUser(true);
+
+    try {
+      // Note: User will be created in Firestore only
+      // They need to sign up using the mobile app to create their auth account
+      // Or admin can create auth account separately through Firebase Console
+      
+      // For now, we'll create a placeholder authUid
+      // The user will need to complete registration through the app
+      const placeholderAuthUid = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      // Create user document in Firestore matching exact structure
+      const userData = {
+        // Personal Information
+        firstName: newUserData.firstName,
+        lastName: newUserData.lastName,
+        fullName: `${newUserData.firstName} ${newUserData.lastName}`,
+        email: newUserData.email,
+        mobile: newUserData.mobile,
+        nationalId: newUserData.nationalId,
+        dateOfBirth: newUserData.dateOfBirth || '',
+        gender: newUserData.gender || 'male',
+        
+        // Authentication - placeholder until user signs up
+        authUid: placeholderAuthUid,
+        emailVerified: false,
+        pendingRegistration: true, // Flag to indicate user needs to complete signup
+        
+        // Status fields
+        approvalStatus: 'approved',
+        approvedAt: serverTimestamp(),
+        approvedBy: currentAdmin?.uid || 'system',
+        registrationStatus: 'completed',
+        registrationStep: 'personal_complete',
+        isProfileComplete: true,
+        isSuspended: false,
+        
+        // Projects array - matching exact structure
+        projects: [{
+          projectId: projectId,
+          role: newUserData.projectRole,
+          unit: newUserData.projectUnit,
+          updatedAt: new Date().toISOString()
+        }],
+        
+        // Top-level role and unit (empty as per structure)
+        role: '',
+        unit: '',
+        
+        // Timestamps
+        createdAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
+        updatedAt: new Date().toISOString(),
+        
+        // Suspension fields (null as per structure)
+        suspendedAt: null,
+        suspendedBy: null,
+        suspensionEndDate: null,
+        suspensionReason: null,
+        suspensionType: null,
+        unsuspendedAt: null,
+        unsuspendedBy: null,
+        
+        // Documents placeholder (empty until user uploads)
+        documents: {
+          backIdUrl: '',
+          frontIdUrl: '',
+          profilePictureUrl: ''
+        }
+      };
+
+      // Add temporary user specific fields
+      if (newUserData.accountType === 'temporary') {
+        userData.isTemporary = true;
+        userData.validityStartDate = new Date(newUserData.validityStartDate);
+        userData.validityEndDate = new Date(newUserData.validityEndDate);
+        userData.accountType = 'temporary';
+      } else {
+        userData.isTemporary = false;
+        userData.accountType = 'permanent';
+      }
+
+      // Add user to Firestore
+      const usersRef = collection(db, 'users');
+      const userDocRef = await addDoc(usersRef, userData);
+
+      console.log('User created successfully:', userDocRef.id);
+
+      // Update local state
+      const newUser = {
+        id: userDocRef.id,
+        ...userData
+      };
+      
+      setProjectUsers(prevUsers => [...prevUsers, newUser]);
+      setFilteredUsers(prevUsers => [...prevUsers, newUser]);
+
+      // Reset form and close modal
+      setNewUserData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        mobile: '',
+        nationalId: '',
+        dateOfBirth: '',
+        gender: 'male',
+        projectUnit: '',
+        projectRole: 'owner',
+        accountType: 'permanent',
+        validityStartDate: '',
+        validityEndDate: ''
+      });
+      
+      setShowAddUserModal(false);
+      alert(`User profile created successfully!\n\nNext steps:\n1. User should download and install the mobile app\n2. User signs up with email: ${newUserData.email}\n3. User completes registration to activate their account\n\nThe user information has been pre-approved.`);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert(`Failed to create user: ${error.message}`);
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const handleNewUserInputChange = (field, value) => {
+    setNewUserData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
 
 
   if (loading) {
@@ -1680,7 +1858,10 @@ const ProjectDashboard = () => {
                 </p>
               </div>
                     <PermissionGate entity="users" action="create">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={() => setShowAddUserModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 <Plus className="h-4 w-4 mr-2 inline" />
                 Add User
               </button>
@@ -5107,6 +5288,326 @@ const ProjectDashboard = () => {
               >
                 Suspend User
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                    <Plus className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">Add New User</h3>
+                    <p className="text-sm text-gray-500 mt-1">Create a new user account for this project</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddUserModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Account Type Selection */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                <label className="block text-lg font-semibold text-gray-900 mb-4">
+                  Account Type *
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className={`relative flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                    newUserData.accountType === 'permanent' 
+                      ? 'border-blue-600 bg-blue-50' 
+                      : 'border-gray-300 bg-white hover:border-blue-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      value="permanent"
+                      checked={newUserData.accountType === 'permanent'}
+                      onChange={(e) => handleNewUserInputChange('accountType', e.target.value)}
+                      className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center">
+                        <UserCheck className="h-5 w-5 mr-2 text-blue-600" />
+                        <span className="text-base font-semibold text-gray-900">Permanent User</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-2">
+                        Regular user account with full access and no expiration date
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className={`relative flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                    newUserData.accountType === 'temporary' 
+                      ? 'border-orange-600 bg-orange-50' 
+                      : 'border-gray-300 bg-white hover:border-orange-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      value="temporary"
+                      checked={newUserData.accountType === 'temporary'}
+                      onChange={(e) => handleNewUserInputChange('accountType', e.target.value)}
+                      className="mt-1 mr-3 text-orange-600 focus:ring-orange-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center">
+                        <Clock className="h-5 w-5 mr-2 text-orange-600" />
+                        <span className="text-base font-semibold text-gray-900">Temporary User</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-2">
+                        Time-limited account with specified validity period
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Validity Period - Only for Temporary Users */}
+              {newUserData.accountType === 'temporary' && (
+                <div className="bg-orange-50 rounded-xl p-6 border border-orange-200">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Calendar className="h-5 w-5 mr-2 text-orange-600" />
+                    Validity Period
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Start Date *
+                      </label>
+                      <input
+                        type="date"
+                        value={newUserData.validityStartDate}
+                        onChange={(e) => handleNewUserInputChange('validityStartDate', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        End Date *
+                      </label>
+                      <input
+                        type="date"
+                        value={newUserData.validityEndDate}
+                        onChange={(e) => handleNewUserInputChange('validityEndDate', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm text-orange-700 mt-3 flex items-start">
+                    <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                    <span>User account will become inaccessible after the end date. The account will behave as if deleted.</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Personal Information */}
+              <div className="bg-gray-50 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-blue-600" />
+                  Personal Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.firstName}
+                      onChange={(e) => handleNewUserInputChange('firstName', e.target.value)}
+                      placeholder="Enter first name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.lastName}
+                      onChange={(e) => handleNewUserInputChange('lastName', e.target.value)}
+                      placeholder="Enter last name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={newUserData.email}
+                      onChange={(e) => handleNewUserInputChange('email', e.target.value)}
+                      placeholder="user@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Password setup link will be sent to this email</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mobile *
+                    </label>
+                    <input
+                      type="tel"
+                      value={newUserData.mobile}
+                      onChange={(e) => handleNewUserInputChange('mobile', e.target.value)}
+                      placeholder="01234567890"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      National ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.nationalId}
+                      onChange={(e) => handleNewUserInputChange('nationalId', e.target.value)}
+                      placeholder="Enter national ID"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date of Birth
+                    </label>
+                    <input
+                      type="date"
+                      value={newUserData.dateOfBirth}
+                      onChange={(e) => handleNewUserInputChange('dateOfBirth', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Gender *
+                    </label>
+                    <select
+                      value={newUserData.gender}
+                      onChange={(e) => handleNewUserInputChange('gender', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Information */}
+              <div className="bg-green-50 rounded-xl p-6 border border-green-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-green-600" />
+                  Project Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unit Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.projectUnit}
+                      onChange={(e) => handleNewUserInputChange('projectUnit', e.target.value)}
+                      placeholder="e.g., A101, B205"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Role *
+                    </label>
+                    <select
+                      value={newUserData.projectRole}
+                      onChange={(e) => handleNewUserInputChange('projectRole', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="owner">Owner</option>
+                      <option value="tenant">Tenant</option>
+                      <option value="resident">Resident</option>
+                      <option value="family">Family</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Important Information */}
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div className="flex items-start">
+                  <svg className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1">
+                    <h5 className="text-sm font-semibold text-blue-900 mb-1">Important Information</h5>
+                    <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                      <li>User profile will be created and <strong>pre-approved</strong></li>
+                      <li>User must complete signup through the <strong>mobile app</strong> to activate account</li>
+                      <li>Required fields: First Name, Last Name, Email, Mobile, National ID, Unit</li>
+                      <li>Documents (ID photos, profile picture) can be uploaded by user during signup</li>
+                      {newUserData.accountType === 'temporary' && (
+                        <li className="font-semibold">Temporary accounts will become inaccessible after the end date</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => setShowAddUserModal(false)}
+                  disabled={addingUser}
+                  className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddNewUser}
+                  disabled={addingUser}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {addingUser ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Creating User...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create User
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
