@@ -326,6 +326,9 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
                   Category
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Media
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -360,6 +363,38 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{submission.categoryName}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {submission.mediaFiles && submission.mediaFiles.length > 0 ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="flex -space-x-2">
+                            {submission.mediaFiles.slice(0, 3).map((file, idx) => (
+                              file.url && file.type?.startsWith('image/') ? (
+                                <img
+                                  key={idx}
+                                  src={file.url}
+                                  alt={`Preview ${idx}`}
+                                  className="h-8 w-8 rounded-full border-2 border-white object-cover"
+                                  title={file.name}
+                                />
+                              ) : (
+                                <div 
+                                  key={idx}
+                                  className="h-8 w-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center"
+                                  title={file.name}
+                                >
+                                  <Paperclip className="h-4 w-4 text-gray-500" />
+                                </div>
+                              )
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-600">
+                            {submission.mediaFiles.length} file{submission.mediaFiles.length > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">No files</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(submission.status)}`}>
@@ -530,29 +565,85 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
               {/* Media Files */}
               {selectedSubmission.mediaFiles && selectedSubmission.mediaFiles.length > 0 && (
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Attached Files</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                    <ImageIcon className="h-5 w-5 mr-2 text-blue-600" />
+                    Attached Files ({selectedSubmission.mediaFiles.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {selectedSubmission.mediaFiles.map((file, index) => (
-                      <div key={index} className="border border-gray-200 rounded-lg p-3">
-                        <div className="flex items-center space-x-2">
-                          {file.type.startsWith('image/') ? (
-                            <ImageIcon className="h-5 w-5 text-blue-500" />
-                          ) : (
-                            <Paperclip className="h-5 w-5 text-gray-500" />
-                          )}
-                          <span className="text-sm text-gray-900 truncate">{file.name}</span>
-                        </div>
-                        <a
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 mt-1 block"
-                        >
-                          Download
-                        </a>
+                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+                        {file.url && file.type?.startsWith('image/') ? (
+                          <>
+                            <div className="relative group">
+                              <img
+                                src={file.url}
+                                alt={file.name || `Image ${index + 1}`}
+                                className="w-full h-48 object-cover cursor-pointer"
+                                onClick={() => window.open(file.url, '_blank')}
+                              />
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
+                                <Eye className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                              <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                Image
+                              </div>
+                            </div>
+                            <div className="p-3 bg-gray-50">
+                              <p className="text-sm text-gray-900 truncate mb-2" title={file.name}>
+                                {file.name || `Image ${index + 1}`}
+                              </p>
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => window.open(file.url, '_blank')}
+                                  className="flex-1 text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center justify-center"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View Full
+                                </button>
+                                <a
+                                  href={file.url}
+                                  download={file.name}
+                                  className="flex-1 text-xs bg-gray-600 text-white px-3 py-1.5 rounded hover:bg-gray-700 flex items-center justify-center"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="p-4">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <Paperclip className="h-5 w-5 text-gray-500" />
+                              <span className="text-sm text-gray-900 truncate">{file.name || 'Unnamed file'}</span>
+                            </div>
+                            {file.url ? (
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => window.open(file.url, '_blank')}
+                                  className="flex-1 text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
+                                >
+                                  View
+                                </button>
+                                <a
+                                  href={file.url}
+                                  download={file.name}
+                                  className="flex-1 text-xs bg-gray-600 text-white px-3 py-1.5 rounded hover:bg-gray-700 text-center"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-red-600">File upload failed</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-gray-500 mt-3 flex items-center">
+                    <ImageIcon className="h-3 w-3 mr-1" />
+                    Click on any image to view it in full size
+                  </p>
                 </div>
               )}
 

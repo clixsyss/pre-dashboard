@@ -1,0 +1,150 @@
+{
+  "common": {
+    "loading": "جاري التحميل...",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "submit": "إرسال",
+    "search": "بحث",
+    "filter": "تصفية",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "next": "التالي",
+    "yes": "نعم",
+    "no": "لا",
+    "confirm": "تأكيد",
+    "success": "نجح",
+    "error": "خطأ",
+    "warning": "تحذير"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "users": "المستخدمون",
+    "projects": "المشاريع",
+    "services": "الخدمات",
+    "stores": "المتاجر",
+    "news": "الأخبار",
+    "complaints": "الشكاوى",
+    "violations": "المخالفات",
+    "bookings": "الحجوزات",
+    "requests": "الطلبات",
+    "courts": "الملاعب",
+    "academy": "الأكاديمية",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
+  },
+  "dashboard": {
+    "welcome": "مرحباً بك في لوحة تحكم مجموعة PRE",
+    "overview": "نظرة عامة",
+    "statistics": "الإحصائيات",
+    "recentActivity": "النشاط الأخير"
+  },
+  "users": {
+    "title": "إدارة المستخدمين",
+    "addUser": "إضافة مستخدم",
+    "editUser": "تعديل مستخدم",
+    "deleteUser": "حذف مستخدم",
+    "userDetails": "تفاصيل المستخدم",
+    "fullName": "الاسم الكامل",
+    "email": "البريد الإلكتروني",
+    "phone": "رقم الهاتف",
+    "status": "الحالة",
+    "role": "الدور",
+    "project": "المشروع",
+    "unit": "الوحدة",
+    "createdAt": "تاريخ الإنشاء",
+    "active": "نشط",
+    "inactive": "غير نشط",
+    "suspended": "موقوف"
+  },
+  "projects": {
+    "title": "إدارة المشاريع",
+    "addProject": "إضافة مشروع",
+    "editProject": "تعديل مشروع",
+    "deleteProject": "حذف مشروع",
+    "projectName": "اسم المشروع",
+    "projectLocation": "الموقع",
+    "projectDescription": "الوصف",
+    "projectStatus": "الحالة"
+  },
+  "services": {
+    "title": "إدارة الخدمات",
+    "addService": "إضافة خدمة",
+    "editService": "تعديل خدمة",
+    "deleteService": "حذف خدمة",
+    "serviceName": "اسم الخدمة (إنجليزي)",
+    "serviceNameAr": "اسم الخدمة (عربي)",
+    "description": "الوصف (إنجليزي)",
+    "descriptionAr": "الوصف (عربي)",
+    "price": "السعر",
+    "duration": "المدة",
+    "category": "الفئة",
+    "availability": "التوفر",
+    "available": "متاح",
+    "unavailable": "غير متاح"
+  },
+  "stores": {
+    "title": "إدارة المتاجر",
+    "addStore": "إضافة متجر",
+    "editStore": "تعديل متجر",
+    "storeName": "اسم المتجر (إنجليزي)",
+    "storeNameAr": "اسم المتجر (عربي)",
+    "description": "الوصف (إنجليزي)",
+    "descriptionAr": "الوصف (عربي)",
+    "products": "المنتجات",
+    "addProduct": "إضافة منتج",
+    "productName": "اسم المنتج (إنجليزي)",
+    "productNameAr": "اسم المنتج (عربي)"
+  },
+  "news": {
+    "title": "إدارة الأخبار",
+    "addNews": "إضافة خبر",
+    "editNews": "تعديل خبر",
+    "newsTitle": "العنوان (إنجليزي)",
+    "newsTitleAr": "العنوان (عربي)",
+    "content": "المحتوى (إنجليزي)",
+    "contentAr": "المحتوى (عربي)",
+    "publish": "نشر",
+    "draft": "مسودة",
+    "published": "منشور"
+  },
+  "categories": {
+    "title": "إدارة الفئات",
+    "addCategory": "إضافة فئة",
+    "editCategory": "تعديل فئة",
+    "categoryName": "اسم الفئة (إنجليزي)",
+    "categoryNameAr": "اسم الفئة (عربي)",
+    "description": "الوصف (إنجليزي)",
+    "descriptionAr": "الوصف (عربي)"
+  },
+  "forms": {
+    "required": "هذا الحقل مطلوب",
+    "invalidEmail": "عنوان البريد الإلكتروني غير صالح",
+    "invalidPhone": "رقم الهاتف غير صالح",
+    "enterText": "أدخل النص",
+    "selectOption": "اختر خياراً",
+    "uploadImage": "رفع صورة",
+    "changeImage": "تغيير الصورة"
+  },
+  "messages": {
+    "saveSuccess": "تم الحفظ بنجاح",
+    "updateSuccess": "تم التحديث بنجاح",
+    "deleteSuccess": "تم الحذف بنجاح",
+    "deleteConfirm": "هل أنت متأكد من حذف هذا العنصر؟",
+    "error": "حدث خطأ",
+    "noData": "لا توجد بيانات"
+  },
+  "language": {
+    "english": "الإنجليزية",
+    "arabic": "العربية",
+    "switchLanguage": "تبديل اللغة"
+  },
+  "bilingual": {
+    "englishVersion": "النسخة الإنجليزية",
+    "arabicVersion": "النسخة العربية",
+    "bothLanguagesRequired": "اللغتان الإنجليزية والعربية مطلوبتان"
+  }
+}
+
