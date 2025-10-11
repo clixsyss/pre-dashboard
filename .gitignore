@@ -21,3 +21,15 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Firebase Admin SDK credentials
+serviceAccountKey.json
+
+# User data (sensitive)
+users.json
+users*.json
+users02.json
+users03.json
+users04.json
+users05.json
+users_jdar.json
