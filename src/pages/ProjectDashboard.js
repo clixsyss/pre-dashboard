@@ -75,6 +75,7 @@ const ProjectDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [userStatusFilter, setUserStatusFilter] = useState('all');
+  const [migrationStatusFilter, setMigrationStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
@@ -348,7 +349,7 @@ const ProjectDashboard = () => {
 
   // Filter users function
   const filterUsers = useCallback(() => {
-    if (searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all') {
+    if (searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all') {
       let filtered = [...projectUsers];
 
       if (searchTerm) {
@@ -376,11 +377,25 @@ const ProjectDashboard = () => {
         }
       }
 
+      // Migration status filter
+      if (migrationStatusFilter !== 'all') {
+        if (migrationStatusFilter === 'migrated') {
+          // Users who have been migrated (have migrated: true)
+          filtered = filtered.filter(user => user.migrated === true);
+        } else if (migrationStatusFilter === 'needs_migration') {
+          // Users who have oldId but not migrated yet
+          filtered = filtered.filter(user => user.oldId && user.migrated !== true);
+        } else if (migrationStatusFilter === 'new_users') {
+          // Users who don't have oldId (registered directly in new system)
+          filtered = filtered.filter(user => !user.oldId);
+        }
+      }
+
       setFilteredUsers(filtered);
     } else {
       setFilteredUsers(projectUsers);
     }
-  }, [searchTerm, statusFilter, userStatusFilter, projectUsers]);
+  }, [searchTerm, statusFilter, userStatusFilter, migrationStatusFilter, projectUsers]);
 
   // Filter bookings based on search and filters
   const getFilteredBookings = useCallback(() => {
@@ -2434,6 +2449,59 @@ const ProjectDashboard = () => {
                     </div>
             </div>
 
+            {/* Migration Status Tabs */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Migration Status
+                </h3>
+              </div>
+              <div className="p-1">
+                <div className="grid grid-cols-4 gap-1">
+                <button
+                  onClick={() => setMigrationStatusFilter('all')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    migrationStatusFilter === 'all'
+                      ? 'bg-gray-100 text-gray-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  All Users ({projectUsers.length})
+                </button>
+                <button
+                  onClick={() => setMigrationStatusFilter('migrated')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    migrationStatusFilter === 'migrated'
+                      ? 'bg-teal-100 text-teal-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  ✅ Migrated ({projectUsers.filter(user => user.migrated === true).length})
+                </button>
+                <button
+                  onClick={() => setMigrationStatusFilter('needs_migration')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    migrationStatusFilter === 'needs_migration'
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  ⚠️ Needs Migration ({projectUsers.filter(user => user.oldId && user.migrated !== true).length})
+                </button>
+                <button
+                  onClick={() => setMigrationStatusFilter('new_users')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    migrationStatusFilter === 'new_users'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  🆕 New Users ({projectUsers.filter(user => !user.oldId).length})
+                </button>
+              </div>
+              </div>
+            </div>
+
             {/* Search and Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center space-x-4">
@@ -2457,12 +2525,40 @@ const ProjectDashboard = () => {
                   <option value="pending">Pending</option>
                   <option value="incomplete">Incomplete</option>
                 </select>
+                <select
+                  value={migrationStatusFilter}
+                  onChange={(e) => setMigrationStatusFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Users</option>
+                  <option value="migrated">✅ Migrated</option>
+                  <option value="needs_migration">⚠️ Needs Migration</option>
+                  <option value="new_users">🆕 New Users</option>
+                </select>
               </div>
               
               {/* Pagination Info and Items Per Page Selector */}
               <div className="mt-4 flex justify-between items-center">
-                <div className="text-sm text-gray-500">
-                  Showing {startIndex + 1}-{Math.min(endIndex, totalUsersCount)} of {totalUsersCount} users
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-gray-500">
+                    Showing {startIndex + 1}-{Math.min(endIndex, totalUsersCount)} of {totalUsersCount} users
+                  </div>
+                  
+                  {/* Clear Filters Button */}
+                  {(searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setStatusFilter('all');
+                        setUserStatusFilter('all');
+                        setMigrationStatusFilter('all');
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear Filters
+                    </button>
+                  )}
                 </div>
                 
                 <div className="flex items-center space-x-2">
@@ -2606,6 +2702,23 @@ const ProjectDashboard = () => {
                               }`}>
                               {user.registrationStatus}
                             </span>
+                                    {/* Migration status badge */}
+                                    {user.migrated === true && (
+                                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700">
+                                        <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Migrated
+                                      </span>
+                                    )}
+                                    {user.oldId && user.migrated !== true && (
+                                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+                                        <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        Needs Migration
+                                      </span>
+                                    )}
                                     {/* Show awaiting password indicator for admin-created users */}
                                     {user.createdByAdmin && user.registrationStatus === 'in_progress' && user.registrationStep === 'awaiting_password' && (
                                       <div className="mt-1">
@@ -5386,18 +5499,41 @@ const ProjectDashboard = () => {
       {/* User Details Modal */}
       {showUserModal && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">User Details</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {selectedUser.firstName} {selectedUser.lastName}
-                </p>
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center space-x-4">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                  {selectedUser.firstName?.charAt(0)}{selectedUser.lastName?.charAt(0)}
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedUser.firstName} {selectedUser.lastName}
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedUser.email}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {selectedUser.migrated === true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700">
+                        <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Migrated
+                      </span>
+                    )}
+                    {selectedUser.oldId && selectedUser.migrated !== true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Needs Migration
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => setShowUserModal(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-full transition-colors"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -5405,34 +5541,127 @@ const ProjectDashboard = () => {
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
-              {/* User Information Section */}
-              <div className="bg-blue-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+              {/* Personal Information Section - Enhanced */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
                   <Users className="h-5 w-5 mr-2 text-blue-600" />
                   Personal Information
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Full Name</label>
-                    <p className="text-sm text-blue-900 font-medium mt-1">
-                      {selectedUser.firstName} {selectedUser.lastName}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</label>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">
+                      {selectedUser.fullName || `${selectedUser.firstName} ${selectedUser.lastName}`}
                     </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Email</label>
-                    <p className="text-sm text-blue-900 font-medium mt-1">
-                      {selectedUser.email || 'No email'}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">First Name</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.firstName || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Name</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.lastName || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1 break-all">{selectedUser.email || 'No email'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.mobile || selectedUser.phone || 'No phone'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">National ID</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.nationalId || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date of Birth</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.dateOfBirth || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUser.gender || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email Verified</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.emailVerified ? (
+                        <span className="text-green-600 flex items-center">
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="text-red-600">Not Verified</span>
+                      )}
                     </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Phone</label>
-                    <p className="text-sm text-blue-900 font-medium mt-1">
-                      {selectedUser.phone || selectedUser.mobile || 'No phone'}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Approval Status</label>
-                    <p className="text-sm text-blue-900 font-medium mt-1">
+                </div>
+              </div>
+
+              {/* Current Project Information - Only show the project they're viewing */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-6 border border-green-200">
+                <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-green-600" />
+                  Current Project Information
+                </h3>
+                {(() => {
+                  // Find the current project from the user's projects array
+                  const currentProject = selectedUser.projects?.find(p => p.projectId === projectId);
+                  
+                  if (currentProject) {
+                    return (
+                      <div className="bg-white rounded-lg p-5 border-2 border-green-300 shadow-md">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Project Name</label>
+                            <p className="text-base text-green-900 font-bold mt-1">{project?.name || 'Unknown Project'}</p>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Unit Number</label>
+                            <p className="text-base text-green-900 font-bold mt-1">{currentProject.unit || 'N/A'}</p>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-3">
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Role</label>
+                            <p className="text-base text-green-900 font-bold mt-1 capitalize">{currentProject.role || 'N/A'}</p>
+                          </div>
+                        </div>
+                        {selectedUser.projects?.length > 1 && (
+                          <div className="mt-4 pt-4 border-t border-green-200">
+                            <p className="text-sm text-green-700 flex items-center">
+                              <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              This user has access to {selectedUser.projects.length} project{selectedUser.projects.length > 1 ? 's' : ''} total
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                        <p className="text-yellow-700 flex items-center">
+                          <AlertTriangle className="h-5 w-5 mr-2" />
+                          User is not associated with this project
+                        </p>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+
+              {/* Status & Approval Section */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+                  <Shield className="h-5 w-5 mr-2 text-purple-600" />
+                  Account Status & Approvals
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approval Status</label>
+                    <p className="text-sm text-gray-900 font-medium mt-2">
                       <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                         selectedUser.approvalStatus === 'approved'
                           ? 'bg-green-100 text-green-800'
@@ -5446,55 +5675,57 @@ const ProjectDashboard = () => {
                       </span>
                     </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-blue-700 uppercase tracking-wide">Registration Status</label>
-                    <p className="text-sm text-blue-900 font-medium mt-1">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Status</label>
+                    <p className="text-sm text-gray-900 font-medium mt-2">
                       <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                         selectedUser.registrationStatus === 'completed'
                           ? 'bg-green-100 text-green-800'
                           : selectedUser.registrationStatus === 'pending'
                             ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
                       }`}>
                         {selectedUser.registrationStatus || 'Unknown'}
                       </span>
                     </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Project Information Section */}
-              <div className="bg-green-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
-                  <Building className="h-5 w-5 mr-2 text-green-600" />
-                  Project Information
-                </h3>
-                <div className="space-y-4">
-                  {selectedUser.projects && selectedUser.projects.length > 0 ? (
-                    selectedUser.projects.map((project, index) => (
-                      <div key={index} className="bg-white rounded-lg p-4 border border-green-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Project ID</label>
-                            <p className="text-sm text-green-900 font-medium mt-1">{project.projectId}</p>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Role</label>
-                            <p className="text-sm text-green-900 font-medium mt-1 capitalize">{project.role || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Unit</label>
-                            <p className="text-sm text-green-900 font-medium mt-1">{project.unit || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Status</label>
-                            <p className="text-sm text-green-900 font-medium mt-1">{project.status || 'Active'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-green-700">No project information available</p>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Profile Complete</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.isProfileComplete ? (
+                        <span className="text-green-600 flex items-center">
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Complete
+                        </span>
+                      ) : (
+                        <span className="text-orange-600">Incomplete</span>
+                      )}
+                    </p>
+                  </div>
+                  {selectedUser.approvedBy && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved By</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.approvedBy}</p>
+                    </div>
+                  )}
+                  {selectedUser.approvedAt && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.approvedAt.toDate ? 
+                          selectedUser.approvedAt.toDate().toLocaleDateString() :
+                          new Date(selectedUser.approvedAt).toLocaleDateString()
+                        }
+                      </p>
+                    </div>
+                  )}
+                  {selectedUser.role && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User Role</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUser.role}</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -5753,18 +5984,88 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
-              {/* Account Information Section */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <Settings className="h-5 w-5 mr-2 text-gray-600" />
-                  Account Information
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
-                    <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.id}</p>
+              {/* Migration Information - Only show if user has migration data */}
+              {(selectedUser.migrated || selectedUser.oldId || selectedUser.migratedAt || selectedUser.oldDocumentId) && (
+                <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-6 border border-teal-200">
+                  <h3 className="text-lg font-semibold text-teal-900 mb-4 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Migration Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migration Status</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.migrated === true ? (
+                          <span className="text-teal-600 flex items-center font-semibold">
+                            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Migrated
+                          </span>
+                        ) : selectedUser.oldId ? (
+                          <span className="text-orange-600 flex items-center font-semibold">
+                            <AlertTriangle className="h-4 w-4 mr-1" />
+                            Needs Migration
+                          </span>
+                        ) : (
+                          <span className="text-blue-600 font-semibold">New User</span>
+                        )}
+                      </p>
+                    </div>
+                    {selectedUser.oldId && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Old User ID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.oldId}</p>
+                      </div>
+                    )}
+                    {selectedUser.oldDocumentId && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Old Document ID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.oldDocumentId}</p>
+                      </div>
+                    )}
+                    {selectedUser.migratedAt && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migrated At</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {typeof selectedUser.migratedAt === 'string'
+                            ? new Date(selectedUser.migratedAt).toLocaleString()
+                            : selectedUser.migratedAt.toDate
+                              ? selectedUser.migratedAt.toDate().toLocaleString()
+                              : 'Unknown'}
+                        </p>
+                      </div>
+                    )}
+                    {selectedUser.migratedTo && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migrated To UID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.migratedTo}</p>
+                      </div>
+                    )}
                   </div>
-                  <div>
+                </div>
+              )}
+
+              {/* Account Information & Timestamps */}
+              <div className="bg-gradient-to-br from-gray-50 to-slate-100 rounded-xl p-6 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <Settings className="h-5 w-5 mr-2 text-gray-600" />
+                  Account Information & Timestamps
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                    <p className="text-xs text-gray-900 font-mono mt-1 break-all">{selectedUser.id}</p>
+                  </div>
+                  {selectedUser.authUid && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Auth UID</label>
+                      <p className="text-xs text-gray-900 font-mono mt-1 break-all">{selectedUser.authUid}</p>
+                    </div>
+                  )}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created At</label>
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {selectedUser.createdAt ? 
@@ -5775,7 +6076,19 @@ const ProjectDashboard = () => {
                       }
                     </p>
                   </div>
-                  <div>
+                  {selectedUser.updatedAt && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Updated At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {typeof selectedUser.updatedAt === 'string'
+                          ? new Date(selectedUser.updatedAt).toLocaleString()
+                          : selectedUser.updatedAt.toDate
+                            ? selectedUser.updatedAt.toDate().toLocaleString()
+                            : 'Unknown'}
+                      </p>
+                    </div>
+                  )}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</label>
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {selectedUser.lastLoginAt ? 
@@ -5786,12 +6099,90 @@ const ProjectDashboard = () => {
                       }
                     </p>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Auth UID</label>
-                    <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.authUid || 'N/A'}</p>
-                  </div>
+                  {selectedUser.registrationStep && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Step</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.registrationStep}</p>
+                    </div>
+                  )}
+                  {selectedUser.createdByAdmin !== undefined && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created By Admin</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.createdByAdmin ? (
+                          <span className="text-blue-600 font-semibold">Yes</span>
+                        ) : (
+                          <span className="text-gray-600">No</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                  {selectedUser.accountType && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Account Type</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1 capitalize">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          selectedUser.accountType === 'temporary'
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {selectedUser.accountType}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                  {selectedUser.validityStartDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Validity Start</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityStartDate}</p>
+                    </div>
+                  )}
+                  {selectedUser.validityEndDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Validity End</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityEndDate}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Additional Metadata - Only show if there are additional fields */}
+              {(selectedUser.fcmTokens || selectedUser.platform || selectedUser.appVersion || selectedUser.deviceInfo) && (
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200">
+                  <h3 className="text-lg font-semibold text-indigo-900 mb-4 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Device & App Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {selectedUser.platform && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Platform</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUser.platform}</p>
+                      </div>
+                    )}
+                    {selectedUser.appVersion && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">App Version</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.appVersion}</p>
+                      </div>
+                    )}
+                    {selectedUser.deviceInfo && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Device Info</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.deviceInfo}</p>
+                      </div>
+                    )}
+                    {selectedUser.fcmTokens && Array.isArray(selectedUser.fcmTokens) && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm col-span-full">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">FCM Tokens</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.fcmTokens.length} device(s) registered</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
