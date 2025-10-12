@@ -12,6 +12,8 @@ import {
   UserX,
   UserCheck
 } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
 import userService from '../services/userService';
 
@@ -29,6 +31,7 @@ const Users = () => {
   }, [navigate]);
 
   const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,7 +104,7 @@ const Users = () => {
   }, [users, searchTerm, roleFilter, statusFilter, approvalFilter]);
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsersAndProjects();
   }, []);
 
   useEffect(() => {
@@ -112,20 +115,38 @@ const Users = () => {
     }
   }, [users, searchTerm, roleFilter, statusFilter, approvalFilter, filterUsers]);
 
-  const fetchUsers = async () => {
+  const fetchUsersAndProjects = async () => {
     try {
       setLoading(true);
       
-      // Use the user service to fetch all users
-      const usersData = await userService.getAllUsers();
+      // Fetch users and projects in parallel
+      const [usersData, projectsSnapshot] = await Promise.all([
+        userService.getAllUsers(),
+        getDocs(collection(db, 'projects'))
+      ]);
+      
       console.log('Fetched users:', usersData);
       setUsers(usersData);
+      
+      // Map projects to an array with id and data
+      const projectsData = projectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('Fetched projects:', projectsData);
+      setProjects(projectsData);
     } catch (err) {
-      console.error('Error fetching users:', err);
-      setError('Failed to load users');
+      console.error('Error fetching users and projects:', err);
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to get project name by ID
+  const getProjectName = (projectId) => {
+    const project = projects.find(p => p.id === projectId);
+    return project?.name || projectId; // Fallback to ID if name not found
   };
 
 
@@ -452,7 +473,7 @@ const Users = () => {
       <div className="text-center py-12">
         <div className="text-red-600 text-lg font-medium">{error}</div>
         <button 
-          onClick={fetchUsers}
+          onClick={fetchUsersAndProjects}
           className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           Retry
@@ -646,9 +667,6 @@ const Users = () => {
                           <span className="text-xs text-gray-600">Back ID</span>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.role || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {(() => {
@@ -871,350 +889,717 @@ const Users = () => {
         )}
       </div>
 
-      {/* Enhanced User Details Modal */}
+      {/* Enhanced User Details Modal - Super Admin View */}
       {showUserModal && selectedUser && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">User Details</h3>
-                <button
-                  onClick={() => setShowUserModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <span className="sr-only">Close</span>
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Basic Information */}
-                <div className="space-y-4">
-                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Basic Information</h4>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {selectedUser.firstName && selectedUser.lastName 
-                        ? `${selectedUser.firstName} ${selectedUser.lastName}`
-                        : selectedUser.fullName || 'No Name'
-                      }
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.email}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Mobile</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.mobile || 'N/A'}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.dateOfBirth || 'N/A'}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Gender</label>
-                    <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.gender || 'N/A'}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">National ID</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.nationalId || 'N/A'}</p>
-                  </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center space-x-4">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                  {selectedUser.firstName?.charAt(0)}{selectedUser.lastName?.charAt(0)}
                 </div>
-                
-                {/* Documents Section */}
-                <div className="space-y-4">
-                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Documents & Profile</h4>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Profile Picture</label>
-                    <div className="mt-2">
-                      {selectedUser.documents?.profilePictureUrl ? (
-                        <div className="flex items-center space-x-3">
-                          <img 
-                            src={selectedUser.documents.profilePictureUrl} 
-                            alt="Profile"
-                            className="h-16 w-16 rounded-full object-cover border-2 border-gray-200"
-                          />
-                          <button
-                            onClick={() => window.open(selectedUser.documents.profilePictureUrl, '_blank')}
-                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                          >
-                            View Full Size
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
-                          <span className="text-gray-400 text-sm">No Image</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Front National ID</label>
-                    <div className="mt-2">
-                      {selectedUser.documents?.frontIdUrl ? (
-                        <div className="flex items-center space-x-3">
-                          <div className="h-16 w-16 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
-                            <Eye className="h-6 w-6 text-blue-600" />
-                          </div>
-                          <button
-                            onClick={() => window.open(selectedUser.documents.frontIdUrl, '_blank')}
-                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                          >
-                            View Document
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="h-16 w-16 rounded-lg bg-gray-100 flex items-center justify-center">
-                          <span className="text-gray-400 text-sm">Not Uploaded</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Back National ID</label>
-                    <div className="mt-2">
-                      {selectedUser.documents?.backIdUrl ? (
-                        <div className="flex items-center space-x-3">
-                          <div className="h-16 w-16 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
-                            <Eye className="h-6 w-6 text-blue-600" />
-                          </div>
-                          <button
-                            onClick={() => window.open(selectedUser.documents.backIdUrl, '_blank')}
-                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                          >
-                            View Document
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="h-16 w-16 rounded-lg bg-gray-100 flex items-center justify-center">
-                          <span className="text-gray-400 text-sm">Not Uploaded</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* System Information */}
-                <div className="space-y-4">
-                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">System Information</h4>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">User ID</label>
-                    <p className="mt-1 text-sm text-gray-900 font-mono">{selectedUser.id}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Auth UID</label>
-                    <p className="mt-1 text-sm text-gray-900 font-mono">{selectedUser.authUid || 'N/A'}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Registration Status</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedUser.registrationStatus === 'completed' 
-                        ? 'bg-green-100 text-green-800'
-                        : selectedUser.registrationStatus === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {selectedUser.registrationStatus || 'pending'}
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Approval Status</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedUser.approvalStatus === 'approved' 
-                        ? 'bg-green-100 text-green-800'
-                        : selectedUser.approvalStatus === 'rejected'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {selectedUser.approvalStatus || 'pending'}
-                    </span>
-                    {selectedUser.approvalStatus === 'approved' && selectedUser.approvedBy && (
-                      <div className="mt-1 text-xs text-gray-600">
-                        <div>Approved by: {selectedUser.approvedBy}</div>
-                        {selectedUser.approvedAt && (
-                          <div>At: {new Date(selectedUser.approvedAt).toLocaleString()}</div>
-                        )}
-                      </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedUser.firstName} {selectedUser.lastName}
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedUser.email}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {selectedUser.migrated === true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700">
+                        <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Migrated
+                      </span>
                     )}
-                    {selectedUser.approvalStatus === 'rejected' && selectedUser.rejectionReason && (
-                      <div className="mt-1 text-xs text-gray-600">
-                        <div>Rejected by: {selectedUser.rejectedBy || 'N/A'}</div>
-                        {selectedUser.rejectedAt && (
-                          <div>At: {new Date(selectedUser.rejectedAt).toLocaleString()}</div>
-                        )}
-                        <div className="mt-1"><strong>Reason:</strong> {selectedUser.rejectionReason}</div>
-                      </div>
+                    {selectedUser.oldId && selectedUser.migrated !== true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+                        <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Needs Migration
+                      </span>
                     )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Registration Step</label>
-                    <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.registrationStep || 'N/A'}</p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Email Verification</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedUser.emailVerified 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {selectedUser.emailVerified ? 'Verified' : 'Pending Verification'}
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Profile Complete</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      selectedUser.isProfileComplete 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {selectedUser.isProfileComplete ? 'Yes' : 'No'}
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Account Status</label>
-                    {selectedUser.isDeleted ? (
-                      <div className="mt-1">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          <UserX className="h-3 w-3 mr-1" />
-                          Deleted
-                        </span>
-                        <div className="mt-2 space-y-1 text-sm text-gray-600">
-                          <div><strong>Deleted At:</strong> {selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : 'N/A'}</div>
-                          <div><strong>Deleted By:</strong> {selectedUser.deletedBy || 'N/A'}</div>
-                          {selectedUser.restoredAt && (
-                            <div><strong>Restored At:</strong> {new Date(selectedUser.restoredAt).toLocaleString()}</div>
-                          )}
-                        </div>
-                      </div>
-                    ) : selectedUser.isSuspended ? (
-                      <div className="mt-1">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          <UserX className="h-3 w-3 mr-1" />
-                          Suspended
-                        </span>
-                        <div className="mt-2 space-y-1 text-sm text-gray-600">
-                          <div><strong>Reason:</strong> {selectedUser.suspensionReason}</div>
-                          <div><strong>Type:</strong> {selectedUser.suspensionType === 'permanent' ? 'Permanent' : 'Temporary'}</div>
-                          {selectedUser.suspensionType === 'temporary' && selectedUser.suspensionEndDate && (
-                            <div><strong>Until:</strong> {new Date(selectedUser.suspensionEndDate).toLocaleString()}</div>
-                          )}
-                          <div><strong>Suspended At:</strong> {selectedUser.suspendedAt ? new Date(selectedUser.suspendedAt).toLocaleString() : 'N/A'}</div>
-                          <div><strong>Suspended By:</strong> {selectedUser.suspendedBy || 'N/A'}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        <UserCheck className="h-3 w-3 mr-1" />
-                        Active
+                    {selectedUser.projects && selectedUser.projects.length > 0 && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                        {selectedUser.projects.length} Project{selectedUser.projects.length > 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
+                <button
+                  onClick={() => setShowUserModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
               
-              {/* Timestamps */}
-              <div className="mt-6 space-y-4">
-                <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Timestamps</h4>
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Personal Information Section - Enhanced */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Personal Information
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Created At</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {selectedUser.createdAt?.toLocaleString() || 'N/A'}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</label>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">
+                      {selectedUser.fullName || `${selectedUser.firstName} ${selectedUser.lastName}`}
                     </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Last Updated</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {selectedUser.updatedAt?.toLocaleString() || 'N/A'}
-                    </p>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">First Name</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.firstName || 'N/A'}</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Last Login</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {selectedUser.lastLoginAt?.toLocaleString() || 'N/A'}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Name</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.lastName || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1 break-all">{selectedUser.email || 'No email'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.mobile || selectedUser.phone || 'No phone'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">National ID</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.nationalId || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date of Birth</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.dateOfBirth || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUser.gender || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email Verified</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.emailVerified ? (
+                        <span className="text-green-600 flex items-center">
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="text-red-600">Not Verified</span>
+                      )}
                     </p>
                   </div>
                 </div>
-              </div>
-              
-              {/* Properties/Projects */}
-              {selectedUser.enhancedProjects && selectedUser.enhancedProjects.length > 0 && (
-                <div className="mt-6 space-y-4">
-                  <h4 className="text-lg font-medium text-gray-900 border-b pb-2">Properties & Projects</h4>
+                  </div>
+                  
+              {/* All Projects Information - Super Admin can see all projects */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-6 border border-green-200">
+                <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  All Projects ({selectedUser.projects?.length || 0})
+                </h3>
+                {selectedUser.projects && selectedUser.projects.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedUser.enhancedProjects.map((project, index) => (
-                      <div key={index} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <h5 className="font-medium text-blue-900">{project.projectName}</h5>
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    {selectedUser.projects.map((project, index) => (
+                      <div key={index} className="bg-white rounded-lg p-5 border-2 border-green-300 shadow-md hover:shadow-lg transition-shadow">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                              <span className="text-lg font-bold text-green-700">{index + 1}</span>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-bold text-green-900">{getProjectName(project.projectId)}</p>
+                              <p className="text-xs font-mono text-gray-500">{project.projectId}</p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${
                             project.role === 'owner' 
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
+                              ? 'bg-purple-100 text-purple-700'
+                              : project.role === 'tenant'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-700'
                           }`}>
-                            {project.role}
+                            {project.role?.toUpperCase() || 'N/A'}
                           </span>
                         </div>
-                        <div className="space-y-1 text-sm text-blue-800">
-                          <div><strong>Type:</strong> {project.projectType}</div>
-                          <div><strong>Location:</strong> {project.projectLocation}</div>
-                          <div><strong>Unit:</strong> {project.unit}</div>
+                        <div className="space-y-2">
+                          <div className="bg-green-50 rounded-lg p-2">
+                            <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Unit Number</label>
+                            <p className="text-base text-green-900 font-bold mt-1">{project.unit || 'N/A'}</p>
+                          </div>
+                          {project.status && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-600">Status:</span>
+                              <span className="font-semibold text-gray-900">{project.status}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                    <p className="text-yellow-700 flex items-center">
+                      <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      No projects associated with this user
+                    </p>
+                  </div>
+                )}
+                  </div>
+                  
+              {/* Status & Approval Section */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  Account Status & Approvals
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approval Status</label>
+                    <p className="text-sm text-gray-900 font-medium mt-2">
+                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                        selectedUser.approvalStatus === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : selectedUser.approvalStatus === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : selectedUser.approvalStatus === 'rejected'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {selectedUser.approvalStatus || 'pending'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Status</label>
+                    <p className="text-sm text-gray-900 font-medium mt-2">
+                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                        selectedUser.registrationStatus === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : selectedUser.registrationStatus === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {selectedUser.registrationStatus || 'Unknown'}
+                      </span>
+                    </p>
                 </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Profile Complete</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.isProfileComplete ? (
+                        <span className="text-green-600 flex items-center">
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Complete
+                        </span>
+                      ) : (
+                        <span className="text-orange-600">Incomplete</span>
+                      )}
+                    </p>
+                  </div>
+                  {selectedUser.approvedBy && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved By</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.approvedBy}</p>
+                    </div>
+                  )}
+                  {selectedUser.approvedAt && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {typeof selectedUser.approvedAt === 'string'
+                          ? new Date(selectedUser.approvedAt).toLocaleDateString()
+                          : selectedUser.approvedAt?.toDate
+                            ? selectedUser.approvedAt.toDate().toLocaleDateString()
+                            : selectedUser.approvedAt?.toLocaleString() || 'N/A'}
+                      </p>
+                    </div>
+                  )}
+                  {selectedUser.role && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User Role</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUser.role}</p>
+                    </div>
+                  )}
+                  {selectedUser.rejectedBy && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm col-span-full">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rejection Details</label>
+                      <div className="mt-2 space-y-1 text-sm">
+                        <p><span className="font-medium">Rejected By:</span> {selectedUser.rejectedBy}</p>
+                        {selectedUser.rejectedAt && (
+                          <p><span className="font-medium">Rejected At:</span> {new Date(selectedUser.rejectedAt).toLocaleString()}</p>
+                        )}
+                        {selectedUser.rejectionReason && (
+                          <p><span className="font-medium">Reason:</span> {selectedUser.rejectionReason}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Documents & Profile Pictures Section */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200">
+                <h3 className="text-lg font-semibold text-indigo-900 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Documents & Profile Pictures
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* Profile Picture */}
+                  <div>
+                    <label className="text-sm font-medium text-indigo-700 block mb-2">Profile Picture</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.profilePictureUrl ? (
+                        <div className="flex items-center space-x-4">
+                          <img 
+                            src={selectedUser.documents.profilePictureUrl} 
+                            alt="Profile"
+                            className="h-20 w-20 rounded-full object-cover border-4 border-indigo-200 shadow-md"
+                          />
+                          <button
+                            onClick={() => window.open(selectedUser.documents.profilePictureUrl, '_blank')}
+                            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Full Size
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-4">
+                          <div className="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300">
+                            <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </div>
+                          <span className="text-gray-500 text-sm">No profile picture uploaded</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* National ID Documents */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Front ID */}
+                  <div>
+                      <label className="text-sm font-medium text-indigo-700 block mb-2">Front National ID</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.frontIdUrl ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img
+                                src={selectedUser.documents.frontIdUrl}
+                                alt="Front National ID"
+                                className="w-full h-32 object-cover rounded-lg border-2 border-indigo-200 shadow-sm"
+                              />
+                              <div className="absolute top-2 right-2">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✓ Uploaded
+                                </span>
+                              </div>
+                          </div>
+                          <button
+                            onClick={() => window.open(selectedUser.documents.frontIdUrl, '_blank')}
+                              className="w-full px-3 py-2 bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-200 transition-colors flex items-center justify-center"
+                          >
+                              <Eye className="h-4 w-4 mr-2" />
+                            View Document
+                          </button>
+                        </div>
+                      ) : (
+                          <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                            <div className="text-center">
+                              <svg className="h-8 w-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-gray-500 text-sm">Not uploaded</span>
+                            </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                    {/* Back ID */}
+                  <div>
+                      <label className="text-sm font-medium text-indigo-700 block mb-2">Back National ID</label>
+                    <div className="mt-2">
+                      {selectedUser.documents?.backIdUrl ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img
+                                src={selectedUser.documents.backIdUrl}
+                                alt="Back National ID"
+                                className="w-full h-32 object-cover rounded-lg border-2 border-indigo-200 shadow-sm"
+                              />
+                              <div className="absolute top-2 right-2">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  ✓ Uploaded
+                                </span>
+                              </div>
+                          </div>
+                          <button
+                            onClick={() => window.open(selectedUser.documents.backIdUrl, '_blank')}
+                              className="w-full px-3 py-2 bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-200 transition-colors flex items-center justify-center"
+                          >
+                              <Eye className="h-4 w-4 mr-2" />
+                            View Document
+                          </button>
+                        </div>
+                      ) : (
+                          <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                            <div className="text-center">
+                              <svg className="h-8 w-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-gray-500 text-sm">Not uploaded</span>
+                            </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                  {/* Document Status Summary */}
+                  <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                    <h4 className="text-sm font-semibold text-indigo-900 mb-3">Document Status</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.profilePictureUrl ? 'bg-green-500' : 'bg-gray-300'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Profile Picture</span>
+                  </div>
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.frontIdUrl ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Front ID</span>
+                  </div>
+                      <div className="text-center">
+                        <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${
+                          selectedUser.documents?.backIdUrl ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs text-gray-600">Back ID</span>
+                  </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Account Status Section */}
+              {(selectedUser.isDeleted || selectedUser.isSuspended) && (
+                <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-6 border border-red-200">
+                  <h3 className="text-lg font-semibold text-red-900 mb-4 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Account Status Alert
+                  </h3>
+                  <div className="space-y-4">
+                    {selectedUser.isDeleted ? (
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                            <UserX className="h-4 w-4 mr-2" />
+                            Account Deleted
+                    </span>
+                      </div>
+                        <div className="space-y-2 text-sm">
+                          <div><span className="font-medium text-gray-700">Deleted At:</span> <span className="text-gray-600">{selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : 'N/A'}</span></div>
+                          <div><span className="font-medium text-gray-700">Deleted By:</span> <span className="text-gray-600">{selectedUser.deletedBy || 'N/A'}</span></div>
+                          {selectedUser.restoredAt && (
+                            <div><span className="font-medium text-gray-700">Restored At:</span> <span className="text-gray-600">{new Date(selectedUser.restoredAt).toLocaleString()}</span></div>
+                          )}
+                      </div>
+                      </div>
+                    ) : selectedUser.isSuspended && (
+                      <div className="bg-white rounded-lg p-4 border border-red-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                            <UserX className="h-4 w-4 mr-2" />
+                            Account Suspended
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {selectedUser.suspensionType === 'permanent' ? 'Permanent' : 'Temporary'}
+                          </span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div><span className="font-medium text-gray-700">Reason:</span> <p className="text-gray-600 mt-1">{selectedUser.suspensionReason}</p></div>
+                          {selectedUser.suspensionType === 'temporary' && selectedUser.suspensionEndDate && (
+                            <div><span className="font-medium text-gray-700">Suspension Ends:</span> <p className="text-gray-600 mt-1">{new Date(selectedUser.suspensionEndDate).toLocaleString()}</p></div>
+                          )}
+                          <div><span className="font-medium text-gray-700">Suspended At:</span> <span className="text-gray-600">{selectedUser.suspendedAt ? new Date(selectedUser.suspendedAt).toLocaleString() : 'N/A'}</span></div>
+                          <div><span className="font-medium text-gray-700">Suspended By:</span> <span className="text-gray-600">{selectedUser.suspendedBy || 'N/A'}</span></div>
+                  </div>
+                  </div>
+                    )}
+                  </div>
+                  </div>
               )}
+
+              {/* Migration Information - Only show if user has migration data */}
+              {(selectedUser.migrated || selectedUser.oldId || selectedUser.migratedAt || selectedUser.oldDocumentId) && (
+                <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-6 border border-teal-200">
+                  <h3 className="text-lg font-semibold text-teal-900 mb-4 flex items-center">
+                    <svg className="h-5 w-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Migration Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migration Status</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.migrated === true ? (
+                          <span className="text-teal-600 flex items-center font-semibold">
+                            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Migrated
+                        </span>
+                        ) : selectedUser.oldId ? (
+                          <span className="text-orange-600 flex items-center font-semibold">
+                            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Needs Migration
+                          </span>
+                        ) : (
+                          <span className="text-blue-600 font-semibold">New User</span>
+                        )}
+                      </p>
+                        </div>
+                    {selectedUser.oldId && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Old User ID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.oldId}</p>
+                      </div>
+                    )}
+                    {selectedUser.oldDocumentId && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Old Document ID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.oldDocumentId}</p>
+                        </div>
+                    )}
+                    {selectedUser.migratedAt && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migrated At</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {typeof selectedUser.migratedAt === 'string'
+                            ? new Date(selectedUser.migratedAt).toLocaleString()
+                            : selectedUser.migratedAt.toDate
+                              ? selectedUser.migratedAt.toDate().toLocaleString()
+                              : 'Unknown'}
+                        </p>
+                      </div>
+                    )}
+                    {selectedUser.migratedTo && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Migrated To UID</label>
+                        <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.migratedTo}</p>
+                  </div>
+                    )}
+                </div>
+              </div>
+              )}
+
+              {/* Account Information & Timestamps */}
+              <div className="bg-gradient-to-br from-gray-50 to-slate-100 rounded-xl p-6 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                  <svg className="h-5 w-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Account Information & Timestamps
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                    <p className="text-xs text-gray-900 font-mono mt-1 break-all">{selectedUser.id}</p>
+                  </div>
+                  {selectedUser.authUid && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Auth UID</label>
+                      <p className="text-xs text-gray-900 font-mono mt-1 break-all">{selectedUser.authUid}</p>
+                    </div>
+                  )}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created At</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.createdAt?.toLocaleString() || 'Unknown'}
+                    </p>
+                  </div>
+                  {selectedUser.updatedAt && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Updated At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.updatedAt?.toLocaleString() || 'Unknown'}
+                    </p>
+                  </div>
+                  )}
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUser.lastLoginAt?.toLocaleString() || 'Never'}
+                    </p>
+                  </div>
+                  {selectedUser.registrationStep && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Step</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.registrationStep}</p>
+                </div>
+                  )}
+                  {selectedUser.createdByAdmin !== undefined && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created By Admin</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {selectedUser.createdByAdmin ? (
+                          <span className="text-blue-600 font-semibold">Yes</span>
+                        ) : (
+                          <span className="text-gray-600">No</span>
+                        )}
+                      </p>
+              </div>
+                  )}
+                  {selectedUser.accountType && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Account Type</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1 capitalize">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          selectedUser.accountType === 'temporary'
+                            ? 'bg-orange-100 text-orange-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                          {selectedUser.accountType}
+                          </span>
+                      </p>
+                        </div>
+                  )}
+                  {selectedUser.validityStartDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Validity Start</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityStartDate}</p>
+                        </div>
+                  )}
+                  {selectedUser.validityEndDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Validity End</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityEndDate}</p>
+                      </div>
+                  )}
+                  </div>
+                </div>
+            </div>
               
-              <div className="mt-6 flex justify-between items-center">
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center space-x-3">
                 {/* Approval Actions for Pending Users */}
                 {!selectedUser.isDeleted && (selectedUser.approvalStatus || 'pending') === 'pending' && (
-                  <div className="flex space-x-3">
+                  <>
                     <button
                       onClick={() => {
                         handleApproveUser(selectedUser);
                         setShowUserModal(false);
                       }}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                      className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
                     >
-                      ✓ Approve User
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Approve User
                     </button>
                     <button
                       onClick={() => {
                         setShowUserModal(false);
                         openDeclineModal(selectedUser);
                       }}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                      className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center"
                     >
-                      ✗ Decline User
+                      <UserX className="h-4 w-4 mr-2" />
+                      Decline User
                     </button>
-                  </div>
+                  </>
                 )}
+                
+                {/* Regular Actions for Approved Users */}
+                {!selectedUser.isDeleted && (selectedUser.approvalStatus || 'pending') === 'approved' && (
+                  <>
+                    {selectedUser.isSuspended ? (
+                      <button
+                        onClick={() => {
+                          handleUnsuspendUser(selectedUser);
+                          setShowUserModal(false);
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                      >
+                        <UserCheck className="h-4 w-4 mr-2" />
+                        Unsuspend
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          openSuspendModal(selectedUser);
+                          setShowUserModal(false);
+                        }}
+                        className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center"
+                      >
+                        <UserX className="h-4 w-4 mr-2" />
+                        Suspend
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        openDeleteModal(selectedUser);
+                        setShowUserModal(false);
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                    >
+                      <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete
+                    </button>
+                  </>
+                )}
+
+                {/* Show restore option for deleted users */}
+                {selectedUser.isDeleted && (
+                  <button
+                    onClick={() => {
+                      handleRestoreUser(selectedUser);
+                      setShowUserModal(false);
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                  >
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Restore User
+                  </button>
+                )}
+              </div>
                 
                 <button
                   onClick={() => setShowUserModal(false)}
-                  className="ml-auto px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Close
                 </button>
-              </div>
             </div>
           </div>
         </div>
