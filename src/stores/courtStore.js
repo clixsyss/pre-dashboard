@@ -59,9 +59,22 @@ export const useCourtStore = create((set, get) => ({
         imageFileName: courtData.imageFileName || '',
         description: courtData.description || '',
         active: courtData.active !== undefined ? courtData.active : true,
+        bookingIntervalMinutes: courtData.bookingIntervalMinutes || 60,
+        availability: courtData.availability || {
+          monday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          tuesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          wednesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          thursday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          friday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          saturday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+          sunday: { enabled: true, startTime: '08:00', endTime: '22:00' }
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
+      
+      console.log('📊 Adding new court to Firestore:', newCourt);
+      console.log('📅 Initial availability:', JSON.stringify(newCourt.availability, null, 2));
 
       const docRef = await addDoc(collection(db, `projects/${projectId}/courts`), newCourt);
       newCourt.id = docRef.id;
@@ -69,6 +82,8 @@ export const useCourtStore = create((set, get) => ({
       set((state) => ({
         courts: [...state.courts, newCourt]
       }));
+      
+      console.log('✅ New court added successfully');
 
       return docRef.id;
     } catch (error) {
@@ -104,10 +119,14 @@ export const useCourtStore = create((set, get) => ({
         imageFileName: courtData.imageFileName || '',
         description: courtData.description || '',
         active: courtData.active,
+        bookingIntervalMinutes: courtData.bookingIntervalMinutes || 60,
+        availability: courtData.availability || {},
         updatedAt: serverTimestamp()
       };
       
-      console.log('Update data being sent to Firestore:', updateData);
+      console.log('📊 Update data being sent to Firestore:', updateData);
+      console.log('📅 Availability in update:', JSON.stringify(updateData.availability, null, 2));
+      console.log('⏱️ Booking interval in update:', updateData.bookingIntervalMinutes);
 
       await updateDoc(courtRef, updateData);
 
@@ -116,6 +135,8 @@ export const useCourtStore = create((set, get) => ({
           court.id === courtId ? { ...court, ...updateData } : court
         )
       }));
+      
+      console.log('✅ Court updated successfully in Firestore');
     } catch (error) {
       console.error("Error updating court:", error);
       set({ error: error.message });

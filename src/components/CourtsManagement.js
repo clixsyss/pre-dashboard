@@ -191,7 +191,9 @@ const CourtsManagement = ({ projectId }) => {
         console.log('No image data available');
       }
       
-      console.log('Court data being saved:', courtData);
+      console.log('📊 Court data being saved:', courtData);
+      console.log('📅 Availability schedule:', JSON.stringify(courtData.availability, null, 2));
+      console.log('⏱️ Booking interval:', courtData.bookingIntervalMinutes, 'minutes');
 
       if (editingCourt) {
         await updateCourt(projectId, editingCourt.id, courtData);
@@ -675,7 +677,7 @@ const CourtsManagement = ({ projectId }) => {
                   <select
                     required
                     value={formData.bookingIntervalMinutes}
-                    onChange={(e) => setFormData({...formData, bookingIntervalMinutes: e.target.value})}
+                    onChange={(e) => setFormData({...formData, bookingIntervalMinutes: parseInt(e.target.value)})}
                     className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-medium"
                   >
                     <option value="30">30 minutes</option>
@@ -685,7 +687,7 @@ const CourtsManagement = ({ projectId }) => {
                     <option value="180">3 hours</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-2">
-                    💡 Users will only be able to book in {formData.bookingIntervalMinutes === '30' ? '30-minute' : formData.bookingIntervalMinutes === '60' ? '1-hour' : formData.bookingIntervalMinutes === '90' ? '1.5-hour' : formData.bookingIntervalMinutes === '120' ? '2-hour' : '3-hour'} slots
+                    💡 Users will only be able to book in {formData.bookingIntervalMinutes === 30 ? '30-minute' : formData.bookingIntervalMinutes === 60 ? '1-hour' : formData.bookingIntervalMinutes === 90 ? '1.5-hour' : formData.bookingIntervalMinutes === 120 ? '2-hour' : '3-hour'} slots
                   </p>
                 </div>
 
