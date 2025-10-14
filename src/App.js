@@ -10,6 +10,7 @@ import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminManagement from './components/AdminManagement';
+import NotificationManager from './components/NotificationManager';
 import Layout from './components/Layout';
 import NotificationContainer from './components/NotificationContainer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -67,6 +68,7 @@ const AppRouter = () => {
           <Route path="admin" element={<AdminDashboard />} />
           <Route path="admin-management" element={<AdminManagement />} />
           <Route path="project-selection" element={<ProjectSelection />} />
+          <Route path="notifications" element={<NotificationManager />} />
         </Route>
         <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
       </Routes>
