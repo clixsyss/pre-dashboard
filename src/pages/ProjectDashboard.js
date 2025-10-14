@@ -2335,7 +2335,7 @@ const ProjectDashboard = () => {
 
         {/* Page Content */}
         <main className="py-8">
-          <div className="max-w-7xl mx-auto px-8 lg:px-10">
+          <div className="max-w-10xl mx-auto px-8 lg:px-20">
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
             {/* Overview Stats */}
