@@ -35,6 +35,9 @@ import {
   FileText,
   Building,
   Shield,
+  UserPlus,
+  Link2,
+  Unlink,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -175,6 +178,11 @@ const ProjectDashboard = () => {
   // User modal state
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
+  
+  // Family member modal state
+  const [showFamilyMemberModal, setShowFamilyMemberModal] = useState(false);
+  const [familySearchTerm, setFamilySearchTerm] = useState('');
+  const [selectedParentUser, setSelectedParentUser] = useState(null);
   
   // Edit user modal state
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -1393,6 +1401,87 @@ const ProjectDashboard = () => {
     } catch (error) {
       console.error('Error rejecting user:', error);
       alert('Failed to reject user. Please try again.');
+    }
+  };
+
+  // Family Member Management Functions
+  const openFamilyMemberModal = (parentUser) => {
+    setSelectedParentUser(parentUser);
+    setFamilySearchTerm('');
+    setShowFamilyMemberModal(true);
+  };
+
+  const handleLinkFamilyMember = async (familyMemberId) => {
+    try {
+      if (!selectedParentUser) return;
+
+      const familyMemberDocRef = doc(db, 'users', familyMemberId);
+      
+      await updateDoc(familyMemberDocRef, {
+        parentAccountId: selectedParentUser.id,
+        updatedAt: new Date(),
+        linkedBy: currentAdmin?.uid || 'system',
+        linkedAt: new Date()
+      });
+
+      // Update local state
+      setProjectUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === familyMemberId
+            ? { ...u, parentAccountId: selectedParentUser.id }
+            : u
+        )
+      );
+
+      // Refresh the selected user if they're still open
+      if (selectedUser && selectedUser.id === selectedParentUser.id) {
+        const updatedParent = projectUsers.find(u => u.id === selectedParentUser.id);
+        setSelectedUser(updatedParent);
+      }
+
+      alert('Family member linked successfully!');
+      setShowFamilyMemberModal(false);
+      setFamilySearchTerm('');
+      
+    } catch (error) {
+      console.error('Error linking family member:', error);
+      alert('Failed to link family member. Please try again.');
+    }
+  };
+
+  const handleUnlinkFamilyMember = async (familyMemberId) => {
+    try {
+      if (!window.confirm('Are you sure you want to unlink this family member?')) return;
+
+      const familyMemberDocRef = doc(db, 'users', familyMemberId);
+      
+      await updateDoc(familyMemberDocRef, {
+        parentAccountId: null,
+        updatedAt: new Date(),
+        unlinkedBy: currentAdmin?.uid || 'system',
+        unlinkedAt: new Date()
+      });
+
+      // Update local state
+      setProjectUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === familyMemberId
+            ? { ...u, parentAccountId: null }
+            : u
+        )
+      );
+
+      // Refresh the selected user if they're still open
+      if (selectedUser) {
+        const updatedUser = projectUsers.find(u => u.id === selectedUser.id);
+        setSelectedUser(updatedUser);
+      }
+
+      alert('Family member unlinked successfully!');
+      
+    } catch (error) {
+      console.error('Error unlinking family member:', error);
+      alert('Failed to unlink family member. Please try again.');
     }
   };
 
@@ -6146,6 +6235,164 @@ const ProjectDashboard = () => {
                 </div>
               </div>
 
+              {/* Family Members Section - ALWAYS VISIBLE */}
+              <div className="bg-gradient-to-br from-pink-50 to-rose-100 rounded-xl p-6 border-2 border-pink-300 shadow-lg">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-pink-900 flex items-center">
+                    <svg className="h-6 w-6 mr-3 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Family Account Management
+                  </h3>
+                  <PermissionGate entity="users" action="write">
+                    <button
+                      onClick={() => openFamilyMemberModal(selectedUser)}
+                      className="px-4 py-2 bg-pink-600 text-white text-sm font-bold rounded-lg hover:bg-pink-700 transition-all hover:scale-105 shadow-md flex items-center"
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Link Family Member
+                    </button>
+                  </PermissionGate>
+                </div>
+                
+                {/* If this user is a family member of someone */}
+                {selectedUser.parentAccountId && (() => {
+                  const parentUser = projectUsers.find(u => u.id === selectedUser.parentAccountId);
+                  return (
+                    <div className="mb-4 bg-white rounded-lg p-5 border-2 border-blue-400 shadow-md">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-blue-900 flex items-center">
+                          <Link2 className="h-4 w-4 mr-2" />
+                          Linked to Parent Account
+                        </h4>
+                        <PermissionGate entity="users" action="write">
+                          <button
+                            onClick={() => handleUnlinkFamilyMember(selectedUser.id)}
+                            className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-100 rounded-lg transition-colors"
+                            title="Unlink from parent"
+                          >
+                            <Unlink className="h-4 w-4" />
+                          </button>
+                        </PermissionGate>
+                      </div>
+                      {parentUser ? (
+                        <div className="flex items-center justify-between bg-blue-50 p-3 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="h-12 w-12 rounded-full bg-blue-300 flex items-center justify-center ring-2 ring-blue-400">
+                              <span className="text-sm font-bold text-blue-900">
+                                {parentUser.firstName?.charAt(0)}{parentUser.lastName?.charAt(0)}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-gray-900">{parentUser.firstName} {parentUser.lastName}</p>
+                              <p className="text-xs text-gray-600">{parentUser.email}</p>
+                              <p className="text-xs text-blue-700 font-semibold mt-1">
+                                Unit: {parentUser.projects?.find(p => p.projectId === projectId)?.unit || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleUserAction('view', parentUser)}
+                            className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-200 rounded-lg transition-colors"
+                            title="View Parent Account"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">Parent ID: {selectedUser.parentAccountId}</p>
+                      )}
+                    </div>
+                  );
+                })()}
+                
+                {/* Family members linked to this account */}
+                {(() => {
+                  const linkedFamilyMembers = projectUsers.filter(user => user.parentAccountId === selectedUser.id);
+                  if (linkedFamilyMembers.length > 0) {
+                    return (
+                      <div className="bg-white rounded-lg p-5 border-2 border-pink-400 shadow-md">
+                        <h4 className="text-sm font-bold text-pink-900 mb-4 flex items-center">
+                          <Users className="h-5 w-5 mr-2" />
+                          Family Members ({linkedFamilyMembers.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {linkedFamilyMembers.map((familyMember) => {
+                            const familyMemberProject = familyMember.projects?.find(p => p.projectId === projectId);
+                            return (
+                              <div key={familyMember.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg border border-pink-200 hover:shadow-md transition-all">
+                                <div className="flex items-center space-x-3 flex-1">
+                                  <div className="h-12 w-12 rounded-full bg-pink-300 flex items-center justify-center ring-2 ring-pink-400">
+                                    <span className="text-sm font-bold text-pink-900">
+                                      {familyMember.firstName?.charAt(0)}{familyMember.lastName?.charAt(0)}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-bold text-gray-900">{familyMember.firstName} {familyMember.lastName}</p>
+                                    <p className="text-xs text-gray-600">{familyMember.email}</p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="text-xs font-semibold text-pink-700 bg-pink-100 px-2 py-0.5 rounded-full">
+                                        Unit: {familyMemberProject?.unit || 'N/A'}
+                                      </span>
+                                      <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                        familyMemberProject?.role === 'family' 
+                                          ? 'bg-pink-200 text-pink-800 ring-1 ring-pink-400'
+                                          : 'bg-gray-200 text-gray-800'
+                                      }`}>
+                                        {familyMemberProject?.role || 'N/A'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleUserAction('view', familyMember)}
+                                    className="p-2 text-pink-600 hover:text-pink-900 hover:bg-pink-200 rounded-lg transition-colors"
+                                    title="View Family Member"
+                                  >
+                                    <Eye className="h-5 w-5" />
+                                  </button>
+                                  <PermissionGate entity="users" action="write">
+                                    <button
+                                      onClick={() => handleUnlinkFamilyMember(familyMember.id)}
+                                      className="p-2 text-red-600 hover:text-red-900 hover:bg-red-100 rounded-lg transition-colors"
+                                      title="Unlink Family Member"
+                                    >
+                                      <Unlink className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGate>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="bg-white rounded-lg p-6 border-2 border-dashed border-pink-300 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="h-16 w-16 rounded-full bg-pink-100 flex items-center justify-center mb-3">
+                            <Users className="h-8 w-8 text-pink-400" />
+                          </div>
+                          <p className="text-sm font-semibold text-gray-700 mb-1">No Family Members Yet</p>
+                          <p className="text-xs text-gray-500 mb-4">This account doesn't have any family members linked</p>
+                          <PermissionGate entity="users" action="write">
+                            <button
+                              onClick={() => openFamilyMemberModal(selectedUser)}
+                              className="px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm font-bold rounded-lg hover:from-pink-700 hover:to-rose-700 transition-all hover:scale-105 shadow-md flex items-center"
+                            >
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Link First Family Member
+                            </button>
+                          </PermissionGate>
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+
               {/* Additional Metadata - Only show if there are additional fields */}
               {(selectedUser.fcmTokens || selectedUser.platform || selectedUser.appVersion || selectedUser.deviceInfo) && (
                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200">
@@ -6550,8 +6797,6 @@ const ProjectDashboard = () => {
                       required
                     >
                       <option value="owner">Owner</option>
-                      <option value="tenant">Tenant</option>
-                      <option value="resident">Resident</option>
                       <option value="family">Family</option>
                     </select>
                   </div>
@@ -7021,8 +7266,6 @@ const ProjectDashboard = () => {
                       required
                     >
                       <option value="owner">Owner</option>
-                      <option value="tenant">Tenant</option>
-                      <option value="resident">Resident</option>
                       <option value="family">Family</option>
                     </select>
                   </div>
@@ -7227,6 +7470,174 @@ const ProjectDashboard = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Family Member Assignment Modal */}
+      {showFamilyMemberModal && selectedParentUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-pink-600 to-rose-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center">
+                    <UserPlus className="h-7 w-7 mr-3" />
+                    Link Family Member
+                  </h2>
+                  <p className="text-pink-100 mt-1 text-sm">
+                    Assign an existing user as family member to <strong>{selectedParentUser.firstName} {selectedParentUser.lastName}</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowFamilyMemberModal(false)}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={familySearchTerm}
+                    onChange={(e) => setFamilySearchTerm(e.target.value)}
+                    placeholder="Search users by name, email, unit..."
+                    className="w-full pl-10 pr-4 py-3 border-2 border-pink-200 rounded-lg focus:outline-none focus:border-pink-500 transition-colors"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Only users from the <strong>same unit (Unit: {selectedParentUser.projects?.find(p => p.projectId === projectId)?.unit || 'N/A'})</strong> who are not already linked will appear
+                </p>
+              </div>
+
+              {/* Available Users List */}
+              <div className="space-y-3">
+                {(() => {
+                  // Get parent user's unit
+                  const parentUserProject = selectedParentUser.projects?.find(p => p.projectId === projectId);
+                  const parentUnit = parentUserProject?.unit;
+
+                  // Filter users: exclude selected parent, exclude users who already have a parent, filter by same unit, and apply search
+                  const availableUsers = projectUsers.filter(user => {
+                    // Exclude the parent user themselves
+                    if (user.id === selectedParentUser.id) return false;
+                    
+                    // Exclude users who already have a parent account
+                    if (user.parentAccountId) return false;
+                    
+                    // MUST be in the same unit as parent
+                    const userProject = user.projects?.find(p => p.projectId === projectId);
+                    if (!userProject || userProject.unit !== parentUnit) return false;
+                    
+                    // Apply search filter
+                    if (familySearchTerm) {
+                      const searchLower = familySearchTerm.toLowerCase();
+                      const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+                      const email = user.email?.toLowerCase() || '';
+                      const unit = userProject.unit?.toLowerCase() || '';
+                      
+                      if (!fullName.includes(searchLower) && !email.includes(searchLower) && !unit.includes(searchLower)) {
+                        return false;
+                      }
+                    }
+                    
+                    return true;
+                  });
+
+                  if (availableUsers.length === 0) {
+                    return (
+                      <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <Users className="h-16 w-16 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-600 font-semibold">No Available Users</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {familySearchTerm ? 'Try a different search term' : 'All users are either already linked or unavailable'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-700">
+                          {availableUsers.length} user{availableUsers.length !== 1 ? 's' : ''} available
+                        </p>
+                        {familySearchTerm && (
+                          <button
+                            onClick={() => setFamilySearchTerm('')}
+                            className="text-xs text-pink-600 hover:text-pink-800 font-medium"
+                          >
+                            Clear Search
+                          </button>
+                        )}
+                      </div>
+                      
+                      {availableUsers.map((user) => {
+                        const userProject = user.projects?.find(p => p.projectId === projectId);
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-pink-50 rounded-lg border-2 border-gray-200 hover:border-pink-400 hover:shadow-md transition-all"
+                          >
+                            <div className="flex items-center space-x-4 flex-1">
+                              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center ring-2 ring-pink-200">
+                                <span className="text-lg font-bold text-white">
+                                  {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
+                                </span>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-gray-900">
+                                  {user.firstName} {user.lastName}
+                                </p>
+                                <p className="text-xs text-gray-600">{user.email}</p>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                    Unit: {userProject?.unit || 'N/A'}
+                                  </span>
+                                  <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                                    Role: {userProject?.role || 'N/A'}
+                                  </span>
+                                  {user.approvalStatus === 'approved' && (
+                                    <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                      ✓ Approved
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleLinkFamilyMember(user.id)}
+                              className="px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm font-bold rounded-lg hover:from-pink-700 hover:to-rose-700 transition-all hover:scale-105 shadow-md flex items-center whitespace-nowrap"
+                            >
+                              <Link2 className="h-4 w-4 mr-2" />
+                              Link as Family
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 p-4 flex justify-end border-t border-gray-200">
+              <button
+                onClick={() => setShowFamilyMemberModal(false)}
+                className="px-6 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

@@ -10,7 +10,10 @@ import {
   Phone,
   X,
   UserX,
-  UserCheck
+  UserCheck,
+  Users as UsersIcon,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -51,6 +54,11 @@ const Users = () => {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [userToDecline, setUserToDecline] = useState(null);
   const [declineReason, setDeclineReason] = useState('');
+  
+  // Family member modal state
+  const [showFamilyMemberModal, setShowFamilyMemberModal] = useState(false);
+  const [familySearchTerm, setFamilySearchTerm] = useState('');
+  const [selectedParentUser, setSelectedParentUser] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -404,6 +412,87 @@ const Users = () => {
     } catch (error) {
       console.error('Error declining user:', error);
       showError('Failed to decline user. Please try again.');
+    }
+  };
+
+  // Family Member Management Functions
+  const openFamilyMemberModal = (parentUser) => {
+    setSelectedParentUser(parentUser);
+    setFamilySearchTerm('');
+    setShowFamilyMemberModal(true);
+  };
+
+  const handleLinkFamilyMember = async (familyMemberId) => {
+    try {
+      if (!selectedParentUser) return;
+
+      const linkData = {
+        parentAccountId: selectedParentUser.id,
+        updatedAt: new Date(),
+        linkedBy: localStorage.getItem('adminUserId') || 'admin',
+        linkedAt: new Date()
+      };
+
+      await userService.updateUser(familyMemberId, linkData);
+
+      // Update local state
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === familyMemberId
+            ? { ...u, ...linkData }
+            : u
+        )
+      );
+
+      // Refresh the selected user if they're still open
+      if (selectedUser && selectedUser.id === selectedParentUser.id) {
+        const updatedParent = users.find(u => u.id === selectedParentUser.id);
+        setSelectedUser(updatedParent);
+      }
+
+      alert('Family member linked successfully!');
+      setShowFamilyMemberModal(false);
+      setFamilySearchTerm('');
+      
+    } catch (error) {
+      console.error('Error linking family member:', error);
+      showError('Failed to link family member. Please try again.');
+    }
+  };
+
+  const handleUnlinkFamilyMember = async (familyMemberId) => {
+    try {
+      if (!window.confirm('Are you sure you want to unlink this family member?')) return;
+
+      const unlinkData = {
+        parentAccountId: null,
+        updatedAt: new Date(),
+        unlinkedBy: localStorage.getItem('adminUserId') || 'admin',
+        unlinkedAt: new Date()
+      };
+
+      await userService.updateUser(familyMemberId, unlinkData);
+
+      // Update local state
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === familyMemberId
+            ? { ...u, ...unlinkData }
+            : u
+        )
+      );
+
+      // Refresh the selected user if they're still open
+      if (selectedUser) {
+        const updatedUser = users.find(u => u.id === selectedUser.id);
+        setSelectedUser(updatedUser);
+      }
+
+      alert('Family member unlinked successfully!');
+      
+    } catch (error) {
+      console.error('Error unlinking family member:', error);
+      showError('Failed to unlink family member. Please try again.');
     }
   };
 
@@ -1313,7 +1402,7 @@ const Users = () => {
                     </svg>
                     Account Status Alert
                   </h3>
-                  <div className="space-y-4">
+                <div className="space-y-4">
                     {selectedUser.isDeleted ? (
                       <div className="bg-white rounded-lg p-4 border border-red-200">
                         <div className="flex items-center justify-between mb-3">
@@ -1321,14 +1410,14 @@ const Users = () => {
                             <UserX className="h-4 w-4 mr-2" />
                             Account Deleted
                     </span>
-                      </div>
+                  </div>
                         <div className="space-y-2 text-sm">
                           <div><span className="font-medium text-gray-700">Deleted At:</span> <span className="text-gray-600">{selectedUser.deletedAt ? new Date(selectedUser.deletedAt).toLocaleString() : 'N/A'}</span></div>
                           <div><span className="font-medium text-gray-700">Deleted By:</span> <span className="text-gray-600">{selectedUser.deletedBy || 'N/A'}</span></div>
                           {selectedUser.restoredAt && (
                             <div><span className="font-medium text-gray-700">Restored At:</span> <span className="text-gray-600">{new Date(selectedUser.restoredAt).toLocaleString()}</span></div>
                           )}
-                      </div>
+                  </div>
                       </div>
                     ) : selectedUser.isSuspended && (
                       <div className="bg-white rounded-lg p-4 border border-red-200">
@@ -1339,8 +1428,8 @@ const Users = () => {
                           </span>
                           <span className="text-sm text-gray-500">
                             {selectedUser.suspensionType === 'permanent' ? 'Permanent' : 'Temporary'}
-                          </span>
-                        </div>
+                    </span>
+                  </div>
                         <div className="space-y-2 text-sm">
                           <div><span className="font-medium text-gray-700">Reason:</span> <p className="text-gray-600 mt-1">{selectedUser.suspensionReason}</p></div>
                           {selectedUser.suspensionType === 'temporary' && selectedUser.suspensionEndDate && (
@@ -1374,7 +1463,7 @@ const Users = () => {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                             Migrated
-                        </span>
+                    </span>
                         ) : selectedUser.oldId ? (
                           <span className="text-orange-600 flex items-center font-semibold">
                             <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1417,8 +1506,8 @@ const Users = () => {
                         <p className="text-sm text-gray-900 font-mono mt-1">{selectedUser.migratedTo}</p>
                   </div>
                     )}
-                </div>
-              </div>
+                  </div>
+                  </div>
               )}
 
               {/* Account Information & Timestamps */}
@@ -1446,26 +1535,26 @@ const Users = () => {
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {selectedUser.createdAt?.toLocaleString() || 'Unknown'}
                     </p>
-                  </div>
+                        </div>
                   {selectedUser.updatedAt && (
                     <div className="bg-white rounded-lg p-3 shadow-sm">
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Updated At</label>
                       <p className="text-sm text-gray-900 font-medium mt-1">
                         {selectedUser.updatedAt?.toLocaleString() || 'Unknown'}
                     </p>
-                  </div>
+                      </div>
                   )}
                   <div className="bg-white rounded-lg p-3 shadow-sm">
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</label>
                     <p className="text-sm text-gray-900 font-medium mt-1">
                       {selectedUser.lastLoginAt?.toLocaleString() || 'Never'}
                     </p>
-                  </div>
+                        </div>
                   {selectedUser.registrationStep && (
                     <div className="bg-white rounded-lg p-3 shadow-sm">
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Step</label>
                       <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.registrationStep}</p>
-                </div>
+                      </div>
                   )}
                   {selectedUser.createdByAdmin !== undefined && (
                     <div className="bg-white rounded-lg p-3 shadow-sm">
@@ -1489,15 +1578,15 @@ const Users = () => {
                               : 'bg-blue-100 text-blue-800'
                           }`}>
                           {selectedUser.accountType}
-                          </span>
+                      </span>
                       </p>
                         </div>
-                  )}
+                    )}
                   {selectedUser.validityStartDate && (
                     <div className="bg-white rounded-lg p-3 shadow-sm">
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Validity Start</label>
                       <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityStartDate}</p>
-                        </div>
+                  </div>
                   )}
                   {selectedUser.validityEndDate && (
                     <div className="bg-white rounded-lg p-3 shadow-sm">
@@ -1505,8 +1594,155 @@ const Users = () => {
                       <p className="text-sm text-gray-900 font-medium mt-1">{selectedUser.validityEndDate}</p>
                       </div>
                   )}
+                </div>
+              </div>
+              
+              {/* Family Members Section - ALWAYS VISIBLE - Super Admin View */}
+              <div className="bg-gradient-to-br from-pink-50 to-rose-100 rounded-xl p-6 border-2 border-pink-300 shadow-lg">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-pink-900 flex items-center">
+                    <svg className="h-6 w-6 mr-3 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Family Account Management
+                  </h3>
+                  <button
+                    onClick={() => openFamilyMemberModal(selectedUser)}
+                    className="px-4 py-2 bg-pink-600 text-white text-sm font-bold rounded-lg hover:bg-pink-700 transition-all hover:scale-105 shadow-md flex items-center"
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Link Family Member
+                  </button>
+                  </div>
+                
+                {/* If this user is a family member of someone */}
+                {selectedUser.parentAccountId && (() => {
+                  const parentUser = users.find(u => u.id === selectedUser.parentAccountId);
+                  return (
+                    <div className="mb-4 bg-white rounded-lg p-5 border-2 border-blue-400 shadow-md">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-blue-900 flex items-center">
+                          <Link2 className="h-4 w-4 mr-2" />
+                          Linked to Parent Account
+                        </h4>
+                        <button
+                          onClick={() => handleUnlinkFamilyMember(selectedUser.id)}
+                          className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Unlink from parent"
+                        >
+                          <Unlink className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {parentUser ? (
+                        <div className="flex items-center justify-between bg-blue-50 p-3 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="h-12 w-12 rounded-full bg-blue-300 flex items-center justify-center ring-2 ring-blue-400">
+                              <span className="text-sm font-bold text-blue-900">
+                                {parentUser.firstName?.charAt(0)}{parentUser.lastName?.charAt(0)}
+                              </span>
+                  </div>
+                  <div>
+                              <p className="text-sm font-bold text-gray-900">{parentUser.firstName} {parentUser.lastName}</p>
+                              <p className="text-xs text-gray-600">{parentUser.email}</p>
+                              <p className="text-xs text-blue-700 font-semibold mt-1">
+                                {parentUser.projects?.length || 0} Project{parentUser.projects?.length !== 1 ? 's' : ''}
+                    </p>
                   </div>
                 </div>
+                          <button
+                            onClick={() => openUserModal(parentUser)}
+                            className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-200 rounded-lg transition-colors"
+                            title="View Parent Account"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
+              </div>
+                      ) : (
+                        <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">Parent ID: {selectedUser.parentAccountId}</p>
+                      )}
+                    </div>
+                  );
+                })()}
+                
+                {/* Family members linked to this account */}
+                {(() => {
+                  const linkedFamilyMembers = users.filter(user => user.parentAccountId === selectedUser.id);
+                  if (linkedFamilyMembers.length > 0) {
+                    return (
+                      <div className="bg-white rounded-lg p-5 border-2 border-pink-400 shadow-md">
+                        <h4 className="text-sm font-bold text-pink-900 mb-4 flex items-center">
+                          <UsersIcon className="h-5 w-5 mr-2" />
+                          Family Members ({linkedFamilyMembers.length}) - All Projects
+                        </h4>
+                        <div className="space-y-3">
+                          {linkedFamilyMembers.map((familyMember) => {
+                            return (
+                              <div key={familyMember.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg border border-pink-200 hover:shadow-md transition-all">
+                                <div className="flex items-center space-x-3 flex-1">
+                                  <div className="h-12 w-12 rounded-full bg-pink-300 flex items-center justify-center ring-2 ring-pink-400">
+                                    <span className="text-sm font-bold text-pink-900">
+                                      {familyMember.firstName?.charAt(0)}{familyMember.lastName?.charAt(0)}
+                          </span>
+                        </div>
+                                  <div className="flex-1">
+                                    <p className="text-sm font-bold text-gray-900">{familyMember.firstName} {familyMember.lastName}</p>
+                                    <p className="text-xs text-gray-600">{familyMember.email}</p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                                        {familyMember.projects?.length || 0} Project{familyMember.projects?.length !== 1 ? 's' : ''}
+                                      </span>
+                                      {familyMember.projects?.some(p => p.role === 'family') && (
+                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-pink-200 text-pink-800 ring-1 ring-pink-400">
+                                          Family Role
+                                        </span>
+                                      )}
+                        </div>
+                      </div>
+                  </div>
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => openUserModal(familyMember)}
+                                    className="p-2 text-pink-600 hover:text-pink-900 hover:bg-pink-200 rounded-lg transition-colors"
+                                    title="View Family Member"
+                                  >
+                                    <Eye className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleUnlinkFamilyMember(familyMember.id)}
+                                    className="p-2 text-red-600 hover:text-red-900 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="Unlink Family Member"
+                                  >
+                                    <Unlink className="h-4 w-4" />
+                                  </button>
+                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="bg-white rounded-lg p-6 border-2 border-dashed border-pink-300 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="h-16 w-16 rounded-full bg-pink-100 flex items-center justify-center mb-3">
+                            <UsersIcon className="h-8 w-8 text-pink-400" />
+                          </div>
+                          <p className="text-sm font-semibold text-gray-700 mb-1">No Family Members Yet</p>
+                          <p className="text-xs text-gray-500 mb-4">This account doesn't have any family members linked</p>
+                          <button
+                            onClick={() => openFamilyMemberModal(selectedUser)}
+                            className="px-5 py-2.5 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm font-bold rounded-lg hover:from-pink-700 hover:to-rose-700 transition-all hover:scale-105 shadow-md flex items-center"
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Link First Family Member
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
               
             {/* Modal Footer */}
@@ -1786,6 +2022,132 @@ const Users = () => {
                   Decline User
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Family Member Assignment Modal */}
+      {showFamilyMemberModal && selectedParentUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-pink-600 to-rose-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center">
+                    <UserPlus className="h-7 w-7 mr-3" />
+                    Link Family Member
+                  </h2>
+                  <p className="text-pink-100 mt-1 text-sm">
+                    Assign an existing user as family member to <strong>{selectedParentUser.firstName} {selectedParentUser.lastName}</strong>
+                  </p>
+                </div>
+                <button onClick={() => setShowFamilyMemberModal(false)} className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={familySearchTerm}
+                    onChange={(e) => setFamilySearchTerm(e.target.value)}
+                    placeholder="Search users by name, email..."
+                    className="w-full pl-10 pr-4 py-3 border-2 border-pink-200 rounded-lg focus:outline-none focus:border-pink-500 transition-colors"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">💡 Only users who share the <strong>same unit</strong> in any project with this parent account will appear</p>
+              </div>
+              <div className="space-y-3">
+                {(() => {
+                  // Get all unit-project combinations for the parent user
+                  const parentUnits = selectedParentUser.projects?.map(p => ({
+                    projectId: p.projectId,
+                    unit: p.unit
+                  })) || [];
+
+                  const availableUsers = users.filter(user => {
+                    if (user.id === selectedParentUser.id) return false;
+                    if (user.parentAccountId) return false;
+                    
+                    // Check if user shares at least one unit with parent in any project
+                    const hasSharedUnit = user.projects?.some(userProject => 
+                      parentUnits.some(parentUnit => 
+                        parentUnit.projectId === userProject.projectId && 
+                        parentUnit.unit === userProject.unit
+                      )
+                    );
+                    
+                    if (!hasSharedUnit) return false;
+                    
+                    if (familySearchTerm) {
+                      const searchLower = familySearchTerm.toLowerCase();
+                      const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+                      const email = user.email?.toLowerCase() || '';
+                      if (!fullName.includes(searchLower) && !email.includes(searchLower)) return false;
+                    }
+                    return true;
+                  });
+                  if (availableUsers.length === 0) {
+                    return (
+                      <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <UsersIcon className="h-16 w-16 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-600 font-semibold">No Available Users</p>
+                        <p className="text-sm text-gray-500 mt-1">{familySearchTerm ? 'Try a different search term' : 'All users are either already linked or unavailable'}</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-700">{availableUsers.length} user{availableUsers.length !== 1 ? 's' : ''} available</p>
+                        {familySearchTerm && (<button onClick={() => setFamilySearchTerm('')} className="text-xs text-pink-600 hover:text-pink-800 font-medium">Clear Search</button>)}
+                      </div>
+                      {availableUsers.map((user) => {
+                        // Find shared units
+                        const sharedUnits = user.projects?.filter(userProject => 
+                          parentUnits.some(parentUnit => 
+                            parentUnit.projectId === userProject.projectId && 
+                            parentUnit.unit === userProject.unit
+                          )
+                        ).map(p => `${p.unit} (${projects.find(proj => proj.id === p.projectId)?.name || p.projectId})`);
+                        
+                        return (
+                          <div key={user.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-pink-50 rounded-lg border-2 border-gray-200 hover:border-pink-400 hover:shadow-md transition-all">
+                            <div className="flex items-center space-x-4 flex-1">
+                              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center ring-2 ring-pink-200">
+                                <span className="text-lg font-bold text-white">{user.firstName?.charAt(0)}{user.lastName?.charAt(0)}</span>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-gray-900">{user.firstName} {user.lastName}</p>
+                                <p className="text-xs text-gray-600">{user.email}</p>
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">{user.projects?.length || 0} Project{user.projects?.length !== 1 ? 's' : ''}</span>
+                                  {sharedUnits?.map((unitInfo, idx) => (
+                                    <span key={idx} className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                                      📍 {unitInfo}
+                                    </span>
+                                  ))}
+                                  {user.approvalStatus === 'approved' && (<span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Approved</span>)}
+                                </div>
+                              </div>
+                            </div>
+                            <button onClick={() => handleLinkFamilyMember(user.id)} className="px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 text-white text-sm font-bold rounded-lg hover:from-pink-700 hover:to-rose-700 transition-all hover:scale-105 shadow-md flex items-center whitespace-nowrap">
+                              <Link2 className="h-4 w-4 mr-2" />Link as Family
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="bg-gray-50 p-4 flex justify-end border-t border-gray-200">
+              <button onClick={() => setShowFamilyMemberModal(false)} className="px-6 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors">Close</button>
             </div>
           </div>
         </div>

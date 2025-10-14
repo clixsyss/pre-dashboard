@@ -58,7 +58,17 @@ const CourtsManagement = ({ projectId }) => {
     surface: 'hard',
     description: '',
     imageFile: null,
-    imageUrl: ''
+    imageUrl: '',
+    bookingIntervalMinutes: 60, // Default to 1 hour slots
+    availability: {
+      monday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      tuesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      wednesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      thursday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      friday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      saturday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      sunday: { enabled: true, startTime: '08:00', endTime: '22:00' }
+    }
   });
 
   const [uploading, setUploading] = useState(false);
@@ -101,7 +111,17 @@ const CourtsManagement = ({ projectId }) => {
       surface: 'hard',
       description: '',
       imageFile: null,
-      imageUrl: ''
+      imageUrl: '',
+      bookingIntervalMinutes: 60,
+      availability: {
+        monday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        tuesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        wednesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        thursday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        friday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        saturday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+        sunday: { enabled: true, startTime: '08:00', endTime: '22:00' }
+      }
     });
     setEditingCourt(null);
   };
@@ -152,7 +172,9 @@ const CourtsManagement = ({ projectId }) => {
         surface: formData.surface,
         description: formData.description.trim(),
         status: 'available',
-        active: true
+        active: true,
+        bookingIntervalMinutes: parseInt(formData.bookingIntervalMinutes) || 60,
+        availability: formData.availability
       };
       
       // Add image data if available
@@ -193,6 +215,17 @@ const CourtsManagement = ({ projectId }) => {
     console.log('Court imageUrl:', court.imageUrl);
     console.log('Court imageFileName:', court.imageFileName);
     
+    // Default availability if not set
+    const defaultAvailability = {
+      monday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      tuesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      wednesday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      thursday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      friday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      saturday: { enabled: true, startTime: '08:00', endTime: '22:00' },
+      sunday: { enabled: true, startTime: '08:00', endTime: '22:00' }
+    };
+    
     setEditingCourt(court);
     setFormData({
       name: court.name || '',
@@ -204,7 +237,9 @@ const CourtsManagement = ({ projectId }) => {
       surface: court.surface || 'hard',
       description: court.description || '',
       imageFile: null,
-      imageUrl: court.imageUrl || ''
+      imageUrl: court.imageUrl || '',
+      bookingIntervalMinutes: court.bookingIntervalMinutes || 60,
+      availability: court.availability || defaultAvailability
     });
     setShowModal(true);
   };
@@ -476,25 +511,30 @@ const CourtsManagement = ({ projectId }) => {
 
       {/* Add/Edit Court Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-6 border w-full max-w-4xl shadow-2xl rounded-2xl bg-white max-h-[90vh] overflow-y-auto">
             <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {editingCourt ? 'Edit Court' : 'Add New Court'}
-                </h3>
+              {/* Modal Header */}
+              <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <Building className="w-6 h-6 mr-2 text-blue-600" />
+                    {editingCourt ? 'Edit Court' : 'Add New Court'}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">Configure court details, availability, and booking settings</p>
+                </div>
                 <button
                   onClick={() => {
                     setShowModal(false);
                     resetForm();
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Court Name *
@@ -624,6 +664,146 @@ const CourtsManagement = ({ projectId }) => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Optional description of the court"
                   />
+                </div>
+
+                {/* Booking Time Interval */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                  <label className="block text-sm font-semibold text-blue-900 mb-3">
+                    ⏱️ Booking Time Slots
+                  </label>
+                  <p className="text-xs text-gray-600 mb-3">Select the time interval for bookings</p>
+                  <select
+                    required
+                    value={formData.bookingIntervalMinutes}
+                    onChange={(e) => setFormData({...formData, bookingIntervalMinutes: e.target.value})}
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-medium"
+                  >
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                    <option value="180">3 hours</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-2">
+                    💡 Users will only be able to book in {formData.bookingIntervalMinutes === '30' ? '30-minute' : formData.bookingIntervalMinutes === '60' ? '1-hour' : formData.bookingIntervalMinutes === '90' ? '1.5-hour' : formData.bookingIntervalMinutes === '120' ? '2-hour' : '3-hour'} slots
+                  </p>
+                </div>
+
+                {/* Availability Schedule */}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
+                  <label className="block text-sm font-semibold text-green-900 mb-3">
+                    📅 Weekly Availability Schedule
+                  </label>
+                  <p className="text-xs text-gray-600 mb-4">Set available days and hours for this court</p>
+                  
+                  <div className="space-y-3">
+                    {Object.keys(formData.availability).map((day) => (
+                      <div key={day} className="bg-white p-3 rounded-lg border-2 border-gray-200 hover:border-green-300 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={formData.availability[day].enabled}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                availability: {
+                                  ...formData.availability,
+                                  [day]: {
+                                    ...formData.availability[day],
+                                    enabled: e.target.checked
+                                  }
+                                }
+                              })}
+                              className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-pointer"
+                            />
+                            <label className={`text-sm font-bold capitalize cursor-pointer ${formData.availability[day].enabled ? 'text-gray-900' : 'text-gray-400'}`}>
+                              {day}
+                            </label>
+                          </div>
+                          {formData.availability[day].enabled && (
+                            <span className="text-xs text-green-600 font-semibold bg-green-100 px-2 py-1 rounded-full">
+                              Open
+                            </span>
+                          )}
+                        </div>
+                        
+                        {formData.availability[day].enabled && (
+                          <div className="grid grid-cols-2 gap-3 mt-3 pl-8">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Start Time
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.availability[day].startTime}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  availability: {
+                                    ...formData.availability,
+                                    [day]: {
+                                      ...formData.availability[day],
+                                      startTime: e.target.value
+                                    }
+                                  }
+                                })}
+                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                End Time
+                              </label>
+                              <input
+                                type="time"
+                                value={formData.availability[day].endTime}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  availability: {
+                                    ...formData.availability,
+                                    [day]: {
+                                      ...formData.availability[day],
+                                      endTime: e.target.value
+                                    }
+                                  }
+                                })}
+                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Quick Actions */}
+                  <div className="mt-4 pt-3 border-t border-green-200 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newAvailability = {};
+                        Object.keys(formData.availability).forEach(day => {
+                          newAvailability[day] = { enabled: true, startTime: '08:00', endTime: '22:00' };
+                        });
+                        setFormData({ ...formData, availability: newAvailability });
+                      }}
+                      className="flex-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 rounded-lg hover:bg-green-200 transition-colors"
+                    >
+                      Enable All Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newAvailability = {};
+                        Object.keys(formData.availability).forEach(day => {
+                          newAvailability[day] = { ...formData.availability[day], enabled: false };
+                        });
+                        setFormData({ ...formData, availability: newAvailability });
+                      }}
+                      className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
+                    >
+                      Disable All Days
+                    </button>
+                  </div>
                 </div>
 
                 {/* Image Upload Section */}
