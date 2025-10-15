@@ -60,6 +60,7 @@ import AdsManagement from '../components/AdsManagement';
 import SupportManagement from '../components/SupportManagement';
 import FinesManagement from '../components/FinesManagement';
 import GuardsManagement from '../components/GuardsManagement';
+import AdminManagement from '../components/AdminManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -108,8 +109,10 @@ const ProjectDashboard = () => {
   const [guards, setGuards] = useState([]);
   const [stores, setStores] = useState([]);
   const [serviceCategories, setServiceCategories] = useState([]);
+  const [projectAdmins, setProjectAdmins] = useState([]);
+  const [pendingAdminsCount, setPendingAdminsCount] = useState(0);
   
-  const { currentAdmin, hasPermission, hasProjectAccess } = useAdminAuth();
+  const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
 
   // Booking store integration
@@ -291,6 +294,12 @@ const ProjectDashboard = () => {
         { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' },
         { id: 'guards', name: 'Guards', icon: Shield, description: 'Guard account management', permission: 'guards' },
         { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' }
+      ]
+    },
+    {
+      category: 'Administration',
+      items: [
+        { id: 'admins', name: 'Admin Accounts', icon: UserPlus, description: 'Manage admin accounts & permissions', permission: 'admin_accounts' }
       ]
     }
   ];
@@ -594,9 +603,17 @@ const ProjectDashboard = () => {
         courts: courts?.length || 0,
         academies: academies?.length || 0,
         stores: stores?.length || 0
+      },
+      administration: {
+        admins: projectAdmins?.length || 0,
+        activeAdmins: projectAdmins?.filter(a => a.isActive).length || 0,
+        pendingRequests: pendingAdminsCount,
+        superAdmins: projectAdmins?.filter(a => a.accountType === 'super_admin').length || 0,
+        fullAccess: projectAdmins?.filter(a => a.accountType === 'full_access').length || 0,
+        customAccess: projectAdmins?.filter(a => a.accountType === 'custom').length || 0
       }
     });
-  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, requestSubmissions, requestCategories, newsItems, adsItems, academies, courts, guards, stores, serviceCategories, getUpcomingBookings, projectBookings]);
+  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, requestSubmissions, requestCategories, newsItems, adsItems, academies, courts, guards, stores, serviceCategories, projectAdmins, pendingAdminsCount, getUpcomingBookings, projectBookings]);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
@@ -654,12 +671,16 @@ const ProjectDashboard = () => {
       case 'guidelines':
         // No indicator needed for static content
         return 0;
+      case 'admins':
+        // Show pending admin requests (super admins only)
+        return isSuperAdmin() ? pendingAdminsCount : 0;
       case 'dashboard':
         // Dashboard shows total pending items requiring action
         return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
                openComplaintsCount + pendingFinesCount + 
                (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
-               openSupportTicketsCount;
+               openSupportTicketsCount +
+               (isSuperAdmin() ? pendingAdminsCount : 0);
       default:
         return 0;
     }
@@ -678,7 +699,9 @@ const ProjectDashboard = () => {
     stores,
     newsItems,
     adsItems,
-    guards
+    guards,
+    pendingAdminsCount,
+    isSuperAdmin
   ]);
 
   useEffect(() => {
@@ -931,6 +954,46 @@ const ProjectDashboard = () => {
     }
   }, []);
 
+  // Fetch project admins (admins with access to this project)
+  const fetchProjectAdmins = useCallback(async (projectId) => {
+    try {
+      // Fetch all admins
+      const adminsSnapshot = await getDocs(collection(db, 'admins'));
+      const allAdmins = adminsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Filter admins who have access to this project
+      const projectSpecificAdmins = allAdmins.filter(admin => 
+        admin.accountType === 'super_admin' || 
+        admin.assignedProjects?.includes(projectId)
+      );
+      
+      setProjectAdmins(projectSpecificAdmins);
+    } catch (error) {
+      console.error('Error fetching project admins:', error);
+      setProjectAdmins([]);
+    }
+  }, []);
+
+  // Fetch pending admin requests
+  const fetchPendingAdmins = useCallback(async () => {
+    try {
+      const pendingSnapshot = await getDocs(
+        query(collection(db, 'pendingAdmins'), where('status', '==', 'pending'))
+      );
+      const pendingData = pendingSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPendingAdminsCount(pendingData.length);
+    } catch (error) {
+      console.error('Error fetching pending admins:', error);
+      setPendingAdminsCount(0);
+    }
+  }, [setPendingAdminsCount]);
+
   // Load all data upfront for instant dashboard experience
   useEffect(() => {
     if (projectId && dataLoaded) {
@@ -954,7 +1017,9 @@ const ProjectDashboard = () => {
             fetchCourts(projectId),
             fetchGuards(projectId),
             fetchStores(projectId),
-            fetchServiceCategories(projectId)
+            fetchServiceCategories(projectId),
+            fetchProjectAdmins(projectId),
+            fetchPendingAdmins()
           ]);
           console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
@@ -964,7 +1029,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories]);
+  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins]);
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
@@ -988,13 +1053,15 @@ const ProjectDashboard = () => {
         fetchCourts(projectId),
         fetchGuards(projectId),
         fetchStores(projectId),
-        fetchServiceCategories(projectId)
+        fetchServiceCategories(projectId),
+        fetchProjectAdmins(projectId),
+        fetchPendingAdmins()
       ]);
       console.log('✅ All data refreshed successfully - Dashboard updated!');
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
-  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories]);
+  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins]);
 
   // Reset filters when switching tabs (no data fetching needed)
   useEffect(() => {
@@ -1745,22 +1812,22 @@ const ProjectDashboard = () => {
     }
   };
 
-  const getTabColorClasses = (color) => {
-    const colorMap = {
-      blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-      indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
-      green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
-      purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-      orange: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
-      pink: 'bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100',
-      red: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
-      teal: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
-      cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
-      amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-      emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-    };
-    return colorMap[color] || 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100';
-  };
+  // const getTabColorClasses = (color) => {
+  //   const colorMap = {
+  //     blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+  //     indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+  //     green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
+  //     purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+  //     orange: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+  //     pink: 'bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100',
+  //     red: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
+  //     teal: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
+  //     cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
+  //     amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+  //     emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+  //   };
+  //   return colorMap[color] || 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100';
+  // };
 
   // Booking action handlers
   const handleViewBooking = (booking) => {
@@ -2479,7 +2546,7 @@ const ProjectDashboard = () => {
     <div className="min-h-screen bg-gray-50">
 
       {/* Sidebar Navigation */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      <div className={`fixed inset-y-0 left-0 z-40 w-80 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
         <div className="flex items-center justify-between h-24 px-8 border-b border-gray-100 bg-gradient-to-r from-pre-red via-pre-red to-pre-red">
             <div className="flex items-center space-x-4">
@@ -2552,7 +2619,7 @@ const ProjectDashboard = () => {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-gray-900 bg-opacity-50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-30 bg-gray-900 bg-opacity-50 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -2561,7 +2628,7 @@ const ProjectDashboard = () => {
       <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'lg:pl-80' : 'lg:pl-0'
         }`}>
         {/* Top Header */}
-        <div className="sticky top-0 z-40 bg-white shadow-lg border-b border-gray-200 top-header">
+        <div className="sticky top-0 z-30 bg-white shadow-lg border-b border-gray-200 top-header">
           <div className="flex items-center justify-between h-24 px-8 lg:px-10">
             <div className="flex items-center space-x-6">
               <button
@@ -2590,7 +2657,7 @@ const ProjectDashboard = () => {
 
             <div className="flex items-center space-x-4">
               {/* Total Pending Items Indicator */}
-              {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount) > 0 && (
+              {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0)) > 0 && (
                 <button 
                   onClick={() => handleTabChange('dashboard')}
                   className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 transition-all hover:scale-105"
@@ -2600,7 +2667,7 @@ const ProjectDashboard = () => {
                   <div className="text-left">
                     <p className="text-xs font-medium text-red-600">Pending Actions</p>
                     <p className="text-sm font-bold text-red-700">
-                      {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount} Items
+                      {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0)} Items
                     </p>
                   </div>
                 </button>
@@ -2999,7 +3066,7 @@ const ProjectDashboard = () => {
                     Pending Actions
                   </h3>
                   <span className="px-3 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">
-                    {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0)} Total
+                    {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0)} Total
                   </span>
                 </div>
                 <div className="space-y-3">
@@ -3031,12 +3098,12 @@ const ProjectDashboard = () => {
                       <div className="flex items-center">
                         <div className="p-2 bg-blue-100 rounded-lg">
                           <Wrench className="h-5 w-5 text-blue-600" />
-                        </div>
+                </div>
                         <div className="ml-3 text-left">
                           <p className="text-sm font-bold text-gray-900">Service Requests</p>
                           <p className="text-xs text-gray-600">Pending service bookings</p>
-                        </div>
-                      </div>
+              </div>
+            </div>
                       <span className="px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full animate-pulse">
                         {pendingServiceRequestsCount}
                       </span>
@@ -3143,7 +3210,27 @@ const ProjectDashboard = () => {
                     </button>
                   )}
 
-                  {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0)) === 0 && (
+                  {isSuperAdmin() && pendingAdminsCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('admins')}
+                      className="w-full flex items-center justify-between p-4 bg-red-50 border-l-4 border-red-500 rounded-lg hover:bg-red-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-red-100 rounded-lg">
+                          <UserPlus className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Admin Requests</p>
+                          <p className="text-xs text-gray-600">New admin accounts to approve</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingAdminsCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0)) === 0 && (
                     <div className="text-center py-8">
                       <div className="p-4 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center shadow-lg">
                         <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3170,12 +3257,12 @@ const ProjectDashboard = () => {
                     All Systems Online
                   </span>
                 </div>
-                <div className="space-y-3">
+              <div className="space-y-3">
                   {/* Users System */}
                   <div className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('users')}>
                     <div className="p-2 bg-red-100 rounded-lg">
                       <Users className="h-5 w-5 text-red-600" />
-                    </div>
+                </div>
                     <div className="ml-3 flex-1">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-gray-900">Users Management</p>
@@ -3184,21 +3271,21 @@ const ProjectDashboard = () => {
                             {pendingUsersCount}
                           </span>
                         )}
-                      </div>
+                </div>
                       <p className="text-xs text-gray-700 mt-1.5 font-medium">
                         {stats.totalUsers} total • {stats.activeUsers} active • {stats.pendingUsers} pending • 
                         {projectUsers.filter(u => u.createdByAdmin && u.registrationStep === 'awaiting_password').length > 0 && (
                           <span className="text-purple-700 font-bold"> {projectUsers.filter(u => u.createdByAdmin && u.registrationStep === 'awaiting_password').length} awaiting password</span>
                         )}
                       </p>
-                    </div>
-                  </div>
+                </div>
+                </div>
 
                   {/* Bookings System */}
                   <div className="flex items-start p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4 border-blue-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('bookings')}>
                     <div className="p-2 bg-blue-100 rounded-lg">
                       <Calendar className="h-5 w-5 text-blue-600" />
-                    </div>
+              </div>
                     <div className="ml-3 flex-1">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-gray-900">Bookings System</p>
@@ -3207,11 +3294,11 @@ const ProjectDashboard = () => {
                             {upcomingBookingsCount}
                           </span>
                         )}
-                      </div>
+            </div>
                       <p className="text-xs text-gray-700 mt-1.5 font-medium">
                         {projectBookings?.length || 0} total • {projectBookings?.filter(b => b.type === 'court').length || 0} courts • {projectBookings?.filter(b => b.type === 'academy').length || 0} academies • {serviceBookings?.length || 0} services
                       </p>
-                    </div>
+          </div>
                   </div>
 
                   {/* Orders System */}
@@ -3333,6 +3420,31 @@ const ProjectDashboard = () => {
                       </p>
                     </div>
                   </div>
+
+                  {/* Admin Accounts - Super Admin or Full Access Only */}
+                  {(isSuperAdmin() || currentAdmin?.accountType === 'full_access') && (
+                    <div className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('admins')}>
+                      <div className="p-2 bg-red-100 rounded-lg">
+                        <UserPlus className="h-5 w-5 text-red-600" />
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-gray-900">Admin Accounts</p>
+                          {isSuperAdmin() && pendingAdminsCount > 0 && (
+                            <span className="px-2 py-0.5 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                              {pendingAdminsCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                          {projectAdmins?.length || 0} total • {projectAdmins?.filter(a => a.isActive).length || 0} active • 
+                          {isSuperAdmin() && pendingAdminsCount > 0 && (
+                            <span className="text-red-700 font-bold"> {pendingAdminsCount} pending approval</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -3486,7 +3598,7 @@ const ProjectDashboard = () => {
             </div>
 
             {/* Security & Compliance Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               {/* Gate Passes */}
               <div className="bg-white rounded-xl shadow-sm border-l-4 border-indigo-500 p-5 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between mb-3">
@@ -3585,6 +3697,32 @@ const ProjectDashboard = () => {
                   <span className="text-gray-600">
                     {projectOrders?.length || 0} total orders
                   </span>
+                </div>
+              </div>
+
+              {/* Admin Accounts */}
+              <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5 hover:shadow-lg transition-all cursor-pointer" onClick={() => handleTabChange('admins')}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-red-100 rounded-xl">
+                    <UserPlus className="h-7 w-7 text-red-600" />
+                  </div>
+                  {isSuperAdmin() && pendingAdminsCount > 0 && (
+                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                      {pendingAdminsCount}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Admin Accounts</h4>
+                <p className="text-3xl font-bold text-gray-900 mb-2">{projectAdmins?.length || 0}</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-green-600 font-bold">
+                    {projectAdmins?.filter(a => a.isActive).length || 0} active
+                  </span>
+                  {isSuperAdmin() && (
+                    <span className="text-red-700 font-bold">
+                      {pendingAdminsCount > 0 ? `${pendingAdminsCount} pending` : 'All approved'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -5344,6 +5482,109 @@ const ProjectDashboard = () => {
             {activeTab === 'guards' && (
               <PermissionGate entity="guards" action="read" showMessage={true}>
                 <GuardsManagement projectId={projectId} />
+              </PermissionGate>
+        )}
+
+        {activeTab === 'admins' && (
+          <PermissionGate entity="admin_accounts" action="read" showMessage={true}>
+            <div className="space-y-6">
+              {/* Admins Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Admin Accounts Management</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Manage administrator accounts, permissions, and access for this project
+                  </p>
+                </div>
+              </div>
+
+              {/* Admin Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-sm border-2 border-red-200 p-6 relative z-10">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-red-200 rounded-xl">
+                      <UserPlus className="h-6 w-6 text-red-700" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-semibold text-red-700 uppercase">Total Admins</p>
+                      <p className="text-3xl font-bold text-red-900">{projectAdmins?.length || 0}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {projectAdmins?.filter(a => a.isActive).length || 0} active
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative z-10">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-blue-100 rounded-xl">
+                      <Shield className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Super Admins</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {projectAdmins?.filter(a => a.accountType === 'super_admin').length || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative z-10">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-green-100 rounded-xl">
+                      <UserCheck className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Full Access</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {projectAdmins?.filter(a => a.accountType === 'full_access').length || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative z-10">
+                  <div className="flex items-center">
+                    <div className="p-3 bg-purple-100 rounded-xl">
+                      <Settings className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Custom Access</p>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {projectAdmins?.filter(a => a.accountType === 'custom').length || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pending Admin Requests - Super Admin Only */}
+              {isSuperAdmin() && pendingAdminsCount > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="p-3 bg-amber-200 rounded-xl">
+                        <AlertTriangle className="h-6 w-6 text-amber-700" />
+                      </div>
+                      <div className="ml-4">
+                        <h3 className="text-lg font-bold text-amber-900">Pending Admin Requests</h3>
+                        <p className="text-sm text-amber-700 mt-1">
+                          {pendingAdminsCount} admin request{pendingAdminsCount !== 1 ? 's' : ''} waiting for approval
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-4 py-2 bg-amber-600 text-white text-lg font-bold rounded-full animate-pulse shadow-lg">
+                      {pendingAdminsCount}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Admin Management Component */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <AdminManagement />
+              </div>
+            </div>
               </PermissionGate>
         )}
 
@@ -8918,7 +9159,7 @@ const ProjectDashboard = () => {
 
       {/* Family Member Assignment Modal */}
       {showFamilyMemberModal && selectedParentUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-pink-600 to-rose-600 p-6 text-white">
