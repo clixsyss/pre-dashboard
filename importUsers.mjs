@@ -215,7 +215,7 @@ async function importUsers() {
   try {
     // Read old users JSON file
     const jsonData = await readFile(
-      join(__dirname, 'users05.json'),
+      join(__dirname, 'jebal_users.json'),
       'utf-8'
     );
     const parsedData = JSON.parse(jsonData);
