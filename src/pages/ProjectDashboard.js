@@ -2301,7 +2301,7 @@ const ProjectDashboard = () => {
       <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'lg:pl-80' : 'lg:pl-0'
         }`}>
         {/* Top Header */}
-        <div className="sticky top-0 z-40 bg-white shadow-lg border-b border-gray-200">
+        <div className="sticky top-0 z-40 bg-white shadow-lg border-b border-gray-200 top-header">
           <div className="flex items-center justify-between h-24 px-8 lg:px-10">
             <div className="flex items-center space-x-6">
               <button
