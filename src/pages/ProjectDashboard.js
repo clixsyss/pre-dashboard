@@ -92,13 +92,22 @@ const ProjectDashboard = () => {
   const [pendingFinesCount, setPendingFinesCount] = useState(0);
   const [pendingGatePassCount, setPendingGatePassCount] = useState(0);
   
-  // Data state for notification counts
+  // Data state for notification counts and comprehensive analytics
   const [notifications] = useState([]);
   const [complaints, setComplaints] = useState([]);
   const [supportTickets, setSupportTickets] = useState([]);
   const [fines, setFines] = useState([]);
   const [gatePasses, setGatePasses] = useState([]);
   const [serviceBookings, setServiceBookings] = useState([]);
+  const [requestSubmissions, setRequestSubmissions] = useState([]);
+  const [requestCategories, setRequestCategories] = useState([]);
+  const [newsItems, setNewsItems] = useState([]);
+  const [adsItems, setAdsItems] = useState([]);
+  const [academies, setAcademies] = useState([]);
+  const [courts, setCourts] = useState([]);
+  const [guards, setGuards] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
   
   const { currentAdmin, hasPermission, hasProjectAccess } = useAdminAuth();
   const navigate = useNavigate();
@@ -516,7 +525,7 @@ const ProjectDashboard = () => {
 
     // Open complaints count (complaints that are not closed)
     const openComplaints = complaints?.filter(complaint => 
-      complaint.status === 'open' || complaint.status === 'pending' || complaint.status === 'in_progress'
+      complaint.status === 'Open' || complaint.status === 'In Progress'
     ).length || 0;
     setOpenComplaintsCount(openComplaints);
 
@@ -532,34 +541,62 @@ const ProjectDashboard = () => {
     ).length || 0;
     setPendingFinesCount(pendingFines);
 
-    // Pending gate pass count (gate passes that need approval)
+    // Pending gate pass count (gate passes that need approval or are active today)
     const pendingGatePass = gatePasses?.filter(pass => 
-      pass.status === 'pending' || pass.status === 'requested'
+      pass.status === 'pending' || pass.status === 'requested' || pass.status === 'active'
     ).length || 0;
     setPendingGatePassCount(pendingGatePass);
 
-    // Debug logging (uncomment for debugging)
-    // console.log('Notification counts:', {
-    //   pendingUsersCount,
-    //   upcomingBookingsCount,
-    //   pendingServiceRequestsCount,
-    //   pendingOrdersCount,
-    //   unreadNotificationsCount,
-    //   openComplaintsCount,
-    //   openSupportTicketsCount,
-    //   pendingFinesCount,
-    //   pendingGatePassCount,
-    //   projectBookings: projectBookings?.length || 0,
-    //   projectOrders: projectOrders?.length || 0,
-    //   notifications: notifications?.length || 0,
-    //   complaints: complaints?.length || 0,
-    //   supportTickets: supportTickets?.length || 0,
-    //   fines: fines?.length || 0,
-    //   gatePasses: gatePasses?.length || 0,
-    //   serviceBookings: serviceBookings?.length || 0,
-    //   serviceBookingsPending: serviceBookings?.filter(booking => booking.status === 'pending').length || 0
-    // });
-  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, getUpcomingBookings]);
+    // Console log comprehensive analytics
+    console.log('📊 Dashboard Analytics Update:', {
+      users: {
+        total: projectUsers.length,
+        pending: pendingCount,
+        active: projectUsers.filter(u => u.registrationStatus === 'completed').length
+      },
+      bookings: {
+        total: projectBookings?.length || 0,
+        upcoming: upcomingBookings,
+        courtBookings: projectBookings?.filter(b => b.type === 'court').length || 0,
+        academyBookings: projectBookings?.filter(b => b.type === 'academy').length || 0
+      },
+      services: {
+        categories: serviceCategories?.length || 0,
+        pendingRequests: pendingServiceRequests
+      },
+      orders: {
+        total: projectOrders?.length || 0,
+        pending: pendingOrders
+      },
+      requests: {
+        categories: requestCategories?.length || 0,
+        submissions: requestSubmissions?.length || 0,
+        pending: requestSubmissions?.filter(r => r.status === 'pending').length || 0
+      },
+      communication: {
+        notifications: notifications?.length || 0,
+        unread: unreadNotifications,
+        news: newsItems?.length || 0,
+        ads: adsItems?.length || 0
+      },
+      support: {
+        complaints: complaints?.length || 0,
+        open: openComplaints,
+        tickets: openSupportTickets
+      },
+      security: {
+        fines: fines?.length || 0,
+        pending: pendingFines,
+        gatePasses: gatePasses?.length || 0,
+        guards: guards?.length || 0
+      },
+      facilities: {
+        courts: courts?.length || 0,
+        academies: academies?.length || 0,
+        stores: stores?.length || 0
+      }
+    });
+  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, requestSubmissions, requestCategories, newsItems, adsItems, academies, courts, guards, stores, serviceCategories, getUpcomingBookings, projectBookings]);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
@@ -570,27 +607,79 @@ const ProjectDashboard = () => {
   const getNotificationCount = useCallback((serviceId) => {
     switch (serviceId) {
       case 'users':
-        return pendingUsersCount;
+        return pendingUsersCount; // Users awaiting approval
       case 'services':
-        return pendingServiceRequestsCount; // Pending service requests
+        return pendingServiceRequestsCount; // Pending service bookings
       case 'bookings':
         return upcomingBookingsCount; // Upcoming court/academy bookings
       case 'orders':
-        return pendingOrdersCount;
+        return pendingOrdersCount; // Orders needing processing
       case 'events': // notifications
-        return unreadNotificationsCount;
+        return unreadNotificationsCount; // Unread notifications
       case 'complaints':
-        return openComplaintsCount;
+        return openComplaintsCount; // Open complaints
       case 'support':
-        return openSupportTicketsCount;
+        return openSupportTicketsCount; // Open support tickets
       case 'fines':
-        return pendingFinesCount;
+        return pendingFinesCount; // Unpaid/disputed fines
       case 'gatepass':
-        return pendingGatePassCount;
+        return pendingGatePassCount; // Active gate passes
+      case 'academies':
+        // Show upcoming academy bookings
+        return projectBookings?.filter(b => 
+          (b.type === 'academy' || b.academyId || b.academyName) && 
+          (b.status === 'pending' || b.status === 'confirmed')
+        ).length || 0;
+      case 'courts':
+        // Show upcoming court bookings
+        return projectBookings?.filter(b => 
+          (b.type === 'court' || b.courtId || b.courtName) && 
+          (b.status === 'pending' || b.status === 'confirmed')
+        ).length || 0;
+      case 'requests':
+        // Show pending request submissions
+        return requestSubmissions?.filter(r => r.status === 'pending').length || 0;
+      case 'store':
+        // Show active stores
+        return stores?.filter(s => s.status === 'active' || s.isActive).length || 0;
+      case 'news':
+        // Show active/published news items
+        return newsItems?.filter(n => n.status === 'active' || n.published).length || 0;
+      case 'ads':
+        // Show active ads
+        return adsItems?.filter(a => a.status === 'active' || a.isActive).length || 0;
+      case 'guards':
+        // Show active guards
+        return guards?.filter(g => g.status === 'active' || g.isActive).length || 0;
+      case 'guidelines':
+        // No indicator needed for static content
+        return 0;
+      case 'dashboard':
+        // Dashboard shows total pending items requiring action
+        return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
+               openComplaintsCount + pendingFinesCount + 
+               (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
+               openSupportTicketsCount;
       default:
         return 0;
     }
-  }, [pendingUsersCount, pendingServiceRequestsCount, upcomingBookingsCount, pendingOrdersCount, unreadNotificationsCount, openComplaintsCount, openSupportTicketsCount, pendingFinesCount, pendingGatePassCount]);
+  }, [
+    pendingUsersCount, 
+    pendingServiceRequestsCount, 
+    upcomingBookingsCount, 
+    pendingOrdersCount, 
+    unreadNotificationsCount, 
+    openComplaintsCount, 
+    openSupportTicketsCount, 
+    pendingFinesCount, 
+    pendingGatePassCount,
+    projectBookings,
+    requestSubmissions,
+    stores,
+    newsItems,
+    adsItems,
+    guards
+  ]);
 
   useEffect(() => {
     filterUsers();
@@ -689,6 +778,159 @@ const ProjectDashboard = () => {
     }
   }, []);
 
+  // Fetch request submissions
+  const fetchRequestSubmissions = useCallback(async (projectId) => {
+    try {
+      const submissionsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/requestSubmissions`), orderBy('createdAt', 'desc'))
+      );
+      const submissionsData = submissionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRequestSubmissions(submissionsData);
+    } catch (error) {
+      console.error('Error fetching request submissions:', error);
+      setRequestSubmissions([]);
+    }
+  }, []);
+
+  // Fetch request categories
+  const fetchRequestCategories = useCallback(async (projectId) => {
+    try {
+      const categoriesSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/requestCategories`)
+      );
+      const categoriesData = categoriesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRequestCategories(categoriesData);
+    } catch (error) {
+      console.error('Error fetching request categories:', error);
+      setRequestCategories([]);
+    }
+  }, []);
+
+  // Fetch news items
+  const fetchNews = useCallback(async (projectId) => {
+    try {
+      const newsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/news`), orderBy('createdAt', 'desc'))
+      );
+      const newsData = newsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setNewsItems(newsData);
+    } catch (error) {
+      console.error('Error fetching news:', error);
+      setNewsItems([]);
+    }
+  }, []);
+
+  // Fetch ads
+  const fetchAds = useCallback(async (projectId) => {
+    try {
+      const adsSnapshot = await getDocs(
+        query(collection(db, `projects/${projectId}/ads`), orderBy('createdAt', 'desc'))
+      );
+      const adsData = adsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAdsItems(adsData);
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+      setAdsItems([]);
+    }
+  }, []);
+
+  // Fetch academies
+  const fetchAcademies = useCallback(async (projectId) => {
+    try {
+      const academiesSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/academies`)
+      );
+      const academiesData = academiesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAcademies(academiesData);
+    } catch (error) {
+      console.error('Error fetching academies:', error);
+      setAcademies([]);
+    }
+  }, []);
+
+  // Fetch courts
+  const fetchCourts = useCallback(async (projectId) => {
+    try {
+      const courtsSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/courts`)
+      );
+      const courtsData = courtsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCourts(courtsData);
+    } catch (error) {
+      console.error('Error fetching courts:', error);
+      setCourts([]);
+    }
+  }, []);
+
+  // Fetch guards
+  const fetchGuards = useCallback(async (projectId) => {
+    try {
+      const guardsSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/guards`)
+      );
+      const guardsData = guardsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGuards(guardsData);
+    } catch (error) {
+      console.error('Error fetching guards:', error);
+      setGuards([]);
+    }
+  }, []);
+
+  // Fetch stores
+  const fetchStores = useCallback(async (projectId) => {
+    try {
+      const storesSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/stores`)
+      );
+      const storesData = storesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStores(storesData);
+    } catch (error) {
+      console.error('Error fetching stores:', error);
+      setStores([]);
+    }
+  }, []);
+
+  // Fetch service categories
+  const fetchServiceCategories = useCallback(async (projectId) => {
+    try {
+      const categoriesSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/serviceCategories`)
+      );
+      const categoriesData = categoriesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setServiceCategories(categoriesData);
+    } catch (error) {
+      console.error('Error fetching service categories:', error);
+      setServiceCategories([]);
+    }
+  }, []);
+
   // Load all data upfront for instant dashboard experience
   useEffect(() => {
     if (projectId && dataLoaded) {
@@ -703,9 +945,18 @@ const ProjectDashboard = () => {
             fetchSupportTickets(projectId),
             fetchFines(projectId),
             fetchGatePasses(projectId),
-            fetchServiceBookings(projectId)
+            fetchServiceBookings(projectId),
+            fetchRequestSubmissions(projectId),
+            fetchRequestCategories(projectId),
+            fetchNews(projectId),
+            fetchAds(projectId),
+            fetchAcademies(projectId),
+            fetchCourts(projectId),
+            fetchGuards(projectId),
+            fetchStores(projectId),
+            fetchServiceCategories(projectId)
           ]);
-          console.log('All dashboard data loaded successfully');
+          console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
           console.error('Error loading dashboard data:', error);
         }
@@ -713,7 +964,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings]);
+  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories]);
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
@@ -728,13 +979,22 @@ const ProjectDashboard = () => {
         fetchSupportTickets(projectId),
         fetchFines(projectId),
         fetchGatePasses(projectId),
-        fetchServiceBookings(projectId)
+        fetchServiceBookings(projectId),
+        fetchRequestSubmissions(projectId),
+        fetchRequestCategories(projectId),
+        fetchNews(projectId),
+        fetchAds(projectId),
+        fetchAcademies(projectId),
+        fetchCourts(projectId),
+        fetchGuards(projectId),
+        fetchStores(projectId),
+        fetchServiceCategories(projectId)
       ]);
-      console.log('All data refreshed successfully');
+      console.log('✅ All data refreshed successfully - Dashboard updated!');
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
-  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings]);
+  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories]);
 
   // Reset filters when switching tabs (no data fetching needed)
   useEffect(() => {
@@ -2312,9 +2572,16 @@ const ProjectDashboard = () => {
               </button>
 
               <div className="hidden sm:block">
+                <div className="flex items-center space-x-3">
                 <h2 className="text-2xl font-bold text-gray-900">
                   {serviceTabs.find(tab => tab.id === activeTab)?.name || 'Dashboard'}
                 </h2>
+                  {getNotificationCount(activeTab) > 0 && (
+                    <span className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-full animate-pulse shadow-lg">
+                      {getNotificationCount(activeTab)}
+                    </span>
+                  )}
+                </div>
                 <p className="text-base text-gray-500 mt-1">
                   {serviceTabs.find(tab => tab.id === activeTab)?.description || 'Manage your project'}
                 </p>
@@ -2322,9 +2589,34 @@ const ProjectDashboard = () => {
       </div>
 
             <div className="flex items-center space-x-4">
-              <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors relative">
+              {/* Total Pending Items Indicator */}
+              {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount) > 0 && (
+                <button 
+                  onClick={() => handleTabChange('dashboard')}
+                  className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 transition-all hover:scale-105"
+                  title="View all pending items"
+                >
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <div className="text-left">
+                    <p className="text-xs font-medium text-red-600">Pending Actions</p>
+                    <p className="text-sm font-bold text-red-700">
+                      {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount} Items
+                    </p>
+                  </div>
+                </button>
+              )}
+              
+              <button 
+                onClick={() => handleTabChange('events')}
+                className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors relative"
+                title="Notifications"
+              >
                 <Bell className="h-6 w-6" />
-                <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute top-1 right-1 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse shadow-lg min-w-[20px] h-5 flex items-center justify-center">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
               </button>
               <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
                 <Settings className="h-6 w-6" />
@@ -2338,119 +2630,1268 @@ const ProjectDashboard = () => {
           <div className="max-w-10xl mx-auto px-8 lg:px-20">
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
-            {/* Overview Stats */}
+            {/* Hero Stats - Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              {/* Users Overview */}
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg border-2 border-red-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('users')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-700 uppercase tracking-wide">Users</p>
+                    <p className="text-4xl font-bold text-red-900 mt-2">{stats.totalUsers}</p>
+                    <div className="flex items-center space-x-4 mt-3">
                 <div className="flex items-center">
-                  <div className="p-3 bg-blue-100 rounded-xl">
-                    <Users className="h-8 w-8 text-blue-600" />
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>
+                        <span className="text-xs font-medium text-gray-700">{stats.activeUsers} Active</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
+                      {pendingUsersCount > 0 && (
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full mr-1.5 animate-pulse"></div>
+                          <span className="text-xs font-bold text-amber-700">{pendingUsersCount} Pending</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 bg-red-200 rounded-2xl">
+                    <Users className="h-10 w-10 text-red-700" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              {/* Bookings Overview */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border-2 border-blue-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('bookings')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Bookings</p>
+                    <p className="text-4xl font-bold text-blue-900 mt-2">{projectBookings?.length || 0}</p>
+                    <div className="flex items-center space-x-4 mt-3">
+                      {upcomingBookingsCount > 0 && (
                 <div className="flex items-center">
-                  <div className="p-3 bg-green-100 rounded-xl">
-                    <Users className="h-8 w-8 text-green-600" />
+                          <Calendar className="w-3 h-3 text-blue-600 mr-1.5" />
+                          <span className="text-xs font-bold text-blue-700">{upcomingBookingsCount} Upcoming</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.activeUsers}</p>
+                      )}
+                      {pendingServiceRequestsCount > 0 && (
+                        <div className="flex items-center">
+                          <Clock className="w-3 h-3 text-amber-600 mr-1.5 animate-pulse" />
+                          <span className="text-xs font-bold text-amber-700">{pendingServiceRequestsCount} Pending</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 bg-blue-200 rounded-2xl">
+                    <Calendar className="h-10 w-10 text-blue-700" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              {/* Orders Overview */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg border-2 border-green-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('orders')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Orders</p>
+                    <p className="text-4xl font-bold text-green-900 mt-2">{projectOrders?.length || 0}</p>
+                    <div className="flex items-center space-x-4 mt-3">
+                      {pendingOrdersCount > 0 && (
                 <div className="flex items-center">
-                  <div className="p-3 bg-yellow-100 rounded-xl">
-                    <Users className="h-8 w-8 text-yellow-600" />
+                          <Package className="w-3 h-3 text-amber-600 mr-1.5 animate-pulse" />
+                          <span className="text-xs font-bold text-amber-700">{pendingOrdersCount} Pending</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Pending Users</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.pendingUsers}</p>
+                      )}
+                      <div className="flex items-center">
+                        <Truck className="w-3 h-3 text-green-600 mr-1.5" />
+                        <span className="text-xs font-medium text-gray-700">{getOrderStats().processing} Processing</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-green-200 rounded-2xl">
+                    <Package className="h-10 w-10 text-green-700" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              {/* Support Overview */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg border-2 border-purple-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('complaints')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-purple-700 uppercase tracking-wide">Support</p>
+                    <p className="text-4xl font-bold text-purple-900 mt-2">{complaints?.length || 0}</p>
+                    <div className="flex items-center space-x-4 mt-3">
+                      {openComplaintsCount > 0 && (
                 <div className="flex items-center">
-                  <div className="p-3 bg-purple-100 rounded-xl">
-                    <Target className="h-8 w-8 text-purple-600" />
+                          <MessageCircle className="w-3 h-3 text-amber-600 mr-1.5 animate-pulse" />
+                          <span className="text-xs font-bold text-amber-700">{openComplaintsCount} Open</span>
+                        </div>
+                      )}
+                      {openSupportTicketsCount > 0 && (
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-purple-600 rounded-full mr-1.5"></div>
+                          <span className="text-xs font-medium text-gray-700">{openSupportTicketsCount} Tickets</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Notifications</p>
-                    <p className="text-3xl font-bold text-gray-900">{stats.activeNotifications}</p>
+                  <div className="p-4 bg-purple-200 rounded-2xl">
+                    <MessageCircle className="h-10 w-10 text-purple-700" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+            {/* Additional Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Total Revenue/Financial */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Revenue This Month</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-2">
+                      EGP {projectOrders?.filter(order => {
+                        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+                        const now = new Date();
+                        return orderDate.getMonth() === now.getMonth() && 
+                               orderDate.getFullYear() === now.getFullYear() &&
+                               order.status !== 'cancelled';
+                      }).reduce((sum, order) => sum + (order.total || 0), 0).toFixed(0)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      From {projectOrders?.filter(order => {
+                        const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt);
+                        const now = new Date();
+                        return orderDate.getMonth() === now.getMonth() && 
+                               orderDate.getFullYear() === now.getFullYear() &&
+                               order.status !== 'cancelled';
+                      }).length || 0} orders
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-100 rounded-xl">
+                    <DollarSign className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Bookings Today */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Bookings Today</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-2">
+                      {projectBookings?.filter(booking => {
+                        if (!booking.date) return false;
+                        const bookingDate = new Date(booking.date);
+                        const today = new Date();
+                        return bookingDate.toDateString() === today.toDateString();
+                      }).length || 0}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Active for today</p>
+                  </div>
+                  <div className="p-3 bg-blue-100 rounded-xl">
+                    <Calendar className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Response Time */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Avg. Response Time</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-2">
+                      {openComplaintsCount > 0 ? '< 24h' : '< 2h'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {openComplaintsCount > 0 ? 'Some delays' : 'On track'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-purple-100 rounded-xl">
+                    <Clock className="h-6 w-6 text-purple-600" />
+                  </div>
+                  </div>
+                </div>
+
+              {/* Completion Rate */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Order Completion</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-2">
+                      {projectOrders && projectOrders.length > 0 
+                        ? Math.round((getOrderStats().delivered / projectOrders.length) * 100) 
+                        : 0}%
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getOrderStats().delivered} of {projectOrders?.length || 0} delivered
+                    </p>
+                  </div>
+                  <div className="p-3 bg-teal-100 rounded-xl">
+                    <Trophy className="h-6 w-6 text-teal-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bookings Breakdown */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <Calendar className="h-5 w-5 mr-2 text-blue-600" />
+                  Bookings Breakdown
+                </h3>
+                    <button
+                  onClick={() => handleTabChange('bookings')}
+                  className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-lg hover:bg-blue-200 transition-colors"
+                    >
+                  View All
+                </button>
+                      </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {serviceTabs.slice(1, 5).map((tab) => {
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 text-center border-2 border-blue-200">
+                  <div className="flex justify-center mb-2">
+                    <MapPin className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900">
+                    {projectBookings?.filter(b => b.type === 'court' || b.courtId).length || 0}
+                  </p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Court Bookings</p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    {projectBookings?.filter(b => (b.type === 'court' || b.courtId) && b.status === 'confirmed').length || 0} confirmed
+                  </p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 text-center border-2 border-purple-200">
+                  <div className="flex justify-center mb-2">
+                    <School className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900">
+                    {projectBookings?.filter(b => b.type === 'academy' || b.academyId).length || 0}
+                  </p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Academy Bookings</p>
+                  <p className="text-xs text-purple-600 mt-1">
+                    {projectBookings?.filter(b => (b.type === 'academy' || b.academyId) && b.status === 'confirmed').length || 0} confirmed
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg p-4 text-center border-2 border-teal-200">
+                  <div className="flex justify-center mb-2">
+                    <Wrench className="h-6 w-6 text-teal-600" />
+                  </div>
+                  <p className="text-2xl font-bold text-teal-900">{serviceBookings?.length || 0}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Service Bookings</p>
+                  <p className="text-xs text-teal-600 mt-1">
+                    {serviceBookings?.filter(b => b.status === 'pending').length || 0} pending
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 text-center border-2 border-green-200">
+                  <div className="flex justify-center mb-2">
+                    <Calendar className="h-6 w-6 text-green-600" />
+                  </div>
+                  <p className="text-2xl font-bold text-green-900">{upcomingBookingsCount}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Upcoming</p>
+                  <p className="text-xs text-green-600 mt-1">
+                    {projectBookings?.filter(b => {
+                      if (!b.date) return false;
+                      const bookingDate = new Date(b.date);
+                      const today = new Date();
+                      const weekFromNow = new Date(today);
+                      weekFromNow.setDate(weekFromNow.getDate() + 7);
+                      return bookingDate >= today && bookingDate <= weekFromNow;
+                    }).length || 0} this week
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Orders & Revenue Analytics */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <ShoppingCart className="h-5 w-5 mr-2 text-green-600" />
+                  E-Commerce Analytics
+                </h3>
+                <button 
+                  onClick={() => handleTabChange('orders')}
+                  className="px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-lg hover:bg-green-200 transition-colors"
+                >
+                  View Orders
+                    </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-lg p-4 text-center border-2 border-green-200">
+                  <p className="text-2xl font-bold text-green-900">{projectOrders?.length || 0}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Total Orders</p>
+                  <p className="text-xs text-green-600 mt-1">All time</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-100 rounded-lg p-4 text-center border-2 border-amber-200">
+                  <p className="text-2xl font-bold text-amber-900">{getOrderStats().pending}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Pending</p>
+                  <p className="text-xs text-amber-600 mt-1">Needs action</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-50 to-sky-100 rounded-lg p-4 text-center border-2 border-blue-200">
+                  <p className="text-2xl font-bold text-blue-900">{getOrderStats().processing}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Processing</p>
+                  <p className="text-xs text-blue-600 mt-1">In progress</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-50 to-green-100 rounded-lg p-4 text-center border-2 border-emerald-200">
+                  <p className="text-2xl font-bold text-emerald-900">{getOrderStats().delivered}</p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Delivered</p>
+                  <p className="text-xs text-emerald-600 mt-1">
+                    {projectOrders && projectOrders.length > 0 
+                      ? Math.round((getOrderStats().delivered / projectOrders.length) * 100) 
+                      : 0}% success
+                  </p>
+                </div>
+
+                <div className="bg-gradient-to-br from-teal-50 to-cyan-100 rounded-lg p-4 text-center border-2 border-teal-200">
+                  <p className="text-xl font-bold text-teal-900">
+                    EGP {projectOrders?.reduce((sum, order) => order.status !== 'cancelled' ? sum + (order.total || 0) : sum, 0).toFixed(0) || 0}
+                  </p>
+                  <p className="text-xs text-gray-700 mt-1 font-semibold">Total Revenue</p>
+                  <p className="text-xs text-teal-600 mt-1">All orders</p>
+                </div>
+              </div>
+              
+              {/* Store-wise breakdown */}
+              {stores && stores.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                    <ShoppingBag className="h-4 w-4 mr-2 text-green-600" />
+                    Store Performance
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {stores.slice(0, 4).map((store) => {
+                      const storeOrders = projectOrders?.filter(order => 
+                        order.items?.some(item => item.storeId === store.id)
+                      ) || [];
+                      const storeRevenue = storeOrders.reduce((sum, order) => 
+                        order.status !== 'cancelled' ? sum + (order.total || 0) : sum, 0
+                      );
+                      
+                      return (
+                        <div key={store.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer" onClick={() => handleTabChange('store')}>
+                          <p className="text-sm font-semibold text-gray-900 truncate">{store.name}</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-gray-600">{storeOrders.length} orders</span>
+                            <span className="text-xs font-bold text-green-700">EGP {storeRevenue.toFixed(0)}</span>
+                          </div>
+                        </div>
+                  );
+                })}
+                    {stores.length > 4 && (
+                      <div className="bg-gray-100 rounded-lg p-3 border border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleTabChange('store')}>
+                        <p className="text-sm font-bold text-gray-600">+{stores.length - 4} more</p>
+              </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Items & Alerts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Pending Actions */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-amber-600" />
+                    Pending Actions
+                  </h3>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">
+                    {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0)} Total
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {pendingUsersCount > 0 && (
+                      <button
+                      onClick={() => handleTabChange('users')}
+                      className="w-full flex items-center justify-between p-4 bg-red-50 border-l-4 border-red-500 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-red-100 rounded-lg">
+                          <UserCheck className="h-5 w-5 text-red-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">User Approvals</p>
+                          <p className="text-xs text-gray-600">Pending user registrations</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingUsersCount}
+                      </span>
+                      </button>
+                  )}
+                  
+                  {pendingServiceRequestsCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('services')}
+                      className="w-full flex items-center justify-between p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Wrench className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Service Requests</p>
+                          <p className="text-xs text-gray-600">Pending service bookings</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingServiceRequestsCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {requestSubmissions?.filter(r => r.status === 'pending').length > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('requests')}
+                      className="w-full flex items-center justify-between p-4 bg-cyan-50 border-l-4 border-cyan-500 rounded-lg hover:bg-cyan-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-cyan-100 rounded-lg">
+                          <FileText className="h-5 w-5 text-cyan-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">User Requests</p>
+                          <p className="text-xs text-gray-600">Request submissions pending review</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-cyan-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {requestSubmissions.filter(r => r.status === 'pending').length}
+                      </span>
+                    </button>
+                  )}
+
+                  {pendingOrdersCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('orders')}
+                      className="w-full flex items-center justify-between p-4 bg-green-50 border-l-4 border-green-500 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <Package className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">New Orders</p>
+                          <p className="text-xs text-gray-600">Orders to process</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-green-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingOrdersCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {openComplaintsCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('complaints')}
+                      className="w-full flex items-center justify-between p-4 bg-purple-50 border-l-4 border-purple-500 rounded-lg hover:bg-purple-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <MessageCircle className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Open Complaints</p>
+                          <p className="text-xs text-gray-600">Complaints to resolve</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-purple-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {openComplaintsCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {pendingFinesCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('fines')}
+                      className="w-full flex items-center justify-between p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg hover:bg-orange-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-orange-100 rounded-lg">
+                          <DollarSign className="h-5 w-5 text-orange-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Pending Fines</p>
+                          <p className="text-xs text-gray-600">Fines to review</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-orange-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingFinesCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {pendingGatePassCount > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('gatepass')}
+                      className="w-full flex items-center justify-between p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-indigo-100 rounded-lg">
+                          <Key className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Gate Pass Requests</p>
+                          <p className="text-xs text-gray-600">Passes to approve</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-indigo-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {pendingGatePassCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0)) === 0 && (
+                    <div className="text-center py-8">
+                      <div className="p-4 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center shadow-lg">
+                        <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <p className="text-lg font-bold text-gray-900">🎉 All Caught Up!</p>
+                      <p className="text-sm text-gray-600 mt-2">No pending actions at the moment</p>
+                      <p className="text-xs text-gray-500 mt-1">Your team is doing great!</p>
+                    </div>
+                  )}
+              </div>
+            </div>
+
+              {/* Comprehensive System Status */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <BarChart3 className="h-5 w-5 mr-2 text-red-600" />
+                    System Overview
+                  </h3>
+                  <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full flex items-center shadow-md">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                    All Systems Online
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {/* Users System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('users')}>
+                    <div className="p-2 bg-red-100 rounded-lg">
+                      <Users className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Users Management</p>
+                        {pendingUsersCount > 0 && (
+                          <span className="px-2 py-0.5 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {pendingUsersCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {stats.totalUsers} total • {stats.activeUsers} active • {stats.pendingUsers} pending • 
+                        {projectUsers.filter(u => u.createdByAdmin && u.registrationStep === 'awaiting_password').length > 0 && (
+                          <span className="text-purple-700 font-bold"> {projectUsers.filter(u => u.createdByAdmin && u.registrationStep === 'awaiting_password').length} awaiting password</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bookings System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4 border-blue-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('bookings')}>
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Calendar className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Bookings System</p>
+                        {upcomingBookingsCount > 0 && (
+                          <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                            {upcomingBookingsCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {projectBookings?.length || 0} total • {projectBookings?.filter(b => b.type === 'court').length || 0} courts • {projectBookings?.filter(b => b.type === 'academy').length || 0} academies • {serviceBookings?.length || 0} services
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Orders System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('orders')}>
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <ShoppingCart className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">E-Commerce</p>
+                        {pendingOrdersCount > 0 && (
+                          <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {pendingOrdersCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {projectOrders?.length || 0} orders • {getOrderStats().pending} pending • {getOrderStats().processing} processing • {getOrderStats().delivered} delivered • {stores?.length || 0} stores
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Requests System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-cyan-50 to-teal-50 rounded-lg border-l-4 border-cyan-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('requests')}>
+                    <div className="p-2 bg-cyan-100 rounded-lg">
+                      <FileText className="h-5 w-5 text-cyan-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Requests System</p>
+                        {requestSubmissions?.filter(r => r.status === 'pending').length > 0 && (
+                          <span className="px-2 py-0.5 bg-cyan-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {requestSubmissions.filter(r => r.status === 'pending').length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {requestCategories?.length || 0} categories • {requestSubmissions?.length || 0} submissions • 
+                        {requestSubmissions?.filter(r => r.status === 'approved').length || 0} approved
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Communications */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('events')}>
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Target className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Communications</p>
+                        {unreadNotificationsCount > 0 && (
+                          <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {unreadNotificationsCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {stats.activeNotifications} notifications • {newsItems?.length || 0} news articles • {adsItems?.length || 0} ads
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Support System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border-l-4 border-orange-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('complaints')}>
+                    <div className="p-2 bg-orange-100 rounded-lg">
+                      <MessageCircle className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Support & Complaints</p>
+                        {(openComplaintsCount + openSupportTicketsCount) > 0 && (
+                          <span className="px-2 py-0.5 bg-orange-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {openComplaintsCount + openSupportTicketsCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {complaints?.length || 0} complaints ({openComplaintsCount} open) • {supportTickets?.length || 0} tickets • 
+                        {complaints && complaints.length > 0 && (
+                          <span className="text-green-700 font-bold">
+                            {Math.round((complaints.filter(c => c.status === 'Resolved').length / complaints.length) * 100)}% resolved
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Security System */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg border-l-4 border-slate-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('fines')}>
+                    <div className="p-2 bg-slate-100 rounded-lg">
+                      <Shield className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-900">Security & Compliance</p>
+                        {(pendingFinesCount + pendingGatePassCount) > 0 && (
+                          <span className="px-2 py-0.5 bg-slate-600 text-white text-xs font-bold rounded-full animate-pulse">
+                            {pendingFinesCount + pendingGatePassCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {guards?.length || 0} guards • {fines?.length || 0} fines • {gatePasses?.length || 0} gate passes • {guards?.filter(g => g.status === 'active' || g.isActive).length || 0} on duty
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Facilities */}
+                  <div className="flex items-start p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg border-l-4 border-indigo-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('courts')}>
+                    <div className="p-2 bg-indigo-100 rounded-lg">
+                      <MapPin className="h-5 w-5 text-indigo-600" />
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <p className="text-sm font-bold text-gray-900">Sports Facilities</p>
+                      <p className="text-xs text-gray-700 mt-1.5 font-medium">
+                        {courts?.length || 0} courts • {academies?.length || 0} academies • 
+                        {academies?.reduce((sum, academy) => sum + (academy.programs?.length || 0), 0) || 0} programs
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Facilities & Services Overview */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Courts & Academies */}
+              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl shadow-lg border-2 border-indigo-200 p-6">
+                <h3 className="text-lg font-bold text-indigo-900 mb-4 flex items-center">
+                  <MapPin className="h-5 w-5 mr-2 text-indigo-600" />
+                  Sports Facilities
+                </h3>
+              <div className="space-y-3">
+                  <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <MapPin className="h-5 w-5 text-blue-600" />
+                </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">Courts</p>
+                          <p className="text-xs text-gray-600">{courts?.filter(c => c.active).length || 0} active courts</p>
+                </div>
+                </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-blue-900">{courts?.length || 0}</p>
+                        {getNotificationCount('courts') > 0 && (
+                          <span className="text-xs font-bold text-amber-700">{getNotificationCount('courts')} bookings</span>
+                        )}
+                </div>
+              </div>
+            </div>
+                  
+                  <div className="bg-white rounded-lg p-4 border border-indigo-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                          <School className="h-5 w-5 text-purple-600" />
+          </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">Academies</p>
+                          <p className="text-xs text-gray-600">
+                            {academies?.reduce((sum, academy) => sum + (academy.programs?.length || 0), 0) || 0} programs
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-purple-900">{academies?.length || 0}</p>
+                        {getNotificationCount('academies') > 0 && (
+                          <span className="text-xs font-bold text-amber-700">{getNotificationCount('academies')} bookings</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Services & Requests */}
+              <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl shadow-lg border-2 border-teal-200 p-6">
+                <h3 className="text-lg font-bold text-teal-900 mb-4 flex items-center">
+                  <Wrench className="h-5 w-5 mr-2 text-teal-600" />
+                  Services & Requests
+                </h3>
+                <div className="space-y-3">
+                  <div className="bg-white rounded-lg p-4 border border-teal-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-teal-100 rounded-lg">
+                          <Wrench className="h-5 w-5 text-teal-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">Service Categories</p>
+                          <p className="text-xs text-gray-600">{serviceBookings?.length || 0} total bookings</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-teal-900">{serviceCategories?.length || 0}</p>
+                        {pendingServiceRequestsCount > 0 && (
+                          <span className="text-xs font-bold text-red-700 animate-pulse">{pendingServiceRequestsCount} pending</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-4 border border-teal-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-cyan-100 rounded-lg">
+                          <FileText className="h-5 w-5 text-cyan-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">Request Categories</p>
+                          <p className="text-xs text-gray-600">{requestSubmissions?.length || 0} submissions</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-cyan-900">{requestCategories?.length || 0}</p>
+                        {requestSubmissions?.filter(r => r.status === 'pending').length > 0 && (
+                          <span className="text-xs font-bold text-red-700 animate-pulse">
+                            {requestSubmissions.filter(r => r.status === 'pending').length} pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Communication & Content */}
+              <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl shadow-lg border-2 border-pink-200 p-6">
+                <h3 className="text-lg font-bold text-pink-900 mb-4 flex items-center">
+                  <Newspaper className="h-5 w-5 mr-2 text-pink-600" />
+                  Communication
+                </h3>
+                <div className="space-y-3">
+                  <div className="bg-white rounded-lg p-4 border border-pink-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Newspaper className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">News Articles</p>
+                          <p className="text-xs text-gray-600">
+                            {newsItems?.filter(n => n.status === 'active' || n.published).length || 0} published
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-900">{newsItems?.length || 0}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-4 border border-pink-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-yellow-100 rounded-lg">
+                          <Star className="h-5 w-5 text-yellow-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-semibold text-gray-900">Advertisements</p>
+                          <p className="text-xs text-gray-600">
+                            {adsItems?.filter(a => a.status === 'active' || a.isActive).length || 0} active
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-yellow-900">{adsItems?.length || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Security & Compliance Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Gate Passes */}
+              <div className="bg-white rounded-xl shadow-sm border-l-4 border-indigo-500 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-indigo-100 rounded-xl">
+                    <Key className="h-7 w-7 text-indigo-600" />
+                  </div>
+                  {pendingGatePassCount > 0 && (
+                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                      {pendingGatePassCount}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Gate Passes</h4>
+                <p className="text-3xl font-bold text-gray-900 mb-2">{gatePasses?.length || 0}</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">
+                    {gatePasses?.filter(p => p.status === 'active').length || 0} active
+                  </span>
+                  <span className="text-amber-700 font-bold">
+                    {gatePasses?.filter(p => {
+                      if (!p.validFrom) return false;
+                      const passDate = new Date(p.validFrom);
+                      const today = new Date();
+                      return passDate.toDateString() === today.toDateString();
+                    }).length || 0} today
+                  </span>
+                </div>
+              </div>
+
+              {/* Fines */}
+              <div className="bg-white rounded-xl shadow-sm border-l-4 border-orange-500 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-orange-100 rounded-xl">
+                    <AlertTriangle className="h-7 w-7 text-orange-600" />
+                  </div>
+                  {pendingFinesCount > 0 && (
+                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                      {pendingFinesCount}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Fines & Violations</h4>
+                <p className="text-3xl font-bold text-gray-900 mb-2">{fines?.length || 0}</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">
+                    {fines?.filter(f => f.status === 'paid').length || 0} paid
+                  </span>
+                  <span className="text-red-700 font-bold">
+                    EGP {fines?.filter(f => f.status !== 'paid').reduce((sum, f) => sum + (f.amount || 0), 0).toFixed(0) || 0} unpaid
+                  </span>
+                </div>
+              </div>
+
+              {/* Guards */}
+              <div className="bg-white rounded-xl shadow-sm border-l-4 border-slate-500 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-slate-100 rounded-xl">
+                    <Shield className="h-7 w-7 text-slate-600" />
+                  </div>
+                  {guards?.filter(g => g.status === 'active' || g.isActive).length > 0 && (
+                    <span className="px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
+                      {guards.filter(g => g.status === 'active' || g.isActive).length}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Security Guards</h4>
+                <p className="text-3xl font-bold text-gray-900 mb-2">{guards?.length || 0}</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-green-600 font-bold">
+                    {guards?.filter(g => g.status === 'active' || g.isActive).length || 0} on duty
+                  </span>
+                  <span className="text-gray-600">
+                    {guards?.filter(g => g.status === 'inactive' || !g.isActive).length || 0} off duty
+                  </span>
+                </div>
+              </div>
+
+              {/* Stores */}
+              <div className="bg-white rounded-xl shadow-sm border-l-4 border-green-500 p-5 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-green-100 rounded-xl">
+                    <ShoppingBag className="h-7 w-7 text-green-600" />
+                  </div>
+                  {stores?.filter(s => s.status === 'active' || s.isActive).length > 0 && (
+                    <span className="px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
+                      {stores.filter(s => s.status === 'active' || s.isActive).length}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-1">Stores</h4>
+                <p className="text-3xl font-bold text-gray-900 mb-2">{stores?.length || 0}</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-green-600 font-bold">
+                    {stores?.filter(s => s.status === 'active' || s.isActive).length || 0} active
+                  </span>
+                  <span className="text-gray-600">
+                    {projectOrders?.length || 0} total orders
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Breakdown Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Request System Analytics */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-cyan-600" />
+                    Request System
+                  </h3>
+                  {requestSubmissions?.filter(r => r.status === 'pending').length > 0 && (
+                    <span className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-full animate-pulse">
+                      {requestSubmissions.filter(r => r.status === 'pending').length} Pending
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-cyan-50 rounded-lg p-4 text-center border border-cyan-200">
+                    <p className="text-3xl font-bold text-cyan-900">{requestCategories?.length || 0}</p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Categories</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+                    <p className="text-3xl font-bold text-blue-900">{requestSubmissions?.length || 0}</p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Submissions</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+                    <p className="text-3xl font-bold text-green-900">
+                      {requestSubmissions?.filter(r => r.status === 'approved' || r.status === 'completed').length || 0}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Approved</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-4 text-center border border-amber-200">
+                    <p className="text-3xl font-bold text-amber-900">
+                      {requestSubmissions?.filter(r => r.status === 'pending').length || 0}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Pending Review</p>
+                  </div>
+                </div>
+                {requestSubmissions && requestSubmissions.length > 0 && (
+                  <div className="mt-4 p-3 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg border border-cyan-200">
+                    <p className="text-xs text-gray-700 flex items-center justify-between">
+                      <span className="font-semibold">Recent Activity:</span>
+                      <span className="text-cyan-700 font-bold">
+                        {requestSubmissions.filter(r => {
+                          const createdDate = r.createdAt?.toDate?.() || new Date(r.createdAt);
+                          const weekAgo = new Date();
+                          weekAgo.setDate(weekAgo.getDate() - 7);
+                          return createdDate >= weekAgo;
+                        }).length} this week
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Support & Complaints Analytics */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <MessageCircle className="h-5 w-5 mr-2 text-purple-600" />
+                    Support System
+                  </h3>
+                  {(openComplaintsCount + openSupportTicketsCount) > 0 && (
+                    <span className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-full animate-pulse">
+                      {openComplaintsCount + openSupportTicketsCount} Open
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
+                    <p className="text-3xl font-bold text-purple-900">{complaints?.length || 0}</p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Total Complaints</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-4 text-center border border-amber-200">
+                    <p className="text-3xl font-bold text-amber-900">{openComplaintsCount}</p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Open/In Progress</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+                    <p className="text-3xl font-bold text-blue-900">{supportTickets?.length || 0}</p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Support Tickets</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+                    <p className="text-3xl font-bold text-green-900">
+                      {complaints?.filter(c => c.status === 'Resolved' || c.status === 'Closed').length || 0}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1 font-semibold">Resolved</p>
+                  </div>
+                </div>
+                {complaints && complaints.length > 0 && (
+                  <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <p className="text-xs text-gray-700 flex items-center justify-between">
+                      <span className="font-semibold">Resolution Rate:</span>
+                      <span className="text-purple-700 font-bold">
+                        {Math.round((complaints.filter(c => c.status === 'Resolved' || c.status === 'Closed').length / complaints.length) * 100)}%
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Activity Timeline */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <Clock className="h-5 w-5 mr-2 text-red-600" />
+                  Recent Activity
+                </h3>
+                <button 
+                  onClick={refreshAllData}
+                  className="px-3 py-1.5 bg-red-50 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-100 transition-colors flex items-center"
+                >
+                  <svg className="h-3.5 w-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(() => {
+                  // Gather all recent activities
+                  const activities = [];
+                  
+                  // Recent orders
+                  if (projectOrders && projectOrders.length > 0) {
+                    projectOrders.slice(0, 3).forEach(order => {
+                      activities.push({
+                        type: 'order',
+                        icon: Package,
+                        color: 'green',
+                        title: `New order #${order.orderNumber || order.id.slice(0, 8)}`,
+                        description: `${order.items?.length || 0} items • EGP ${order.total || 0}`,
+                        time: order.createdAt,
+                        status: order.status
+                      });
+                    });
+                  }
+                  
+                  // Recent bookings
+                  if (projectBookings && projectBookings.length > 0) {
+                    projectBookings.slice(0, 3).forEach(booking => {
+                      activities.push({
+                        type: 'booking',
+                        icon: Calendar,
+                        color: 'blue',
+                        title: booking.type === 'court' ? `Court booking: ${booking.courtName}` : `Academy: ${booking.academyName}`,
+                        description: `${booking.date} • ${booking.status}`,
+                        time: booking.createdAt,
+                        status: booking.status
+                      });
+                    });
+                  }
+                  
+                  // Recent complaints
+                  if (complaints && complaints.length > 0) {
+                    complaints.slice(0, 2).forEach(complaint => {
+                      activities.push({
+                        type: 'complaint',
+                        icon: MessageCircle,
+                        color: 'purple',
+                        title: `Complaint: ${complaint.title || 'Untitled'}`,
+                        description: `${complaint.category || 'General'} • ${complaint.status}`,
+                        time: complaint.createdAt,
+                        status: complaint.status
+                      });
+                    });
+                  }
+                  
+                  // Recent request submissions
+                  if (requestSubmissions && requestSubmissions.length > 0) {
+                    requestSubmissions.slice(0, 2).forEach(request => {
+                      activities.push({
+                        type: 'request',
+                        icon: FileText,
+                        color: 'cyan',
+                        title: `New request submission`,
+                        description: `Category: ${request.categoryName || 'Unknown'} • ${request.status}`,
+                        time: request.createdAt,
+                        status: request.status
+                      });
+                    });
+                  }
+                  
+                  // Recent users
+                  if (projectUsers && projectUsers.length > 0) {
+                    projectUsers
+                      .sort((a, b) => {
+                        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt);
+                        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt);
+                        return bTime - aTime;
+                      })
+                      .slice(0, 2)
+                      .forEach(user => {
+                        activities.push({
+                          type: 'user',
+                          icon: Users,
+                          color: 'red',
+                          title: `New user: ${user.firstName} ${user.lastName}`,
+                          description: `${user.email} • ${user.approvalStatus}`,
+                          time: user.createdAt,
+                          status: user.approvalStatus
+                        });
+                      });
+                  }
+                  
+                  // Sort all activities by time
+                  activities.sort((a, b) => {
+                    const aTime = a.time?.toDate?.() || new Date(a.time);
+                    const bTime = b.time?.toDate?.() || new Date(b.time);
+                    return bTime - aTime;
+                  });
+                  
+                  // Display recent activities
+                  return activities.slice(0, 10).map((activity, index) => {
+                    const Icon = activity.icon;
+                    const colorClasses = {
+                      red: 'bg-red-50 border-red-200',
+                      blue: 'bg-blue-50 border-blue-200',
+                      green: 'bg-green-50 border-green-200',
+                      purple: 'bg-purple-50 border-purple-200',
+                      cyan: 'bg-cyan-50 border-cyan-200',
+                      orange: 'bg-orange-50 border-orange-200'
+                    };
+                    
+                    const iconColorClasses = {
+                      red: 'bg-red-100 text-red-600',
+                      blue: 'bg-blue-100 text-blue-600',
+                      green: 'bg-green-100 text-green-600',
+                      purple: 'bg-purple-100 text-purple-600',
+                      cyan: 'bg-cyan-100 text-cyan-600',
+                      orange: 'bg-orange-100 text-orange-600'
+                    };
+                    
+                    const timeAgo = activity.time ? (() => {
+                      const activityTime = activity.time?.toDate?.() || new Date(activity.time);
+                      const now = new Date();
+                      const diffMs = now - activityTime;
+                      const diffMins = Math.floor(diffMs / 60000);
+                      const diffHours = Math.floor(diffMs / 3600000);
+                      const diffDays = Math.floor(diffMs / 86400000);
+                      
+                      if (diffMins < 1) return 'Just now';
+                      if (diffMins < 60) return `${diffMins}m ago`;
+                      if (diffHours < 24) return `${diffHours}h ago`;
+                      return `${diffDays}d ago`;
+                    })() : 'Unknown';
+                    
+                    return (
+                      <div key={index} className={`flex items-start p-3 rounded-lg border ${colorClasses[activity.color]} hover:shadow-md transition-all`}>
+                        <div className={`p-2 rounded-lg ${iconColorClasses[activity.color]}`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-gray-900">{activity.title}</p>
+                            <span className="text-xs text-gray-500">{timeAgo}</span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+                
+                {(!projectOrders || projectOrders.length === 0) && 
+                 (!projectBookings || projectBookings.length === 0) && 
+                 (!complaints || complaints.length === 0) && (
+                  <div className="text-center py-12">
+                    <Clock className="h-16 w-16 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 font-semibold">No recent activity</p>
+                    <p className="text-xs text-gray-400 mt-1">Activity will appear here as it happens</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+                <Target className="h-5 w-5 mr-2 text-red-600" />
+                Quick Navigation
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {serviceTabs.slice(1).map((tab) => {
                   const Icon = tab.icon;
+                  const notificationCount = getNotificationCount(tab.id);
                   return (
                     <button
                       key={tab.id}
                       onClick={() => handleTabChange(tab.id)}
-                      className="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                      className="relative flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-red-300 hover:bg-red-50 transition-all hover:scale-105 group"
                     >
-                      <div className={`p-3 rounded-xl mb-3 ${getTabColorClasses(tab.color)}`}>
-                        <Icon className="h-6 w-6" />
+                      {notificationCount > 0 && (
+                        <span className="absolute -top-2 -right-2 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse shadow-lg">
+                          {notificationCount}
+                        </span>
+                      )}
+                      <div className="p-3 bg-gray-100 rounded-xl mb-2 group-hover:bg-red-100 transition-colors">
+                        <Icon className="h-6 w-6 text-gray-600 group-hover:text-red-600 transition-colors" />
                       </div>
-                      <span className="text-sm font-medium text-gray-700">{tab.name}</span>
+                      <span className="text-xs font-semibold text-gray-700 text-center group-hover:text-red-700 transition-colors">{tab.name}</span>
                     </button>
                   );
                 })}
-              </div>
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Actions</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {serviceTabs.slice(5, 10).map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => handleTabChange(tab.id)}
-                        className="flex flex-col items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors"
-                      >
-                        <div className={`p-2 rounded-lg mb-2 ${getTabColorClasses(tab.color)}`}>
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-700">{tab.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-              <div className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                  <span>Project dashboard loaded successfully</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  <span>{stats.totalUsers} users found in project</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                  <span>{stats.activeNotifications} active notifications</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
-                  <span>Ready to manage project services</span>
-                </div>
               </div>
             </div>
           </div>
