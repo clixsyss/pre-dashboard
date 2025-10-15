@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -73,7 +73,7 @@ const ProjectDashboard = () => {
   const { projectId } = useParams();
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  // filteredUsers is now memoized for better performance
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -83,15 +83,7 @@ const ProjectDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
-  const [pendingUsersCount, setPendingUsersCount] = useState(0);
-  const [upcomingBookingsCount, setUpcomingBookingsCount] = useState(0);
-  const [pendingServiceRequestsCount, setPendingServiceRequestsCount] = useState(0);
-  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
-  const [openComplaintsCount, setOpenComplaintsCount] = useState(0);
-  const [openSupportTicketsCount, setOpenSupportTicketsCount] = useState(0);
-  const [pendingFinesCount, setPendingFinesCount] = useState(0);
-  const [pendingGatePassCount, setPendingGatePassCount] = useState(0);
+  // Notification counts are now memoized for better performance
   
   // Data state for notification counts and comprehensive analytics
   const [notifications] = useState([]);
@@ -360,7 +352,6 @@ const ProjectDashboard = () => {
           });
 
           setProjectUsers(projectUsersData);
-          setFilteredUsers(projectUsersData);
           setLoading(false); // Set loading to false immediately after data is loaded
           setDataLoaded(true); // Mark that initial data is loaded
         } catch (err) {
@@ -373,16 +364,17 @@ const ProjectDashboard = () => {
     }
   }, [projectId]);
 
-  // Filter users function
-  const filterUsers = useCallback(() => {
+  // Memoized filtered users for better performance
+  const filteredUsers = useMemo(() => {
     if (searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all') {
       let filtered = [...projectUsers];
 
       if (searchTerm) {
+        const term = searchTerm.toLowerCase();
         filtered = filtered.filter(user =>
-          user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+          user.firstName?.toLowerCase().includes(term) ||
+          user.lastName?.toLowerCase().includes(term) ||
+          user.email?.toLowerCase().includes(term)
         );
       }
 
@@ -417,25 +409,31 @@ const ProjectDashboard = () => {
         }
       }
 
-      setFilteredUsers(filtered);
+      return filtered;
     } else {
-      setFilteredUsers(projectUsers);
+      return projectUsers;
     }
   }, [searchTerm, statusFilter, userStatusFilter, migrationStatusFilter, projectUsers]);
 
-  // Filter bookings based on search and filters
-  const getFilteredBookings = useCallback(() => {
+  // Filter users function - now just returns the memoized value
+  const filterUsers = useCallback(() => {
+    return filteredUsers;
+  }, [filteredUsers]);
+
+  // Memoized filtered bookings for better performance
+  const filteredBookings = useMemo(() => {
     if (!projectBookings || projectBookings.length === 0) return [];
         
     let filtered = [...projectBookings];
 
     if (bookingSearchTerm) {
+      const term = bookingSearchTerm.toLowerCase();
       filtered = filtered.filter(booking =>
-        (booking.userName && booking.userName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.userEmail && booking.userEmail.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.date && booking.date.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.courtName && booking.courtName.toLowerCase().includes(bookingSearchTerm.toLowerCase())) ||
-        (booking.academyName && booking.academyName.toLowerCase().includes(bookingSearchTerm.toLowerCase()))
+        (booking.userName && booking.userName.toLowerCase().includes(term)) ||
+        (booking.userEmail && booking.userEmail.toLowerCase().includes(term)) ||
+        (booking.date && booking.date.toLowerCase().includes(term)) ||
+        (booking.courtName && booking.courtName.toLowerCase().includes(term)) ||
+        (booking.academyName && booking.academyName.toLowerCase().includes(term))
       );
     }
 
@@ -475,9 +473,14 @@ const ProjectDashboard = () => {
     return filtered;
   }, [projectBookings, bookingSearchTerm, bookingServiceFilter, courtFilter, academyFilter, bookingStatusFilter]);
 
-  // Separate upcoming and past bookings
-  const getUpcomingBookings = useCallback(() => {
-    const filtered = getFilteredBookings();
+  // Filter bookings function - now just returns the memoized value
+  const getFilteredBookings = useCallback(() => {
+    return filteredBookings;
+  }, [filteredBookings]);
+
+  // Memoized upcoming bookings for better performance
+  const upcomingBookings = useMemo(() => {
+    const filtered = filteredBookings;
     const now = new Date();
 
     return filtered.filter(booking => {
@@ -500,120 +503,83 @@ const ProjectDashboard = () => {
       // If no date but status is pending or confirmed, consider it upcoming
       return booking.status === 'pending' || booking.status === 'confirmed';
     });
-  }, [getFilteredBookings]);
+  }, [filteredBookings]);
 
-  // Update all notification counts
-  const updateAllNotificationCounts = useCallback(() => {
-    // Pending users count
-    const pendingCount = projectUsers.filter(user => 
+  // Separate upcoming and past bookings - now just returns memoized value
+  const getUpcomingBookings = useCallback(() => {
+    return upcomingBookings;
+  }, [upcomingBookings]);
+
+  // Memoized calculations for better performance
+  const pendingUsersCount = useMemo(() => 
+    projectUsers.filter(user => 
       user.approvalStatus === 'pending' && !user.isDeleted
-    ).length;
-    setPendingUsersCount(pendingCount);
+    ).length, [projectUsers]
+  );
 
-    // Upcoming bookings count (court/academy bookings that are upcoming)
-    const upcomingBookings = getUpcomingBookings().length;
-    setUpcomingBookingsCount(upcomingBookings);
+  const upcomingBookingsCount = useMemo(() => 
+    upcomingBookings.length, [upcomingBookings]
+  );
 
-    // Pending service requests count (service bookings that are pending)
-    const pendingServiceRequests = serviceBookings?.filter(booking => 
-      booking.status === 'pending'
+  const pendingServiceRequestsCount = useMemo(() => {
+    const count = serviceBookings?.filter(booking => 
+      booking.status === 'open' || booking.status === 'processing'
     ).length || 0;
-    setPendingServiceRequestsCount(pendingServiceRequests);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Service Bookings:', serviceBookings?.length || 0, 'Open/Processing:', count);
+    }
+    return count;
+  }, [serviceBookings]);
 
-    // Pending orders count (orders that need processing)
-    const pendingOrders = projectOrders?.filter(order => 
+  const pendingOrdersCount = useMemo(() => 
+    projectOrders?.filter(order => 
       order.status === 'pending' || order.status === 'processing'
-    ).length || 0;
-    setPendingOrdersCount(pendingOrders);
+    ).length || 0, [projectOrders]
+  );
 
-    // Unread notifications count (assuming notifications have a read status)
-    const unreadNotifications = notifications?.filter(notification => 
+  const unreadNotificationsCount = useMemo(() => 
+    notifications?.filter(notification => 
       !notification.read || notification.read === false
-    ).length || 0;
-    setUnreadNotificationsCount(unreadNotifications);
+    ).length || 0, [notifications]
+  );
 
-    // Open complaints count (complaints that are not closed)
-    const openComplaints = complaints?.filter(complaint => 
+  const openComplaintsCount = useMemo(() => 
+    complaints?.filter(complaint => 
       complaint.status === 'Open' || complaint.status === 'In Progress'
-    ).length || 0;
-    setOpenComplaintsCount(openComplaints);
+    ).length || 0, [complaints]
+  );
 
-    // Open support tickets count (support chats that are open)
-    const openSupportTickets = supportTickets?.filter(ticket => 
+  const openSupportTicketsCount = useMemo(() => 
+    supportTickets?.filter(ticket => 
       ticket.status === 'open' || !ticket.status
-    ).length || 0;
-    setOpenSupportTicketsCount(openSupportTickets);
+    ).length || 0, [supportTickets]
+  );
 
-    // Pending fines count (fines that are issued but not paid)
-    const pendingFines = fines?.filter(fine => 
+  const pendingFinesCount = useMemo(() => 
+    fines?.filter(fine => 
       fine.status === 'issued' || fine.status === 'disputed'
-    ).length || 0;
-    setPendingFinesCount(pendingFines);
+    ).length || 0, [fines]
+  );
 
-    // Pending gate pass count (gate passes that need approval or are active today)
-    const pendingGatePass = gatePasses?.filter(pass => 
+  const pendingGatePassCount = useMemo(() => 
+    gatePasses?.filter(pass => 
       pass.status === 'pending' || pass.status === 'requested' || pass.status === 'active'
-    ).length || 0;
-    setPendingGatePassCount(pendingGatePass);
+    ).length || 0, [gatePasses]
+  );
 
-    // Console log comprehensive analytics
-    console.log('📊 Dashboard Analytics Update:', {
-      users: {
-        total: projectUsers.length,
-        pending: pendingCount,
-        active: projectUsers.filter(u => u.registrationStatus === 'completed').length
-      },
-      bookings: {
-        total: projectBookings?.length || 0,
-        upcoming: upcomingBookings,
-        courtBookings: projectBookings?.filter(b => b.type === 'court').length || 0,
-        academyBookings: projectBookings?.filter(b => b.type === 'academy').length || 0
-      },
-      services: {
-        categories: serviceCategories?.length || 0,
-        pendingRequests: pendingServiceRequests
-      },
-      orders: {
-        total: projectOrders?.length || 0,
-        pending: pendingOrders
-      },
-      requests: {
-        categories: requestCategories?.length || 0,
-        submissions: requestSubmissions?.length || 0,
-        pending: requestSubmissions?.filter(r => r.status === 'pending').length || 0
-      },
-      communication: {
-        notifications: notifications?.length || 0,
-        unread: unreadNotifications,
-        news: newsItems?.length || 0,
-        ads: adsItems?.length || 0
-      },
-      support: {
-        complaints: complaints?.length || 0,
-        open: openComplaints,
-        tickets: openSupportTickets
-      },
-      security: {
-        fines: fines?.length || 0,
-        pending: pendingFines,
-        gatePasses: gatePasses?.length || 0,
-        guards: guards?.length || 0
-      },
-      facilities: {
-        courts: courts?.length || 0,
-        academies: academies?.length || 0,
-        stores: stores?.length || 0
-      },
-      administration: {
-        admins: projectAdmins?.length || 0,
-        activeAdmins: projectAdmins?.filter(a => a.isActive).length || 0,
-        pendingRequests: pendingAdminsCount,
-        superAdmins: projectAdmins?.filter(a => a.accountType === 'super_admin').length || 0,
-        fullAccess: projectAdmins?.filter(a => a.accountType === 'full_access').length || 0,
-        customAccess: projectAdmins?.filter(a => a.accountType === 'custom').length || 0
-      }
-    });
-  }, [projectUsers, projectOrders, notifications, complaints, supportTickets, fines, gatePasses, serviceBookings, requestSubmissions, requestCategories, newsItems, adsItems, academies, courts, guards, stores, serviceCategories, projectAdmins, pendingAdminsCount, getUpcomingBookings, projectBookings]);
+  // Update all notification counts - now just logs analytics (counts are memoized)
+  const updateAllNotificationCounts = useCallback(() => {
+
+    // Reduced logging for better performance - only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Dashboard Analytics Update:', {
+        users: { total: projectUsers.length, pending: pendingUsersCount },
+        bookings: { total: projectBookings?.length || 0, upcoming: upcomingBookingsCount },
+        orders: { total: projectOrders?.length || 0, pending: pendingOrdersCount },
+        complaints: { total: complaints?.length || 0, open: openComplaintsCount }
+      });
+    }
+  }, [pendingUsersCount, upcomingBookingsCount, pendingOrdersCount, openComplaintsCount, projectUsers, projectOrders, projectBookings, complaints]);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
@@ -705,10 +671,9 @@ const ProjectDashboard = () => {
   ]);
 
   useEffect(() => {
-    filterUsers();
     // Reset to page 1 when filters change
     setCurrentPage(1);
-  }, [filterUsers]);
+  }, [filteredUsers]);
 
   // Update all notification counts when data changes
   useEffect(() => {
@@ -994,7 +959,7 @@ const ProjectDashboard = () => {
     }
   }, [setPendingAdminsCount]);
 
-  // Load all data upfront for instant dashboard experience
+  // Load all data on mount for best user experience
   useEffect(() => {
     if (projectId && dataLoaded) {
       const loadAllData = async () => {
@@ -1884,7 +1849,6 @@ const ProjectDashboard = () => {
       
       // Update local state - remove user from project users list
       setProjectUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
-      setFilteredUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
       
       console.log('User removed from project successfully');
     } catch (error) {
@@ -2014,14 +1978,6 @@ const ProjectDashboard = () => {
 
       // Update local state
       setProjectUsers(prevUsers =>
-        prevUsers.map(u =>
-          u.id === editUserData.id
-            ? { ...u, ...updateData }
-            : u
-        )
-      );
-
-      setFilteredUsers(prevUsers =>
         prevUsers.map(u =>
           u.id === editUserData.id
             ? { ...u, ...updateData }
@@ -2322,7 +2278,6 @@ const ProjectDashboard = () => {
       };
       
       setProjectUsers(prevUsers => [...prevUsers, newUser]);
-      setFilteredUsers(prevUsers => [...prevUsers, newUser]);
 
       // Reset form and close modal
       setNewUserData({
