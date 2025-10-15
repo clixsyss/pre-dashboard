@@ -61,6 +61,7 @@ import SupportManagement from '../components/SupportManagement';
 import FinesManagement from '../components/FinesManagement';
 import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
+import GuestPasses from './GuestPasses';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -285,7 +286,8 @@ const ProjectDashboard = () => {
         { id: 'gatepass', name: 'Gate Pass', icon: Key, description: 'Gate pass management', permission: 'gate_pass' },
         { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' },
         { id: 'guards', name: 'Guards', icon: Shield, description: 'Guard account management', permission: 'guards' },
-        { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' }
+        { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' },
+        { id: 'guestpasses', name: 'Guest Passes', icon: UserX, description: 'Manage guest passes and user limits', permission: 'guest_passes' }
       ]
     },
     {
@@ -5425,6 +5427,12 @@ const ProjectDashboard = () => {
             {activeTab === 'fines' && (
               <PermissionGate entity="fines" action="read" showMessage={true}>
                 <FinesManagement projectId={projectId} />
+              </PermissionGate>
+            )}
+
+            {activeTab === 'guestpasses' && (
+              <PermissionGate entity="guest_passes" action="read" showMessage={true}>
+                <GuestPasses />
               </PermissionGate>
             )}
 
