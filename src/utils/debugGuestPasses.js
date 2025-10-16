@@ -42,11 +42,12 @@ export const debugGuestPasses = async (projectId) => {
       orderBy('createdAt', 'desc')
     );
     
+    let projectPasses = [];
+    
     try {
       const projectPassesSnapshot = await getDocs(projectPassesQuery);
       console.log(`📊 Passes for project ${projectId}: ${projectPassesSnapshot.size}`);
       
-      const projectPasses = [];
       projectPassesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         projectPasses.push({

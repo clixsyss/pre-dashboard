@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Settings, 
   Users, 
@@ -7,10 +7,12 @@ import {
   Save,
   RotateCcw,
   Edit,
-  Trash2,
   Plus,
   Check,
-  X
+  X,
+  Search,
+  UserCog,
+  RefreshCcw
 } from 'lucide-react';
 
 const AdminControls = ({ 
@@ -29,6 +31,8 @@ const AdminControls = ({
   const [editingUserLimit, setEditingUserLimit] = useState(null);
   const [newUserLimit, setNewUserLimit] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false);
 
   const sections = [
     { id: 'users', name: 'User Management', icon: Users },
@@ -59,6 +63,46 @@ const AdminControls = ({
     }
   };
 
+  const handleResetToDefault = async (userId) => {
+    if (!globalSettings?.monthlyLimit) {
+      console.error('No global limit set');
+      return;
+    }
+    const defaultLimit = globalSettings.monthlyLimit;
+    try {
+      await onUpdateUserLimit(projectId, userId, defaultLimit);
+    } catch (error) {
+      console.error('Error resetting user limit to default:', error);
+    }
+  };
+
+  const handleResetAllToDefault = async () => {
+    if (!globalSettings?.monthlyLimit) {
+      console.error('No global limit set');
+      return;
+    }
+    
+    const defaultLimit = globalSettings.monthlyLimit;
+    const usersWithCustomLimits = users.filter(user => {
+      const hasCustomLimit = user.monthlyLimit !== undefined && 
+                            user.monthlyLimit !== null && 
+                            user.monthlyLimit !== defaultLimit;
+      return hasCustomLimit;
+    });
+
+    if (usersWithCustomLimits.length === 0) return;
+
+    try {
+      // Reset all users with custom limits
+      for (const user of usersWithCustomLimits) {
+        await onUpdateUserLimit(projectId, user.id, defaultLimit);
+      }
+      setShowResetAllConfirm(false);
+    } catch (error) {
+      console.error('Error resetting all limits to default:', error);
+    }
+  };
+
   const handleResetUsage = async () => {
     try {
       await onResetUsage(projectId);
@@ -74,6 +118,59 @@ const AdminControls = ({
     if (percentage >= 80) return 'bg-orange-500';
     return 'bg-green-500';
   };
+
+  // Filter and search users
+  const filteredUsers = useMemo(() => {
+    if (!users || !globalSettings?.monthlyLimit) return [];
+
+    let filtered = [...users];
+    const defaultLimit = globalSettings.monthlyLimit;
+
+    if (searchTerm.trim()) {
+      // When searching, show ALL matching users (so you can set custom limits for anyone)
+      filtered = filtered.filter(user => 
+        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    } else {
+      // When NOT searching, show ONLY users with custom limits
+      filtered = filtered.filter(user => {
+        const hasCustomLimit = user.monthlyLimit !== undefined && 
+                              user.monthlyLimit !== null && 
+                              user.monthlyLimit !== defaultLimit;
+        return hasCustomLimit;
+      });
+    }
+
+    return filtered;
+  }, [users, searchTerm, globalSettings?.monthlyLimit]);
+
+  // Count users with custom limits
+  const customLimitCount = useMemo(() => {
+    if (!users || !globalSettings?.monthlyLimit) return 0;
+    const defaultLimit = globalSettings.monthlyLimit;
+    
+    const customUsers = users.filter(user => {
+      // Only count as custom if the limit is explicitly different from global
+      const hasCustomLimit = user.monthlyLimit !== undefined && 
+                            user.monthlyLimit !== null && 
+                            user.monthlyLimit !== defaultLimit;
+      return hasCustomLimit;
+    });
+    
+    console.log('🔍 Custom Limit Detection:', {
+      defaultLimit,
+      totalUsers: users.length,
+      customUsersCount: customUsers.length,
+      allUserLimits: users.map(u => ({ 
+        name: u.name, 
+        limit: u.monthlyLimit,
+        isCustom: u.monthlyLimit !== defaultLimit 
+      }))
+    });
+    
+    return customUsers.length;
+  }, [users, globalSettings?.monthlyLimit]);
 
   return (
     <div className="space-y-6">
@@ -98,50 +195,150 @@ const AdminControls = ({
       {/* User Management */}
       {activeSection === 'users' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">User Limits & Status</h3>
-            <div className="text-sm text-gray-500">
-              {users?.length || 0} total users
+          {/* Header with Stats */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                <Users className="h-6 w-6 mr-2 text-pre-red" />
+                User Limits & Status
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {users?.length || 0} total users · {customLimitCount} with custom limits
+              </p>
+            </div>
+            {customLimitCount > 0 && (
+              <button
+                onClick={() => setShowResetAllConfirm(true)}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+                title={`Reset all ${customLimitCount} users to default limit (${globalSettings?.monthlyLimit || 100})`}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                <span>Reset All to Default ({customLimitCount})</span>
+              </button>
+            )}
+          </div>
+
+          {/* Search Bar */}
+          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-4">
+              {/* Search Input */}
+              <div className="flex-1 relative">
+                <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search users with custom limits by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-pre-red focus:border-transparent transition-all duration-200 bg-white"
+                />
+              </div>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="px-4 py-3 text-gray-600 hover:text-gray-800 hover:bg-white rounded-xl transition-all duration-200 flex items-center space-x-2"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Info Banner */}
+            <div className="mt-4 flex items-center space-x-2 text-sm">
+              <UserCog className="h-4 w-4 text-pre-red" />
+              <span className="text-gray-700">
+                {searchTerm ? (
+                  <>Search results from <span className="font-semibold text-gray-900">all users</span></>
+                ) : (
+                  <>Showing only users with <span className="font-semibold text-pre-red">custom pass limits</span></>
+                )}
+              </span>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {/* Results Info */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">
+              {searchTerm ? (
+                <>
+                  Found <span className="font-semibold text-gray-900">{filteredUsers.length}</span> user{filteredUsers.length !== 1 ? 's' : ''} matching "{searchTerm}"
+                </>
+              ) : (
+                <>
+                  Showing <span className="font-semibold text-gray-900">{filteredUsers.length}</span> user{filteredUsers.length !== 1 ? 's' : ''} with custom limits
+                </>
+              )}
+            </span>
+            {filteredUsers.length === 0 && searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-pre-red hover:text-red-700 font-medium flex items-center space-x-1"
+              >
+                <X className="h-3 w-3" />
+                <span>Clear search</span>
+              </button>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Usage
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Monthly Limit
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users?.length === 0 ? (
+                  {filteredUsers?.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center">
-                          <Users className="h-12 w-12 text-gray-400 mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
-                          <p className="text-gray-500">
-                            No users have been created for guest passes yet. Users will appear here when they first access the guest pass feature in the mobile app.
-                          </p>
+                          {searchTerm ? (
+                            <>
+                              <Search className="h-16 w-16 text-gray-300 mb-4" />
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Users Found</h3>
+                              <p className="text-gray-500 mb-4 max-w-md">
+                                No users found matching "{searchTerm}". Try a different search term.
+                              </p>
+                              <button
+                                onClick={() => setSearchTerm('')}
+                                className="px-4 py-2 bg-pre-red text-white rounded-xl hover:bg-red-700 transition-colors flex items-center space-x-2"
+                              >
+                                <X className="h-4 w-4" />
+                                <span>Clear Search</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <UserCog className="h-16 w-16 text-gray-300 mb-4" />
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Custom Limits Set</h3>
+                              <p className="text-gray-500 max-w-md mb-2">
+                                All users are currently using the default global limit of <span className="font-semibold text-gray-900">{globalSettings?.monthlyLimit || 100} passes</span>.
+                              </p>
+                              <p className="text-sm text-gray-400">
+                                Click the edit icon next to a user's limit to set a custom value.
+                              </p>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    users?.map((user) => (
+                    filteredUsers?.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -150,25 +347,31 @@ const AdminControls = ({
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
                           user.blocked 
-                            ? 'bg-red-100 text-red-800' 
-                            : 'bg-green-100 text-green-800'
+                            ? 'bg-red-50 text-red-700 border-red-200' 
+                            : 'bg-green-50 text-green-700 border-green-200'
                         }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                            user.blocked ? 'bg-red-500' : 'bg-green-500'
+                          }`}></span>
                           {user.blocked ? 'Blocked' : 'Active'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center space-x-3">
-                          <div className="text-sm text-gray-900">
+                          <div className="text-sm font-medium text-gray-900">
                             {user.usedThisMonth} / {user.monthlyLimit}
                           </div>
-                          <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2.5 shadow-inner">
                             <div 
-                              className={`h-2 rounded-full ${getUsageColor(user.usedThisMonth, user.monthlyLimit)}`}
+                              className={`h-2.5 rounded-full transition-all duration-500 ${getUsageColor(user.usedThisMonth, user.monthlyLimit)}`}
                               style={{ width: `${Math.min((user.usedThisMonth / user.monthlyLimit) * 100, 100)}%` }}
                             ></div>
                           </div>
+                          <span className="text-xs font-medium text-gray-500">
+                            {Math.round((user.usedThisMonth / user.monthlyLimit) * 100)}%
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -178,12 +381,14 @@ const AdminControls = ({
                               type="number"
                               value={newUserLimit}
                               onChange={(e) => setNewUserLimit(e.target.value)}
-                              className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-pre-red focus:border-transparent"
+                              className="w-20 px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-pre-red focus:border-transparent"
                               placeholder={user.monthlyLimit}
+                              autoFocus
                             />
                             <button
                               onClick={() => handleUpdateUserLimit(user.id, user.monthlyLimit)}
-                              className="text-green-600 hover:text-green-700"
+                              className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Save"
                             >
                               <Check className="h-4 w-4" />
                             </button>
@@ -192,23 +397,43 @@ const AdminControls = ({
                                 setEditingUserLimit(null);
                                 setNewUserLimit('');
                               }}
-                              className="text-gray-400 hover:text-gray-600"
+                              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Cancel"
                             >
                               <X className="h-4 w-4" />
                             </button>
                           </div>
                         ) : (
                           <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-900">{user.monthlyLimit}</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-gray-900">{user.monthlyLimit}</span>
+                              {globalSettings?.monthlyLimit && user.monthlyLimit !== globalSettings.monthlyLimit && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-pre-red bg-opacity-10 text-pre-red border border-pre-red border-opacity-20">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-1">
                             <button
                               onClick={() => {
                                 setEditingUserLimit(user.id);
                                 setNewUserLimit(user.monthlyLimit.toString());
                               }}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              <Edit className="h-3 w-3" />
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                title="Edit limit"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              {globalSettings?.monthlyLimit && user.monthlyLimit !== globalSettings.monthlyLimit && (
+                                <button
+                                  onClick={() => handleResetToDefault(user.id)}
+                                  className="p-1.5 text-orange-500 hover:text-white hover:bg-orange-500 rounded-lg transition-all duration-200"
+                                  title={`Reset to default (${globalSettings.monthlyLimit})`}
+                                >
+                                  <RefreshCcw className="h-3.5 w-3.5" />
                             </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </td>
@@ -217,7 +442,7 @@ const AdminControls = ({
                           {user.blocked ? (
                             <button
                               onClick={() => onUnblockUser && onUnblockUser(projectId, user.id)}
-                              className="text-green-600 hover:text-green-700 px-2 py-1 rounded hover:bg-green-50 transition-colors"
+                              className="px-3 py-1.5 text-green-600 hover:text-white bg-green-50 hover:bg-green-600 border border-green-200 hover:border-green-600 rounded-lg transition-all duration-200 font-medium"
                               title="Unblock User"
                             >
                               Unblock
@@ -225,7 +450,7 @@ const AdminControls = ({
                           ) : (
                             <button
                               onClick={() => onBlockUser && onBlockUser(projectId, user.id)}
-                              className="text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                              className="px-3 py-1.5 text-red-600 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 rounded-lg transition-all duration-200 font-medium"
                               title="Block User"
                             >
                               Block
@@ -389,29 +614,65 @@ const AdminControls = ({
         </div>
       )}
 
-      {/* Reset Confirmation Modal */}
+      {/* Reset Usage Confirmation Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center space-x-3 mb-4">
-              <AlertTriangle className="h-6 w-6 text-orange-500" />
-              <h3 className="text-lg font-semibold text-gray-900">Confirm Reset</h3>
+              <div className="p-3 bg-red-100 rounded-xl">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Confirm Reset Usage</h3>
             </div>
-            <p className="text-sm text-gray-500 mb-6">
-              Are you sure you want to reset all users' monthly usage counters? This action cannot be undone.
+            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+              Are you sure you want to reset all users' monthly usage counters to zero? This action cannot be undone.
             </p>
             <div className="flex items-center justify-end space-x-3">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResetUsage}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
               >
                 Reset Usage
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset All Limits to Default Confirmation Modal */}
+      {showResetAllConfirm && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-orange-100 rounded-xl">
+                <RefreshCcw className="h-6 w-6 text-orange-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Reset Custom Limits?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2 leading-relaxed">
+              This will reset <span className="font-semibold text-gray-900">{customLimitCount} users</span> with custom limits back to the default limit of <span className="font-semibold text-orange-600">{globalSettings?.monthlyLimit || 100} passes</span>.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              This action cannot be undone. Previous custom limits will be lost.
+            </p>
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                onClick={() => setShowResetAllConfirm(false)}
+                className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetAllToDefault}
+                className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
+              >
+                Reset All ({customLimitCount})
               </button>
             </div>
           </div>

@@ -3,17 +3,15 @@
  * This will show detailed information about what's happening
  */
 
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bug, RefreshCw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { guestPassesService } from '../services/guestPassesService';
 
 const GuestPassDebugger = ({ projectId }) => {
   const [debugInfo, setDebugInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const runDebugCheck = async () => {
+  const runDebugCheck = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -39,13 +37,13 @@ const GuestPassDebugger = ({ projectId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     if (projectId) {
       runDebugCheck();
     }
-  }, [projectId]);
+  }, [projectId, runDebugCheck]);
 
   if (!projectId) {
     return (

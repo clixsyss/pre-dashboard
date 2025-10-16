@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -10,8 +10,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   Area,
   AreaChart
 } from 'recharts';
@@ -21,14 +19,12 @@ import {
   Users, 
   Clock,
   CheckCircle,
-  AlertCircle,
   BarChart3,
   Activity
 } from 'lucide-react';
 
 const PassAnalytics = ({ stats, users, passes, selectedProject }) => {
   const [timeRange, setTimeRange] = useState('month');
-  const [analyticsData, setAnalyticsData] = useState(null);
 
   // Mock data for demonstration - replace with real data from API
   const mockDailyData = [
@@ -53,8 +49,6 @@ const PassAnalytics = ({ stats, users, passes, selectedProject }) => {
     { name: 'Sent', value: stats?.passesSent || 0, color: '#10B981' },
     { name: 'Pending', value: (stats?.totalPassesThisMonth || 0) - (stats?.passesSent || 0), color: '#F59E0B' }
   ];
-
-  const COLORS = ['#10B981', '#F59E0B', '#EF4444', '#3B82F6'];
 
   const timeRangeOptions = [
     { value: 'week', label: 'Last 7 Days' },

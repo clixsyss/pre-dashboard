@@ -6,15 +6,12 @@ import {
   getDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc, 
   query, 
   where, 
   orderBy, 
   limit,
-  startAfter,
   serverTimestamp,
-  writeBatch,
-  increment
+  writeBatch
 } from 'firebase/firestore';
 
 class GuestPassesService {
@@ -120,6 +117,17 @@ class GuestPassesService {
   // Get users for a project
   async getUsers(projectId) {
     try {
+      // First, get the global settings to know the default limit
+      let defaultLimit = 100; // Fallback default
+      try {
+        const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
+        if (settingsDoc.exists()) {
+          defaultLimit = settingsDoc.data().monthlyLimit || 100;
+        }
+      } catch (error) {
+        console.log('Could not fetch global settings, using fallback default:', defaultLimit);
+      }
+
       // Get all users from main users collection
       const usersSnapshot = await getDocs(collection(db, this.collections.users));
       
@@ -134,26 +142,30 @@ class GuestPassesService {
           const projectInfo = userData.projects.find(project => project.projectId === projectId);
           
           if (projectInfo) {
-            // Check if user has guest pass data, if not create default
-            const guestPassData = userData.guestPassData || {
-              monthlyLimit: 10, // Default limit
-              usedThisMonth: 0,
-              blocked: false
-            };
+            // Check if user has guest pass data
+            const guestPassData = userData.guestPassData;
+            
+            // Use guestPassData if it exists, otherwise use global defaults
+            const monthlyLimit = guestPassData?.monthlyLimit ?? defaultLimit;
+            const usedThisMonth = guestPassData?.usedThisMonth ?? 0;
+            const blocked = guestPassData?.blocked ?? false;
             
             projectUsers.push({
               id: doc.id,
               name: userData.fullName || (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : userData.email),
               email: userData.email,
-              monthlyLimit: guestPassData.monthlyLimit,
-              usedThisMonth: guestPassData.usedThisMonth,
-              blocked: guestPassData.blocked,
+              monthlyLimit: monthlyLimit,
+              usedThisMonth: usedThisMonth,
+              blocked: blocked,
+              hasGuestPassData: !!guestPassData, // Track if user has explicit data
               createdAt: userData.createdAt?.toDate?.() || new Date(),
               updatedAt: userData.updatedAt?.toDate?.() || new Date()
             });
           }
         }
       });
+      
+      console.log(`Fetched ${projectUsers.length} users for project ${projectId} (default limit: ${defaultLimit})`);
       
       return projectUsers;
     } catch (error) {
@@ -679,6 +691,17 @@ class GuestPassesService {
   // Initialize user data (called when user first accesses guest passes)
   async initializeUser(projectId, userId, userData) {
     try {
+      // Get global settings to use the correct default limit
+      let defaultLimit = 100;
+      try {
+        const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
+        if (settingsDoc.exists()) {
+          defaultLimit = settingsDoc.data().monthlyLimit || 100;
+        }
+      } catch (error) {
+        console.log('Could not fetch global settings, using fallback default:', defaultLimit);
+      }
+
       const userRef = doc(db, this.collections.users, userId);
       const userDoc = await getDoc(userRef);
       
@@ -690,7 +713,7 @@ class GuestPassesService {
         if (!existingUserData.guestPassData) {
           await updateDoc(userRef, {
             guestPassData: {
-              monthlyLimit: 10, // Default limit
+              monthlyLimit: defaultLimit, // Use global default limit
               usedThisMonth: 0,
               blocked: false,
               updatedAt: serverTimestamp()
@@ -701,7 +724,7 @@ class GuestPassesService {
           return {
             ...existingUserData,
             guestPassData: {
-              monthlyLimit: 10,
+              monthlyLimit: defaultLimit,
               usedThisMonth: 0,
               blocked: false,
               updatedAt: new Date()
