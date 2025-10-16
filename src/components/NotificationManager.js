@@ -22,7 +22,6 @@ import {
   Bell, 
   Send, 
   Clock, 
-  Users, 
   ArrowLeft,
   CheckCircle,
   XCircle,
@@ -66,7 +65,6 @@ const NotificationManager = () => {
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
   const [previewLang, setPreviewLang] = useState('en');
-  const [projectUsers, setProjectUsers] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     registeredTokens: 0,
@@ -106,6 +104,30 @@ const NotificationManager = () => {
     }
   }, [currentAdmin]);
 
+  // Load recent notifications
+  const loadRecentNotifications = useCallback(async () => {
+    if (!selectedProject) return;
+
+    try {
+      const notificationsRef = collection(db, `projects/${selectedProject.id}/notifications`);
+      const q = query(
+        notificationsRef,
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+      
+      const snapshot = await getDocs(q);
+      const notifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setRecentNotifications(notifications);
+    } catch (error) {
+      console.error('Error loading recent notifications:', error);
+    }
+  }, [selectedProject]);
+
   // Load project users and stats
   const loadProjectData = useCallback(async () => {
     if (!selectedProject) return;
@@ -121,8 +143,6 @@ const NotificationManager = () => {
           }
           return false;
         });
-      
-      setProjectUsers(users);
 
       // Count tokens
       let tokenCount = 0;
@@ -152,30 +172,7 @@ const NotificationManager = () => {
     } catch (error) {
       console.error('Error loading project data:', error);
     }
-  }, [selectedProject]);
-
-  const loadRecentNotifications = async () => {
-    if (!selectedProject) return;
-
-    try {
-      const notificationsRef = collection(db, `projects/${selectedProject.id}/notifications`);
-      const q = query(
-        notificationsRef,
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      
-      const snapshot = await getDocs(q);
-      const notifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setRecentNotifications(notifications);
-    } catch (error) {
-      console.error('Error loading recent notifications:', error);
-    }
-  };
+  }, [selectedProject, loadRecentNotifications]);
 
   useEffect(() => {
     if (currentAdmin && !adminLoading) {
