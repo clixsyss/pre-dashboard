@@ -53,7 +53,7 @@ if (userDoc.exists()) {
   await updateDoc(userRef, {
     guestPassData: {
       ...guestPassData,
-      monthlyLimit: 10, // Default limit
+      monthlyLimit: 100, // Default limit
       usedThisMonth: 0,
       blocked: false,
       updatedAt: serverTimestamp()
@@ -126,7 +126,7 @@ const checkUserEligibility = async (projectId, userId) => {
   }
   
   const userData = userDoc.data();
-  const guestPassData = userData.guestPassData || { blocked: false, monthlyLimit: 10, usedThisMonth: 0 };
+  const guestPassData = userData.guestPassData || { blocked: false, monthlyLimit: 100, usedThisMonth: 0 };
   
   if (guestPassData.blocked) {
     throw new Error('User is blocked from generating passes');

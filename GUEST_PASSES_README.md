@@ -41,7 +41,7 @@ src/
   projectId: "projectId",
   name: "User Name",
   email: "user@example.com",
-  monthlyLimit: 10,
+  monthlyLimit: 100,
   usedThisMonth: 3,
   blocked: false,
   createdAt: timestamp,

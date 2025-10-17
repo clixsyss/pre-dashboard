@@ -275,7 +275,15 @@ class GuestPassesService {
       }
       
       const userData = userDoc.data();
-      const guestPassData = userData.guestPassData || { blocked: false, monthlyLimit: 10, usedThisMonth: 0 };
+      
+      // Get global settings to use as default
+      const globalSettings = await this.getGlobalSettings(projectId);
+      
+      const guestPassData = userData.guestPassData || { 
+        blocked: false, 
+        monthlyLimit: globalSettings.monthlyLimit, 
+        usedThisMonth: 0 
+      };
       
       if (guestPassData.blocked) {
         throw new Error('User is blocked from generating passes');
@@ -573,11 +581,14 @@ class GuestPassesService {
   // API endpoint for mobile app to check user eligibility
   async checkUserEligibility(projectId, userId) {
     try {
+      console.log(`🔍 [Service] Starting eligibility check for user ${userId} in project ${projectId}`);
+      
       // Get user data
       const userRef = doc(db, this.collections.users, userId);
       const userDoc = await getDoc(userRef);
       
       if (!userDoc.exists()) {
+        console.error(`❌ [Service] User ${userId} not found in database`);
         return {
           success: false,
           error: 'User not found',
@@ -585,10 +596,16 @@ class GuestPassesService {
         };
       }
       
+      console.log(`✅ [Service] User ${userId} found in database`);
+      
       const userData = userDoc.data();
+      
+      // Get global settings to use as default
+      const globalSettings = await this.getGlobalSettings(projectId);
+      
       const guestPassData = userData.guestPassData || { 
         blocked: false, 
-        monthlyLimit: 10, 
+        monthlyLimit: globalSettings.monthlyLimit, 
         usedThisMonth: 0 
       };
       
@@ -610,7 +627,14 @@ class GuestPassesService {
         };
       }
       
+      console.log(`📊 [Service] User guest pass data:`, {
+        blocked: guestPassData.blocked,
+        monthlyLimit: guestPassData.monthlyLimit,
+        usedThisMonth: guestPassData.usedThisMonth
+      });
+      
       if (guestPassData.blocked) {
+        console.warn(`🚫 [Service] User ${userId} is BLOCKED from generating passes`);
         return {
           success: false,
           error: 'User blocked',

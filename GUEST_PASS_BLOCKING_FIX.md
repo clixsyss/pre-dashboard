@@ -58,7 +58,7 @@ async checkUserEligibility(projectId, userId) {
 {
   // ... existing user data ...
   guestPassData: {
-    monthlyLimit: 10,
+    monthlyLimit: 100,
     usedThisMonth: 0,
     blocked: false,
     updatedAt: timestamp

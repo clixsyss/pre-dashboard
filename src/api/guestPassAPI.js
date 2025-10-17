@@ -15,12 +15,31 @@ import { guestPassesService } from '../services/guestPassesService';
  */
 export const checkUserEligibility = async (projectId, userId) => {
   try {
-    console.log(`Checking eligibility for user ${userId} in project ${projectId}`);
+    console.log(`🔍 [API] Checking eligibility for user ${userId} in project ${projectId}`);
+    
+    // Validate inputs
+    if (!projectId || !userId) {
+      console.error('❌ [API] Missing required parameters:', { projectId, userId });
+      return {
+        success: false,
+        error: 'Missing parameters',
+        message: 'Project ID and User ID are required'
+      };
+    }
+    
     const result = await guestPassesService.checkUserEligibility(projectId, userId);
-    console.log('Eligibility check result:', result);
+    console.log('✅ [API] Eligibility check result:', result);
+    
+    // Add additional logging for debugging
+    if (!result.success) {
+      console.warn(`⚠️ [API] User ${userId} is NOT eligible:`, result.error);
+    } else {
+      console.log(`✅ [API] User ${userId} is eligible for pass generation`);
+    }
+    
     return result;
   } catch (error) {
-    console.error('Error in checkUserEligibility API:', error);
+    console.error('❌ [API] Error in checkUserEligibility:', error);
     return {
       success: false,
       error: error.message,
