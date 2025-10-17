@@ -744,7 +744,6 @@ class GuestPassesService {
       
       if (userDoc.exists()) {
         const existingUserData = userDoc.data();
-        const guestPassData = existingUserData.guestPassData || {};
         
         // Initialize guest pass data if it doesn't exist
         if (!existingUserData.guestPassData) {

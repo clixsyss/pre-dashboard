@@ -5,7 +5,6 @@ import {
   Calendar, 
   BarChart3, 
   Settings, 
-  Plus,
   Search,
   Filter,
   Download,
@@ -31,7 +30,6 @@ const GuestPasses = () => {
     passes,
     globalSettings,
     loading,
-    error,
     fetchStats,
     fetchUsers,
     fetchPasses,
@@ -68,7 +66,7 @@ const GuestPasses = () => {
         fetchGlobalSettings(activeProjectId);
       }
     }
-  }, [projectId]);
+  }, [projectId, fetchStats, fetchUsers, fetchPasses, fetchGlobalSettings]);
 
   const tabs = [
     { id: 'overview', name: 'Overview', icon: BarChart3 },
