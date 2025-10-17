@@ -202,16 +202,23 @@ export const useGuestPassStore = create((set, get) => ({
   // Update global monthly limit
   updateGlobalLimit: async (projectId, newLimit) => {
     try {
+      console.log(`🔄 [Store] Updating global limit for project ${projectId} to ${newLimit}`);
       set({ loading: true, error: null });
+      
       await guestPassesService.updateGlobalLimit(projectId, newLimit);
       
       // Update local state
+      const currentSettings = get().globalSettings;
+      const updatedSettings = { ...currentSettings, monthlyLimit: newLimit };
+      
+      console.log(`✅ [Store] Updated local global settings:`, updatedSettings);
+      
       set({ 
-        globalSettings: { ...get().globalSettings, monthlyLimit: newLimit },
+        globalSettings: updatedSettings,
         loading: false 
       });
     } catch (error) {
-      console.error('Error updating global limit:', error);
+      console.error('❌ [Store] Error updating global limit:', error);
       set({ error: error.message, loading: false });
       throw error;
     }

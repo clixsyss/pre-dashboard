@@ -6,6 +6,7 @@ import {
   getDoc, 
   addDoc, 
   updateDoc, 
+  setDoc,
   query, 
   where, 
   orderBy, 
@@ -236,11 +237,15 @@ class GuestPassesService {
   // Get global settings for a project
   async getGlobalSettings(projectId) {
     try {
+      console.log(`🔍 [Service] Getting global settings for project ${projectId}`);
       const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
       
       if (settingsDoc.exists()) {
-        return settingsDoc.data();
+        const settings = settingsDoc.data();
+        console.log(`✅ [Service] Found global settings:`, settings);
+        return settings;
       } else {
+        console.log(`⚠️ [Service] No global settings found, returning defaults`);
         // Return default settings without creating them in the database yet
         return {
           monthlyLimit: 100,
@@ -251,6 +256,7 @@ class GuestPassesService {
         };
       }
     } catch (error) {
+      console.error(`❌ [Service] Error getting global settings:`, error);
       console.log('No settings collection found yet, returning default settings');
       return {
         monthlyLimit: 100,
@@ -453,12 +459,19 @@ class GuestPassesService {
   // Update global monthly limit
   async updateGlobalLimit(projectId, newLimit) {
     try {
-      await updateDoc(doc(db, this.collections.settings, projectId), {
+      console.log(`🔧 [Service] Updating global limit for project ${projectId} to ${newLimit}`);
+      
+      // Use setDoc to create or update the document
+      await setDoc(doc(db, this.collections.settings, projectId), {
         monthlyLimit: newLimit,
+        autoReset: true,
+        allowOverrides: true,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true }); // merge: true allows partial updates
+      
+      console.log(`✅ [Service] Global limit updated successfully`);
     } catch (error) {
-      console.error('Error updating global limit:', error);
+      console.error('❌ [Service] Error updating global limit:', error);
       throw new Error('Failed to update global limit');
     }
   }
