@@ -246,6 +246,13 @@ const NotificationManagement = ({ projectId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (loading) {
+      console.log('[NotificationManagement] Prevented double submission');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSuccess(false);
