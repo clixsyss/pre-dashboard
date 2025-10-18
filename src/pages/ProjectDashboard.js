@@ -596,7 +596,8 @@ const ProjectDashboard = () => {
       case 'services':
         return pendingServiceRequestsCount; // Pending service bookings
       case 'bookings':
-        return upcomingBookingsCount; // Upcoming court/academy bookings
+        // Show only pending bookings (new bookings awaiting action)
+        return projectBookings?.filter(b => b.status === 'pending').length || 0;
       case 'orders':
         return pendingOrdersCount; // Orders needing processing
       case 'events': // notifications
@@ -616,11 +617,8 @@ const ProjectDashboard = () => {
           (b.status === 'pending' || b.status === 'confirmed')
         ).length || 0;
       case 'courts':
-        // Show upcoming court bookings
-        return projectBookings?.filter(b => 
-          (b.type === 'court' || b.courtId || b.courtName) && 
-          (b.status === 'pending' || b.status === 'confirmed')
-        ).length || 0;
+        // No indicator for courts tab
+        return 0;
       case 'requests':
         // Show pending request submissions
         return requestSubmissions?.filter(r => r.status === 'pending').length || 0;
