@@ -16,6 +16,7 @@ import AdminRequestChat from './AdminRequestChat';
 import { 
   collection, 
   getDocs, 
+  getDoc,
   query, 
   orderBy, 
   where,
@@ -36,6 +37,8 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
   const [showModal, setShowModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatSubmission, setChatSubmission] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loadingUserData, setLoadingUserData] = useState(false);
 
   // Fetch categories for filter
   const fetchCategories = useCallback(async () => {
@@ -132,10 +135,44 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
     }
   };
 
+  // Fetch complete user data
+  const fetchUserData = async (userId) => {
+    if (!userId) return null;
+    
+    setLoadingUserData(true);
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        return {
+          id: userDocSnap.id,
+          ...userDocSnap.data()
+        };
+      }
+      
+      console.warn('User document not found for ID:', userId);
+      return null;
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      return null;
+    } finally {
+      setLoadingUserData(false);
+    }
+  };
+
   // View submission details
-  const viewSubmission = (submission) => {
+  const viewSubmission = async (submission) => {
     setSelectedSubmission(submission);
     setShowModal(true);
+    
+    // Fetch complete user data
+    if (submission.userId) {
+      const fullUserData = await fetchUserData(submission.userId);
+      setUserData(fullUserData);
+    } else {
+      setUserData(null);
+    }
   };
 
   // Open chat for submission
@@ -485,7 +522,7 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
       {/* Submission Details Modal */}
       {showModal && selectedSubmission && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[75vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
                 Submission Details - {selectedSubmission.categoryName}
@@ -494,25 +531,177 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
             <div className="p-6 space-y-6">
               {/* User Information */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">User Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Name</label>
-                    <p className="text-sm text-gray-900">{selectedSubmission.userName || 'Not provided'}</p>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <User className="h-5 w-5 mr-2 text-red-600" />
+                  Complete User Information
+                </h4>
+                
+                {loadingUserData ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                    <span className="ml-2 text-sm text-gray-600">Loading user details...</span>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Email</label>
-                    <p className="text-sm text-gray-900">{selectedSubmission.userEmail || 'Not provided'}</p>
+                ) : userData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Personal Information */}
+                    <div className="col-span-full">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">Personal Information</h5>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Full Name</label>
+                      <p className="text-sm text-gray-900 font-medium">
+                        {userData.firstName && userData.lastName 
+                          ? `${userData.firstName} ${userData.lastName}` 
+                          : userData.userName || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Email</label>
+                      <p className="text-sm text-gray-900">{userData.email || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Mobile</label>
+                      <p className="text-sm text-gray-900">{userData.mobile || userData.phone || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Gender</label>
+                      <p className="text-sm text-gray-900 capitalize">{userData.gender || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Date of Birth</label>
+                      <p className="text-sm text-gray-900">{userData.dateOfBirth || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">National ID</label>
+                      <p className="text-sm text-gray-900">{userData.nationalId || 'Not provided'}</p>
+                    </div>
+                    
+                    {/* Property Information - Only for current project */}
+                    {userData.projects && userData.projects.length > 0 && (() => {
+                      // Find the project matching the current projectId
+                      const currentProject = userData.projects.find(p => p.projectId === projectId || p.id === projectId);
+                      
+                      if (!currentProject) {
+                        return (
+                          <div className="col-span-full mt-2">
+                            <p className="text-sm text-yellow-600 italic">User project details not found for this project</p>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <>
+                          <div className="col-span-full mt-2">
+                            <h5 className="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">
+                              Property Information (This Project)
+                            </h5>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Unit Number</label>
+                            <p className="text-sm text-gray-900 font-medium">{currentProject.unit || 'Not provided'}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Role</label>
+                            <p className="text-sm text-gray-900 capitalize">{currentProject.role || 'Not provided'}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Registration Status</label>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              currentProject.registrationStatus === 'approved' 
+                                ? 'bg-green-100 text-green-800' 
+                                : currentProject.registrationStatus === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {currentProject.registrationStatus || 'Unknown'}
+                            </span>
+                          </div>
+                          {currentProject.compound && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Compound</label>
+                              <p className="text-sm text-gray-900">{currentProject.compound}</p>
+                            </div>
+                          )}
+                          {currentProject.registrationStep && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Registration Step</label>
+                              <p className="text-sm text-gray-900 capitalize">{currentProject.registrationStep.replace(/_/g, ' ')}</p>
+                            </div>
+                          )}
+                          {currentProject.updatedAt && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Last Updated</label>
+                              <p className="text-sm text-gray-900">{formatDate(currentProject.updatedAt)}</p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                    
+                    {/* Account Information */}
+                    <div className="col-span-full mt-2">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2 border-b pb-1">Account Information</h5>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">User ID</label>
+                      <p className="text-xs text-gray-900 font-mono">{userData.id || selectedSubmission.userId}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Registration Date</label>
+                      <p className="text-sm text-gray-900">
+                        {userData.createdAt ? formatDate(userData.createdAt) : 'Not available'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Email Verified</label>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        userData.emailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {userData.emailVerified ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Profile Complete</label>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        userData.isProfileComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {userData.isProfileComplete ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Last Login</label>
+                      <p className="text-sm text-gray-900">
+                        {userData.lastLogin ? formatDate(userData.lastLogin) : 'Not available'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Request Submitted</label>
+                      <p className="text-sm text-gray-900">{formatDate(selectedSubmission.createdAt)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Mobile</label>
-                    <p className="text-sm text-gray-900">{selectedSubmission.userPhone || selectedSubmission.userMobile || 'Not provided'}</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Name</label>
+                      <p className="text-sm text-gray-900">{selectedSubmission.userName || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Email</label>
+                      <p className="text-sm text-gray-900">{selectedSubmission.userEmail || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Mobile</label>
+                      <p className="text-sm text-gray-900">{selectedSubmission.userPhone || selectedSubmission.userMobile || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Submitted</label>
+                      <p className="text-sm text-gray-900">{formatDate(selectedSubmission.createdAt)}</p>
+                    </div>
+                    <div className="col-span-full">
+                      <p className="text-xs text-gray-500 italic">Complete user details not available</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Submitted</label>
-                    <p className="text-sm text-gray-900">{formatDate(selectedSubmission.createdAt)}</p>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Form Data */}

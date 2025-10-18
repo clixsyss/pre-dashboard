@@ -1082,7 +1082,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
       {/* Store Management Modals */}
       {(isAddModalOpen || isEditModalOpen || isViewModalOpen) && modalType === 'store' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-2xl font-bold text-gray-900">
                 {isAddModalOpen ? 'Add New Store' :
@@ -1493,7 +1493,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
       {/* Product Modals (placeholder for now) */}
       {(isAddModalOpen || isEditModalOpen || isViewModalOpen) && modalType === 'product' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-2xl font-bold text-gray-900">
                 {isAddModalOpen ? 'Add New Product' :
@@ -1529,7 +1529,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
       {/* Product Management Modal */}
       {isProductModalOpen && selectedStore && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">Manage Products</h2>
@@ -1753,7 +1753,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
       {/* Edit Product Modal */}
       {isEditProductModalOpen && selectedProduct && selectedStore && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-2xl font-bold text-gray-900">Edit Product</h2>
               <button
@@ -1888,7 +1888,7 @@ const StoreManagement = ({ projectId, onViewStore }) => {
       {/* View Product Modal */}
       {isViewProductModalOpen && selectedProduct && selectedStore && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 className="text-2xl font-bold text-gray-900">Product Details</h2>
               <button

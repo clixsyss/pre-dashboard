@@ -328,7 +328,7 @@ const AdsManagement = ({ projectId }) => {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[75vh] overflow-y-auto">
             <div className="p-4 border-b">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">

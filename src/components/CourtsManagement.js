@@ -514,7 +514,7 @@ const CourtsManagement = ({ projectId }) => {
       {/* Add/Edit Court Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-          <div className="relative mx-auto p-6 border w-full max-w-4xl shadow-2xl rounded-2xl bg-white max-h-[90vh] overflow-y-auto">
+          <div className="relative mx-auto p-6 border w-full max-w-4xl shadow-2xl rounded-2xl bg-white max-h-[75vh] overflow-y-auto">
             <div className="mt-3">
               {/* Modal Header */}
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
