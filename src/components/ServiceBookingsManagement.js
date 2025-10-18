@@ -54,7 +54,8 @@ const ServiceBookingsManagement = ({ projectId }) => {
     total: 0,
     open: 0,
     processing: 0,
-    closed: 0
+    closed: 0,
+    rejected: 0
   });
 
   // Load service bookings
@@ -85,9 +86,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
   const updateStats = (bookingsData) => {
     const stats = {
       total: bookingsData.length,
-      open: bookingsData.filter(b => b.status === 'open').length,
-      processing: bookingsData.filter(b => b.status === 'processing').length,
-      closed: bookingsData.filter(b => b.status === 'closed').length
+      open: bookingsData.filter(b => b.status === 'open' || b.status === 'pending').length,
+      processing: bookingsData.filter(b => b.status === 'processing' || b.status === 'confirmed').length,
+      closed: bookingsData.filter(b => b.status === 'closed' || b.status === 'completed').length,
+      rejected: bookingsData.filter(b => b.status === 'rejected' || b.status === 'cancelled').length
     };
     setStats(stats);
   };
@@ -364,9 +366,14 @@ const ServiceBookingsManagement = ({ projectId }) => {
   // Get status color
   const getStatusColor = (status) => {
     switch (status) {
-      case 'open': return 'text-green-600 bg-green-50 border-green-200';
-      case 'processing': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'closed': return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'open':
+      case 'pending': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      case 'processing':
+      case 'confirmed': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'closed':
+      case 'completed': return 'text-green-600 bg-green-50 border-green-200';
+      case 'rejected':
+      case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
@@ -460,7 +467,7 @@ const ServiceBookingsManagement = ({ projectId }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div 
           className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'all' ? 'ring-2 ring-blue-500' : ''}`}
           onClick={() => setStatusFilter('all')}
@@ -481,18 +488,18 @@ const ServiceBookingsManagement = ({ projectId }) => {
         </div>
 
         <div 
-          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'open' ? 'ring-2 ring-green-500' : ''}`}
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'open' ? 'ring-2 ring-yellow-500' : ''}`}
           onClick={() => setStatusFilter('open')}
         >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Clock className="h-6 w-6 text-green-400" />
+                <Clock className="h-6 w-6 text-yellow-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Open</dt>
-                  <dd className="text-lg font-medium text-green-600">{stats.open}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Pending</dt>
+                  <dd className="text-lg font-medium text-yellow-600">{stats.open}</dd>
                 </dl>
               </div>
             </div>
@@ -500,18 +507,18 @@ const ServiceBookingsManagement = ({ projectId }) => {
         </div>
 
         <div 
-          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'processing' ? 'ring-2 ring-yellow-500' : ''}`}
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'processing' ? 'ring-2 ring-blue-500' : ''}`}
           onClick={() => setStatusFilter('processing')}
         >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <AlertCircle className="h-6 w-6 text-yellow-400" />
+                <AlertCircle className="h-6 w-6 text-blue-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Processing</dt>
-                  <dd className="text-lg font-medium text-yellow-600">{stats.processing}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Confirmed</dt>
+                  <dd className="text-lg font-medium text-blue-600">{stats.processing}</dd>
                 </dl>
               </div>
             </div>
@@ -519,18 +526,37 @@ const ServiceBookingsManagement = ({ projectId }) => {
         </div>
 
         <div 
-          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'closed' ? 'ring-2 ring-gray-500' : ''}`}
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'closed' ? 'ring-2 ring-green-500' : ''}`}
           onClick={() => setStatusFilter('closed')}
         >
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <CheckCircle className="h-6 w-6 text-gray-400" />
+                <CheckCircle className="h-6 w-6 text-green-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Closed</dt>
-                  <dd className="text-lg font-medium text-gray-600">{stats.closed}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Completed</dt>
+                  <dd className="text-lg font-medium text-green-600">{stats.closed}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div 
+          className={`bg-white overflow-hidden shadow rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg ${statusFilter === 'rejected' ? 'ring-2 ring-red-500' : ''}`}
+          onClick={() => setStatusFilter('rejected')}
+        >
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <X className="h-6 w-6 text-red-400" />
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Rejected</dt>
+                  <dd className="text-lg font-medium text-red-600">{stats.rejected}</dd>
                 </dl>
               </div>
             </div>
@@ -560,9 +586,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">All Status</option>
-              <option value="open">Open</option>
-              <option value="processing">Processing</option>
-              <option value="closed">Closed</option>
+              <option value="open">Pending</option>
+              <option value="processing">Confirmed</option>
+              <option value="closed">Completed</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
         </div>
@@ -758,10 +785,20 @@ const ServiceBookingsManagement = ({ projectId }) => {
                       onChange={(e) => setUpdateData({...updateData, status: e.target.value})}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="open">Open</option>
-                      <option value="processing">Processing</option>
-                      <option value="closed">Closed</option>
+                      <option value="pending">Pending (Open)</option>
+                      <option value="confirmed">Confirmed (Processing)</option>
+                      <option value="completed">Completed (Closed)</option>
+                      <option value="rejected">Rejected (Cancelled)</option>
                     </select>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-md">
+                    <p className="text-xs text-blue-800">
+                      <strong>Status Guide:</strong>
+                      <br />• <strong>Pending:</strong> Awaiting review
+                      <br />• <strong>Confirmed:</strong> Accepted and in progress
+                      <br />• <strong>Completed:</strong> Successfully finished
+                      <br />• <strong>Rejected:</strong> Declined or cancelled
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Reason (Optional)</label>
@@ -984,8 +1021,125 @@ const ServiceBookingsManagement = ({ projectId }) => {
                   </div>
                 )}
 
+                {/* Quick Actions */}
+                <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
+                          await updateDoc(bookingRef, {
+                            status: 'confirmed',
+                            updatedAt: serverTimestamp(),
+                            lastMessageAt: serverTimestamp(),
+                            messages: [...(selectedBooking.messages || []), {
+                              id: Date.now().toString(),
+                              text: 'Booking confirmed by admin',
+                              senderType: 'system',
+                              timestamp: new Date(),
+                              messageType: 'status_update'
+                            }]
+                          });
+                          setShowBookingDetail(false);
+                        } catch (error) {
+                          console.error('Error confirming booking:', error);
+                          alert('Failed to confirm booking');
+                        }
+                      }}
+                      className="px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      ✓ Confirm
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
+                          await updateDoc(bookingRef, {
+                            status: 'rejected',
+                            updatedAt: serverTimestamp(),
+                            lastMessageAt: serverTimestamp(),
+                            messages: [...(selectedBooking.messages || []), {
+                              id: Date.now().toString(),
+                              text: 'Booking rejected by admin',
+                              senderType: 'system',
+                              timestamp: new Date(),
+                              messageType: 'status_update'
+                            }]
+                          });
+                          setShowBookingDetail(false);
+                        } catch (error) {
+                          console.error('Error rejecting booking:', error);
+                          alert('Failed to reject booking');
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
+                    >
+                      ✗ Reject
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
+                          await updateDoc(bookingRef, {
+                            status: 'completed',
+                            updatedAt: serverTimestamp(),
+                            lastMessageAt: serverTimestamp(),
+                            messages: [...(selectedBooking.messages || []), {
+                              id: Date.now().toString(),
+                              text: 'Booking marked as completed by admin',
+                              senderType: 'system',
+                              timestamp: new Date(),
+                              messageType: 'status_update'
+                            }]
+                          });
+                          setShowBookingDetail(false);
+                        } catch (error) {
+                          console.error('Error completing booking:', error);
+                          alert('Failed to complete booking');
+                        }
+                      }}
+                      className="px-3 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors"
+                    >
+                      ✓ Complete
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
+                          await updateDoc(bookingRef, {
+                            status: 'pending',
+                            updatedAt: serverTimestamp(),
+                            lastMessageAt: serverTimestamp(),
+                            messages: [...(selectedBooking.messages || []), {
+                              id: Date.now().toString(),
+                              text: 'Booking set to pending by admin',
+                              senderType: 'system',
+                              timestamp: new Date(),
+                              messageType: 'status_update'
+                            }]
+                          });
+                          setShowBookingDetail(false);
+                        } catch (error) {
+                          console.error('Error setting booking to pending:', error);
+                          alert('Failed to set booking to pending');
+                        }
+                      }}
+                      className="px-3 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 transition-colors"
+                    >
+                      ⏱ Set Pending
+                    </button>
+                  </div>
+                </div>
+
                 {/* Action Buttons */}
                 <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowBookingDetail(false)}
+                    className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
                   <button
                     onClick={() => {
                       setShowBookingDetail(false);
@@ -995,16 +1149,6 @@ const ServiceBookingsManagement = ({ projectId }) => {
                   >
                     <MessageCircle className="w-4 h-4 mr-2" />
                     Open Chat
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowBookingDetail(false);
-                      openUpdateModal(selectedBooking, 'status');
-                    }}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Update Status
                   </button>
                   <button
                     onClick={() => {

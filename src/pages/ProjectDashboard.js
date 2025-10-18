@@ -6378,7 +6378,12 @@ const ProjectDashboard = () => {
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created At</label>
                     <p className="text-sm text-gray-900 font-medium mt-1">
-                      {selectedBookingForModal.createdAt ? new Date(selectedBookingForModal.createdAt.toDate()).toLocaleString() : 'Unknown'}
+                      {selectedBookingForModal.createdAt ? 
+                        (selectedBookingForModal.createdAt.toDate ? 
+                          selectedBookingForModal.createdAt.toDate().toLocaleString() : 
+                          new Date(selectedBookingForModal.createdAt).toLocaleString()
+                        ) : 'Unknown'
+                      }
                     </p>
                   </div>
                   {selectedBookingForModal.notes && (
