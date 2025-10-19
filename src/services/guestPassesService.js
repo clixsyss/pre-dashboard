@@ -19,9 +19,9 @@ class GuestPassesService {
   constructor() {
     this.collections = {
       users: 'users', // Use main users collection
-      passes: 'guestPasses',
       settings: 'guestPassSettings'
     };
+    // Note: passes are now per-project subcollections: projects/{projectId}/guestPasses
   }
 
   // Get statistics for a project
@@ -35,11 +35,10 @@ class GuestPassesService {
       let activeUsers = 0;
       let globalLimit = 100;
 
-      // Try to get total passes this month
+      // Try to get total passes this month from project-specific subcollection
       try {
         const passesQuery = query(
-          collection(db, this.collections.passes),
-          where('projectId', '==', projectId),
+          collection(db, `projects/${projectId}/guestPasses`),
           where('createdAt', '>=', startOfMonth)
         );
         const passesSnapshot = await getDocs(passesQuery);
@@ -51,8 +50,7 @@ class GuestPassesService {
       // Try to get sent passes this month
       try {
         const sentPassesQuery = query(
-          collection(db, this.collections.passes),
-          where('projectId', '==', projectId),
+          collection(db, `projects/${projectId}/guestPasses`),
           where('sentStatus', '==', true),
           where('sentAt', '>=', startOfMonth)
         );
@@ -179,11 +177,10 @@ class GuestPassesService {
   async getPasses(projectId, filters = {}) {
     try {
       console.log(`🔍 GuestPassesService: Getting passes for project ${projectId}`);
-      console.log(`🔍 GuestPassesService: Using collection: ${this.collections.passes}`);
+      console.log(`🔍 GuestPassesService: Using collection: projects/${projectId}/guestPasses`);
       
       let passesQuery = query(
-        collection(db, this.collections.passes),
-        where('projectId', '==', projectId),
+        collection(db, `projects/${projectId}/guestPasses`),
         orderBy('createdAt', 'desc')
       );
 
@@ -226,8 +223,8 @@ class GuestPassesService {
       console.error('❌ GuestPassesService: Error getting passes:', error);
       if (error.code === 'failed-precondition') {
         console.log('💡 This is likely a Firestore indexing issue. You need to create an index for:');
-        console.log('   Collection: guestPasses');
-        console.log('   Fields: projectId (Ascending), createdAt (Descending)');
+        console.log(`   Collection: projects/${projectId}/guestPasses`);
+        console.log('   Fields: createdAt (Descending)');
       }
       console.log('No passes collection found yet, returning empty array');
       return [];
@@ -300,8 +297,7 @@ class GuestPassesService {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
       const userPassesQuery = query(
-        collection(db, this.collections.passes),
-        where('projectId', '==', projectId),
+        collection(db, `projects/${projectId}/guestPasses`),
         where('userId', '==', userId),
         where('createdAt', '>=', startOfMonth)
       );
@@ -314,7 +310,7 @@ class GuestPassesService {
       // Generate unique pass ID
       const passId = this.generatePassId();
       
-      // Create pass document
+      // Create pass document in project-specific subcollection
       const passDoc = {
         id: passId,
         projectId,
@@ -327,7 +323,7 @@ class GuestPassesService {
         ...passData
       };
       
-      const docRef = await addDoc(collection(db, this.collections.passes), passDoc);
+      const docRef = await addDoc(collection(db, `projects/${projectId}/guestPasses`), passDoc);
       
       // Update user's used count in guestPassData
       await updateDoc(userRef, {
@@ -353,7 +349,7 @@ class GuestPassesService {
   // Update pass sent status
   async updatePassSentStatus(projectId, passId, sentStatus) {
     try {
-      const passRef = doc(db, this.collections.passes, passId);
+      const passRef = doc(db, `projects/${projectId}/guestPasses`, passId);
       const updateData = {
         sentStatus,
         updatedAt: serverTimestamp()
@@ -388,17 +384,14 @@ class GuestPassesService {
       const userDoc = await getDoc(userRef);
       
       if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const guestPassData = userData.guestPassData || {};
-        
+        // Use nested field updates to preserve existing fields
         await updateDoc(userRef, {
-          guestPassData: {
-            ...guestPassData,
-            blocked: true,
-            updatedAt: serverTimestamp()
-          },
+          'guestPassData.blocked': true,
+          'guestPassData.blockedAt': serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        
+        console.log(`✅ Blocked user ${userId}`);
       }
     } catch (error) {
       console.error('Error blocking user:', error);
@@ -413,17 +406,14 @@ class GuestPassesService {
       const userDoc = await getDoc(userRef);
       
       if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const guestPassData = userData.guestPassData || {};
-        
+        // Use nested field updates to preserve existing fields
         await updateDoc(userRef, {
-          guestPassData: {
-            ...guestPassData,
-            blocked: false,
-            updatedAt: serverTimestamp()
-          },
+          'guestPassData.blocked': false,
+          'guestPassData.unblockedAt': serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        
+        console.log(`✅ Unblocked user ${userId}`);
       }
     } catch (error) {
       console.error('Error unblocking user:', error);
@@ -432,6 +422,8 @@ class GuestPassesService {
   }
 
   // Update user monthly limit
+  // If newLimit is null, undefined, or empty string, it REMOVES the custom limit
+  // This makes the user follow the global limit instead
   async updateUserLimit(projectId, userId, newLimit) {
     try {
       const userRef = doc(db, this.collections.users, userId);
@@ -441,14 +433,42 @@ class GuestPassesService {
         const userData = userDoc.data();
         const guestPassData = userData.guestPassData || {};
         
-        await updateDoc(userRef, {
-          guestPassData: {
-            ...guestPassData,
-            monthlyLimit: newLimit,
+        // If newLimit is null/undefined/empty, REMOVE the custom limit
+        if (newLimit === null || newLimit === undefined || newLimit === '' || newLimit === 'null') {
+          console.log(`🔧 [Service] Removing custom limit for user ${userId} - will use global limit`);
+          
+          // Remove monthlyLimit field while keeping other guestPassData
+          const { monthlyLimit, remainingQuota, limitUpdatedAt, ...restOfGuestPassData } = guestPassData;
+          
+          await updateDoc(userRef, {
+            guestPassData: restOfGuestPassData,
             updatedAt: serverTimestamp()
-          },
+          });
+          
+          console.log(`✅ User ${userId} now uses global limit`);
+          return;
+        }
+        
+        // Ensure the limit is a number, not a string
+        const limitAsNumber = typeof newLimit === 'string' ? parseInt(newLimit, 10) : newLimit;
+        if (isNaN(limitAsNumber) || limitAsNumber < 0) {
+          throw new Error(`Invalid limit value: ${newLimit}`);
+        }
+        
+        console.log(`🔧 [Service] Setting CUSTOM limit for user ${userId}:`, limitAsNumber, '(type:', typeof limitAsNumber, ')');
+        
+        const usedThisMonth = guestPassData.usedThisMonth || 0;
+        const remainingQuota = Math.max(0, limitAsNumber - usedThisMonth);
+        
+        // Use nested field updates to preserve existing fields
+        await updateDoc(userRef, {
+          'guestPassData.monthlyLimit': limitAsNumber,  // ✅ Save as number
+          'guestPassData.remainingQuota': remainingQuota,
+          'guestPassData.limitUpdatedAt': serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        
+        console.log(`✅ Updated user ${userId} CUSTOM limit: limit=${limitAsNumber}, used=${usedThisMonth}, remaining=${remainingQuota}`);
       }
     } catch (error) {
       console.error('Error updating user limit:', error);
@@ -461,9 +481,17 @@ class GuestPassesService {
     try {
       console.log(`🔧 [Service] Updating global limit for project ${projectId} to ${newLimit}`);
       
+      // Ensure the limit is a number, not a string
+      const limitAsNumber = typeof newLimit === 'string' ? parseInt(newLimit, 10) : newLimit;
+      if (isNaN(limitAsNumber) || limitAsNumber < 0) {
+        throw new Error(`Invalid limit value: ${newLimit}`);
+      }
+      
+      console.log(`🔧 [Service] Saving as number:`, limitAsNumber, '(type:', typeof limitAsNumber, ')');
+      
       // Use setDoc to create or update the document
       await setDoc(doc(db, this.collections.settings, projectId), {
-        monthlyLimit: newLimit,
+        monthlyLimit: limitAsNumber,  // ✅ Save as number
         autoReset: true,
         allowOverrides: true,
         updatedAt: serverTimestamp()
@@ -473,6 +501,25 @@ class GuestPassesService {
     } catch (error) {
       console.error('❌ [Service] Error updating global limit:', error);
       throw new Error('Failed to update global limit');
+    }
+  }
+
+  // Toggle block all users setting
+  async toggleBlockAll(projectId, blockAllUsers) {
+    try {
+      console.log(`🔧 [Service] ${blockAllUsers ? 'Blocking' : 'Unblocking'} all users for project ${projectId}`);
+      
+      // Use setDoc with merge to update only the blockAllUsers field
+      await setDoc(doc(db, this.collections.settings, projectId), {
+        blockAllUsers: blockAllUsers,
+        blockAllUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ [Service] Global block all setting updated: ${blockAllUsers}`);
+    } catch (error) {
+      console.error('❌ [Service] Error updating block all setting:', error);
+      throw new Error('Failed to update block all setting');
     }
   }
 
@@ -532,8 +579,7 @@ class GuestPassesService {
       }
       
       const passesQuery = query(
-        collection(db, this.collections.passes),
-        where('projectId', '==', projectId),
+        collection(db, `projects/${projectId}/guestPasses`),
         where('createdAt', '>=', startDate),
         orderBy('createdAt')
       );
@@ -670,8 +716,7 @@ class GuestPassesService {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
       const passesQuery = query(
-        collection(db, this.collections.passes),
-        where('projectId', '==', projectId),
+        collection(db, `projects/${projectId}/guestPasses`),
         where('userId', '==', userId),
         where('createdAt', '>=', startOfMonth)
       );
@@ -728,17 +773,6 @@ class GuestPassesService {
   // Initialize user data (called when user first accesses guest passes)
   async initializeUser(projectId, userId, userData) {
     try {
-      // Get global settings to use the correct default limit
-      let defaultLimit = 100;
-      try {
-        const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
-        if (settingsDoc.exists()) {
-          defaultLimit = settingsDoc.data().monthlyLimit || 100;
-        }
-      } catch (error) {
-        console.log('Could not fetch global settings, using fallback default:', defaultLimit);
-      }
-
       const userRef = doc(db, this.collections.users, userId);
       const userDoc = await getDoc(userRef);
       
@@ -747,9 +781,12 @@ class GuestPassesService {
         
         // Initialize guest pass data if it doesn't exist
         if (!existingUserData.guestPassData) {
+          // IMPORTANT: Do NOT set monthlyLimit here!
+          // Users should use the global limit by default.
+          // Only set monthlyLimit when admin explicitly assigns a custom limit.
           await updateDoc(userRef, {
             guestPassData: {
-              monthlyLimit: defaultLimit, // Use global default limit
+              // monthlyLimit: NOT SET - will use global limit
               usedThisMonth: 0,
               blocked: false,
               updatedAt: serverTimestamp()
@@ -757,10 +794,11 @@ class GuestPassesService {
             updatedAt: serverTimestamp()
           });
           
+          console.log(`✅ Initialized user ${userId} with default guest pass data (no custom limit)`);
+          
           return {
             ...existingUserData,
             guestPassData: {
-              monthlyLimit: defaultLimit,
               usedThisMonth: 0,
               blocked: false,
               updatedAt: new Date()

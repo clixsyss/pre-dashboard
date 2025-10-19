@@ -4,6 +4,7 @@ import './index.css';
 import './i18n/i18n'; // Initialize i18n
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import './utils/fixGuestPassLimits'; // Load migration utilities
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

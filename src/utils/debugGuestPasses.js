@@ -14,17 +14,17 @@ export const debugGuestPasses = async (projectId) => {
   console.log(`🔍 Debugging guest passes for project: ${projectId}`);
   
   try {
-    // 1. Check guestPasses collection
-    console.log('1️⃣ Checking guestPasses collection...');
-    const guestPassesRef = collection(db, 'guestPasses');
+    // 1. Check project-specific guestPasses subcollection
+    console.log('1️⃣ Checking project-specific guestPasses subcollection...');
+    const guestPassesRef = collection(db, `projects/${projectId}/guestPasses`);
     const guestPassesSnapshot = await getDocs(guestPassesRef);
     
-    console.log(`📊 Total guest passes in collection: ${guestPassesSnapshot.size}`);
+    console.log(`📊 Total guest passes for project ${projectId}: ${guestPassesSnapshot.size}`);
     
-    const allPasses = [];
+    const projectPasses = [];
     guestPassesSnapshot.docs.forEach(doc => {
       const data = doc.data();
-      allPasses.push({
+      projectPasses.push({
         id: doc.id,
         ...data,
         createdAt: data.createdAt?.toDate?.() || data.createdAt,
@@ -32,54 +32,36 @@ export const debugGuestPasses = async (projectId) => {
       });
     });
     
-    console.log('📋 All passes in guestPasses collection:', allPasses);
+    console.log(`📋 All passes for project ${projectId}:`, projectPasses);
     
-    // 2. Check passes for this specific project
-    console.log(`2️⃣ Checking passes for project ${projectId}...`);
-    const projectPassesQuery = query(
-      guestPassesRef,
-      where('projectId', '==', projectId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    let projectPasses = [];
+    // 2. Check for legacy passes in global collection (for migration reference)
+    console.log(`2️⃣ Checking legacy global guestPasses collection...`);
+    let legacyPasses = [];
     
     try {
-      const projectPassesSnapshot = await getDocs(projectPassesQuery);
-      console.log(`📊 Passes for project ${projectId}: ${projectPassesSnapshot.size}`);
+      const legacyRef = collection(db, 'guestPasses');
+      const legacyQuery = query(
+        legacyRef,
+        where('projectId', '==', projectId),
+        orderBy('createdAt', 'desc')
+      );
       
-      projectPassesSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        projectPasses.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.() || data.createdAt,
-          sentAt: data.sentAt?.toDate?.() || data.sentAt
+      const legacySnapshot = await getDocs(legacyQuery);
+      console.log(`📊 Legacy passes found for project ${projectId}: ${legacySnapshot.size}`);
+      
+      if (legacySnapshot.size > 0) {
+        console.log('⚠️ Found passes in legacy global collection. Consider migrating to project-specific subcollection.');
+        legacySnapshot.docs.forEach(doc => {
+          legacyPasses.push({
+            id: doc.id,
+            ...doc.data()
+          });
         });
-      });
-      
-      console.log(`📋 Passes for project ${projectId}:`, projectPasses);
-      
-      if (projectPasses.length === 0) {
-        console.log('⚠️ No passes found for this project. Checking if projectId matches...');
-        
-        // Check if there are passes with similar project IDs
-        const similarProjectIds = allPasses
-          .map(p => p.projectId)
-          .filter((id, index, arr) => arr.indexOf(id) === index);
-        
-        console.log('🔍 Found project IDs in passes:', similarProjectIds);
-        
-        if (similarProjectIds.length > 0) {
-          console.log('💡 Suggestion: Check if the project ID matches exactly');
-          console.log(`   Expected: "${projectId}"`);
-          console.log(`   Found: ${similarProjectIds.map(id => `"${id}"`).join(', ')}`);
-        }
+        console.log('📋 Legacy passes:', legacyPasses);
       }
       
     } catch (queryError) {
-      console.error('❌ Error querying project passes:', queryError);
-      console.log('💡 This might be a Firestore indexing issue');
+      console.log('ℹ️ No legacy passes found (this is expected for new installations)');
     }
     
     // 3. Check if there are any other collections that might contain passes
@@ -132,10 +114,11 @@ export const debugGuestPasses = async (projectId) => {
     console.log(`📊 Users with guest pass data: ${usersWithGuestPassData}`);
     
     return {
-      totalPasses: allPasses.length,
+      totalPasses: projectPasses.length,
       projectPasses: projectPasses || [],
+      legacyPasses: legacyPasses || [],
       usersWithGuestPassData,
-      allPasses
+      allPasses: projectPasses
     };
     
   } catch (error) {
@@ -153,10 +136,9 @@ export const debugServiceQuery = async (projectId) => {
   
   try {
     // This replicates the exact query from guestPassesService.getPasses()
-    const passesRef = collection(db, 'guestPasses');
+    const passesRef = collection(db, `projects/${projectId}/guestPasses`);
     const passesQuery = query(
       passesRef,
-      where('projectId', '==', projectId),
       orderBy('createdAt', 'desc')
     );
     
@@ -177,8 +159,8 @@ export const debugServiceQuery = async (projectId) => {
     console.error('❌ Error in service query:', error);
     if (error.code === 'failed-precondition') {
       console.log('💡 This is likely a Firestore indexing issue. You need to create an index for:');
-      console.log('   Collection: guestPasses');
-      console.log('   Fields: projectId (Ascending), createdAt (Descending)');
+      console.log(`   Collection: projects/${projectId}/guestPasses`);
+      console.log('   Fields: createdAt (Descending)');
     }
     return { error: error.message };
   }
@@ -200,6 +182,9 @@ export const createTestPass = async (projectId, userId = null) => {
       projectId: projectId,
       userId: userId || 'test-user-123',
       userName: 'Test User',
+      guestName: 'Test Guest',
+      purpose: 'Testing',
+      validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
       createdAt: serverTimestamp(),
       sentStatus: false,
       sentAt: null,
@@ -207,10 +192,10 @@ export const createTestPass = async (projectId, userId = null) => {
       testPass: true // Mark as test pass
     };
     
-    const passesRef = collection(db, 'guestPasses');
+    const passesRef = collection(db, `projects/${projectId}/guestPasses`);
     const docRef = await addDoc(passesRef, testPassData);
     
-    console.log('✅ Test pass created:', docRef.id);
+    console.log('✅ Test pass created in project subcollection:', docRef.id);
     
     // Immediately try to fetch it
     const { getDoc } = await import('firebase/firestore');

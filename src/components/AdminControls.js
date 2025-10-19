@@ -23,6 +23,7 @@ const AdminControls = ({
   onUpdateUserLimit,
   onBlockUser,
   onUnblockUser,
+  onToggleBlockAll,
   projectId
 }) => {
   const [activeSection, setActiveSection] = useState('users');
@@ -43,7 +44,13 @@ const AdminControls = ({
   const handleUpdateGlobalLimit = async () => {
     if (newGlobalLimit && newGlobalLimit !== globalSettings?.monthlyLimit) {
       try {
-        await onUpdateGlobalLimit(projectId, newGlobalLimit);
+        // Convert to number before saving to Firestore
+        const limitAsNumber = parseInt(newGlobalLimit, 10);
+        if (isNaN(limitAsNumber) || limitAsNumber < 0) {
+          console.error('Invalid limit value:', newGlobalLimit);
+          return;
+        }
+        await onUpdateGlobalLimit(projectId, limitAsNumber);
         setEditingGlobalLimit(false);
       } catch (error) {
         console.error('Error updating global limit:', error);
@@ -518,6 +525,49 @@ const AdminControls = ({
             ) : (
               <div className="text-3xl font-bold text-gray-900">
                 {globalSettings?.monthlyLimit || 100} passes
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Block All Users</h3>
+                <p className="text-sm text-gray-500">Prevent all users from generating guest passes</p>
+              </div>
+              <button
+                onClick={() => onToggleBlockAll && onToggleBlockAll(projectId, !globalSettings?.blockAllUsers)}
+                className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  globalSettings?.blockAllUsers 
+                    ? 'bg-red-600 focus:ring-red-500' 
+                    : 'bg-gray-300 focus:ring-gray-400'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                    globalSettings?.blockAllUsers ? 'translate-x-7' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {globalSettings?.blockAllUsers ? (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-900">All Guest Pass Generation Blocked</p>
+                    <p className="text-sm text-red-700 mt-1">
+                      No users can currently generate guest passes. Individual user blocks still apply.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  Users can generate guest passes according to their individual limits and block status.
+                </p>
               </div>
             )}
           </div>

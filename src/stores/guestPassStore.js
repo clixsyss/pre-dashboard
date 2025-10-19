@@ -224,6 +224,31 @@ export const useGuestPassStore = create((set, get) => ({
     }
   },
 
+  // Toggle block all users setting
+  toggleBlockAll: async (projectId, blockAllUsers) => {
+    try {
+      console.log(`🔄 [Store] ${blockAllUsers ? 'Blocking' : 'Unblocking'} all users for project ${projectId}`);
+      set({ loading: true, error: null });
+      
+      await guestPassesService.toggleBlockAll(projectId, blockAllUsers);
+      
+      // Update local state
+      const currentSettings = get().globalSettings;
+      const updatedSettings = { ...currentSettings, blockAllUsers: blockAllUsers };
+      
+      console.log(`✅ [Store] Updated block all setting:`, updatedSettings);
+      
+      set({ 
+        globalSettings: updatedSettings,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('❌ [Store] Error updating block all setting:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
   // Reset monthly usage for all users
   resetMonthlyUsage: async (projectId) => {
     try {
