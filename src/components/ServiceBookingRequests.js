@@ -23,8 +23,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserDetails, getUserProjects } from '../services/userService';
+import { useQuickNotifications } from './DashboardAcceptanceNotification';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const ServiceBookingRequests = ({ projectId }) => {
+  const { currentAdmin } = useAdminAuth();
+  const { quickSendBookingConfirmation, quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
+  
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -138,6 +143,13 @@ const ServiceBookingRequests = ({ projectId }) => {
   // Handle status update
   const handleStatusUpdate = async (bookingId, newStatus) => {
     try {
+      // Find the booking to get user details
+      const booking = bookings.find(b => b.id === bookingId);
+      if (!booking) {
+        console.error('Booking not found');
+        return;
+      }
+
       await updateDoc(doc(db, `projects/${projectId}/serviceBookings`, bookingId), {
         status: newStatus,
         updatedAt: serverTimestamp()
@@ -153,6 +165,45 @@ const ServiceBookingRequests = ({ projectId }) => {
       // Update selected booking if it's the same
       if (selectedBooking && selectedBooking.id === bookingId) {
         setSelectedBooking(prev => ({ ...prev, status: newStatus }));
+      }
+
+      // Send appropriate notification based on status
+      try {
+        switch (newStatus) {
+          case 'confirmed':
+            await quickSendBookingConfirmation(
+              booking.userId,
+              `Your service booking for "${booking.serviceName || 'the requested service'}" has been confirmed! Our team will contact you soon to schedule the service.`
+            );
+            break;
+          case 'in_progress':
+            await quickSendApproval(
+              booking.userId,
+              `Work has started on your service booking for "${booking.serviceName || 'the requested service'}". Our team is now working on your request.`
+            );
+            break;
+          case 'completed':
+            await quickSendApproval(
+              booking.userId,
+              `Your service booking for "${booking.serviceName || 'the requested service'}" has been completed! Thank you for using our services.`
+            );
+            break;
+          case 'cancelled':
+            await quickSendApproval(
+              booking.userId,
+              `Your service booking for "${booking.serviceName || 'the requested service'}" has been cancelled. Please contact the management office if you have any questions.`
+            );
+            break;
+          default:
+            await quickSendApproval(
+              booking.userId,
+              `Your service booking status has been updated to ${newStatus.toUpperCase()}.`
+            );
+        }
+        console.log(`Booking ${bookingId} status notification sent`);
+      } catch (notificationError) {
+        console.warn('Failed to send notification:', notificationError);
+        // Don't fail the status update if notification fails
       }
     } catch (error) {
       console.error('Error updating booking status:', error);
