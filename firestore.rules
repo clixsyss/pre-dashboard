@@ -528,6 +528,16 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // User FCM tokens - users can manage their own tokens
+    match /users/{userId}/tokens/{tokenId} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow listing user tokens
+    match /users/{userId}/tokens {
+      allow list: if request.auth != null && request.auth.uid == userId;
+    }
+    
     // Pending Admins collection - allow anyone to create (for registration)
     // Allow authenticated users to read (for status checking)
     // Only approved admins can update/delete (for approval process)
@@ -706,6 +716,64 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || 
          // Users can only list their own gate passes - this will be filtered in the query
          request.auth != null);
+    }
+
+    // GUEST PASSES COLLECTION - Allow authenticated users to create and manage guest passes
+    match /guestPasses/{passId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing guest passes collection
+    match /guestPasses {
+      allow list: if request.auth != null;
+    }
+    
+    // GUEST PASS SETTINGS COLLECTION - Allow authenticated users to read settings
+    match /guestPassSettings/{projectId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing guest pass settings
+    match /guestPassSettings {
+      allow list: if request.auth != null;
+    }
+    
+    // GUEST PASS USERS COLLECTION - Allow users to read/write their own data
+    match /guestPassUsers/{userId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    
+    // Allow listing guest pass users
+    match /guestPassUsers {
+      allow list: if request.auth != null;
+    }
+    
+    // PROJECT NOTIFICATIONS - Allow users to read their own notifications within a project
+    match /projects/{projectId}/notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project notifications for authenticated users
+    match /projects/{projectId}/notifications {
+      allow list: if request.auth != null;
+    }
+    
+    // USER NOTIFICATION READ STATUS - Allow users to manage their own read status
+    match /users/{userId}/notificationReadStatus/{notificationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow listing user notification read status
+    match /users/{userId}/notificationReadStatus {
+      allow list: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
