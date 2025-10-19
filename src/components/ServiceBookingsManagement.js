@@ -25,8 +25,13 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useQuickNotifications } from './DashboardAcceptanceNotification';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const ServiceBookingsManagement = ({ projectId }) => {
+  const { currentAdmin } = useAdminAuth();
+  const { quickSendBookingConfirmation, quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
+  
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -197,8 +202,44 @@ const ServiceBookingsManagement = ({ projectId }) => {
         messages: [...(selectedBooking.messages || []), systemMessage]
       });
 
+      // Send appropriate notification based on status
+      try {
+        switch (updateData.status) {
+          case 'confirmed':
+            await quickSendBookingConfirmation(
+              selectedBooking.userId,
+              `Your service booking for "${selectedBooking.serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`
+            );
+            break;
+          case 'completed':
+            await quickSendApproval(
+              selectedBooking.userId,
+              `Your service booking for "${selectedBooking.serviceName}" has been completed! Thank you for using our services.`
+            );
+            break;
+          case 'rejected':
+            await quickSendApproval(
+              selectedBooking.userId,
+              `Your service booking for "${selectedBooking.serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`
+            );
+            break;
+          default:
+            await quickSendApproval(
+              selectedBooking.userId,
+              `Your service booking for "${selectedBooking.serviceName}" status has been updated to ${updateData.status.toUpperCase()}. ${updateData.reason ? `Reason: ${updateData.reason}` : ''}`
+            );
+        }
+        console.log('Booking status notification sent');
+      } catch (notificationError) {
+        console.warn('Failed to send notification:', notificationError);
+        // Don't fail the status update if notification fails
+      }
+
       setShowUpdateModal(false);
       setUpdateData({ status: '', reason: '', servicePrice: '', selectedDate: '', selectedTime: '' });
+      
+      // Refresh bookings to show updated status
+      loadServiceBookings();
     } catch (error) {
       console.error('Error updating booking status:', error);
     }
@@ -1041,7 +1082,22 @@ const ServiceBookingsManagement = ({ projectId }) => {
                               messageType: 'status_update'
                             }]
                           });
+
+                          // Send push notification to user
+                          try {
+                            await quickSendBookingConfirmation(
+                              selectedBooking.userId,
+                              `Your service booking for "${selectedBooking.serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`
+                            );
+                            console.log('Booking confirmation notification sent');
+                          } catch (notificationError) {
+                            console.warn('Failed to send notification:', notificationError);
+                            // Don't fail the booking confirmation if notification fails
+                          }
+
                           setShowBookingDetail(false);
+                          // Refresh bookings to show updated status
+                          loadServiceBookings();
                         } catch (error) {
                           console.error('Error confirming booking:', error);
                           alert('Failed to confirm booking');
@@ -1067,7 +1123,22 @@ const ServiceBookingsManagement = ({ projectId }) => {
                               messageType: 'status_update'
                             }]
                           });
+
+                          // Send push notification to user
+                          try {
+                            await quickSendApproval(
+                              selectedBooking.userId,
+                              `Your service booking for "${selectedBooking.serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`
+                            );
+                            console.log('Booking rejection notification sent');
+                          } catch (notificationError) {
+                            console.warn('Failed to send notification:', notificationError);
+                            // Don't fail the booking rejection if notification fails
+                          }
+
                           setShowBookingDetail(false);
+                          // Refresh bookings to show updated status
+                          loadServiceBookings();
                         } catch (error) {
                           console.error('Error rejecting booking:', error);
                           alert('Failed to reject booking');

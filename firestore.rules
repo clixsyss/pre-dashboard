@@ -558,6 +558,18 @@ service cloud.firestore {
       allow list: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Push Notifications collection - allow admins to create and read
+    match /pushNotifications/{notificationId} {
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing push notifications
+    match /pushNotifications {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
     // Pending Admins collection - allow anyone to create (for registration)
     // Allow authenticated users to read (for status checking)
     // Only approved admins can update/delete (for approval process)

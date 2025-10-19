@@ -118,15 +118,20 @@ const NotificationManagement = ({ projectId }) => {
       // Store project users for selection
       setProjectUsers(users);
 
-      // Count tokens
+      // Count tokens (optional - may not have permission)
       let tokenCount = 0;
-      for (const user of users) {
-        try {
-          const tokensSnapshot = await getDocs(collection(db, `users/${user.id}/tokens`));
-          tokenCount += tokensSnapshot.size;
-        } catch (err) {
-          console.error(`Error counting tokens for user ${user.id}:`, err);
+      try {
+        for (const user of users) {
+          try {
+            const tokensSnapshot = await getDocs(collection(db, `users/${user.id}/tokens`));
+            tokenCount += tokensSnapshot.size;
+          } catch (err) {
+            // Silently skip token counting if no permission
+            console.warn(`Cannot count tokens for user ${user.id}: insufficient permissions`);
+          }
         }
+      } catch (err) {
+        console.warn('Token counting not available due to permissions');
       }
 
       // Count notifications sent today
