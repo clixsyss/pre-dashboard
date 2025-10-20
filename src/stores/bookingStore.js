@@ -281,38 +281,38 @@ export const useBookingStore = create((set, get) => ({
       // Send push notification to user
       if (booking?.userId) {
         try {
-          // Import dynamically to avoid circular dependency
-          const { default: mobilePushService } = await import('../services/mobilePushService');
+          const { sendStatusNotification } = await import('../services/statusNotificationService');
           
           const bookingType = booking.type || 'booking';
           const resourceName = booking.courtName || booking.academyName || booking.eventName || 'your booking';
-          let notificationMessage = '';
+          let title_en = 'Booking Status Update';
+          let title_ar = 'تحديث حالة الحجز';
+          let body_en = '';
+          let body_ar = '';
           
           switch (newStatus) {
             case 'confirmed':
-              notificationMessage = `Your ${bookingType} for "${resourceName}" has been confirmed! ${booking.date ? `Date: ${booking.date}` : ''} ${booking.startTime ? `at ${booking.startTime}` : ''}`;
+              body_en = `Your ${bookingType} for "${resourceName}" has been confirmed! ${booking.date ? `Date: ${booking.date}` : ''} ${booking.startTime ? `at ${booking.startTime}` : ''}`;
+              body_ar = `تم تأكيد حجزك لـ "${resourceName}"! ${booking.date ? `التاريخ: ${booking.date}` : ''} ${booking.startTime ? `في ${booking.startTime}` : ''}`;
               break;
             case 'cancelled':
-              notificationMessage = `Your ${bookingType} for "${resourceName}" has been cancelled. If you have any questions, please contact the management office.`;
+              body_en = `Your ${bookingType} for "${resourceName}" has been cancelled. If you have any questions, please contact the management office.`;
+              body_ar = `تم إلغاء حجزك لـ "${resourceName}". إذا كان لديك أي أسئلة، يرجى الاتصال بمكتب الإدارة.`;
               break;
             case 'completed':
-              notificationMessage = `Your ${bookingType} for "${resourceName}" has been completed. Thank you for using our services!`;
+              body_en = `Your ${bookingType} for "${resourceName}" has been completed. Thank you for using our services!`;
+              body_ar = `تم إكمال حجزك لـ "${resourceName}". شكراً لاستخدام خدماتنا!`;
               break;
             case 'pending':
-              notificationMessage = `Your ${bookingType} for "${resourceName}" is pending approval.`;
+              body_en = `Your ${bookingType} for "${resourceName}" is pending approval.`;
+              body_ar = `حجزك لـ "${resourceName}" قيد الموافقة.`;
               break;
             default:
-              notificationMessage = `Your ${bookingType} for "${resourceName}" status has been updated to ${newStatus.toUpperCase()}.`;
+              body_en = `Your ${bookingType} for "${resourceName}" status has been updated to ${newStatus.toUpperCase()}.`;
+              body_ar = `تم تحديث حالة حجزك لـ "${resourceName}" إلى ${newStatus.toUpperCase()}.`;
           }
           
-          await mobilePushService.sendPushNotification(booking.userId, projectId, {
-            title: 'Booking Status Update',
-            message: notificationMessage,
-            actionType: 'booking_update',
-            category: 'booking',
-            priority: 'normal'
-          });
-          
+          await sendStatusNotification(projectId, booking.userId, title_en, body_en, title_ar, body_ar, 'booking');
           console.log('Booking status notification sent successfully');
         } catch (notificationError) {
           console.warn('Failed to send booking notification:', notificationError);

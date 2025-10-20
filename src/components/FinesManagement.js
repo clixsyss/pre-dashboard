@@ -11,7 +11,8 @@ import {
   DollarSign,
   User,
   Upload,
-  X
+  X,
+  Send
 } from 'lucide-react';
 import {
   getFines,
@@ -22,6 +23,7 @@ import {
   addMessage,
   onFineChange
 } from '../services/finesService';
+import { sendStatusNotification } from '../services/statusNotificationService';
 
 const FinesManagement = ({ projectId }) => {
   const [fines, setFines] = useState([]);
@@ -786,7 +788,7 @@ const FinesManagement = ({ projectId }) => {
 
       {/* Detail Modal - Placeholder */}
       {showDetailModal && selectedFine && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 finesModal">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Fine Details</h2>
@@ -845,7 +847,116 @@ const FinesManagement = ({ projectId }) => {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
+            {/* Quick Notification */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Send Quick Notification</h3>
+              <button
+                onClick={async () => {
+                  const message = prompt('Enter notification message to send to user:');
+                  if (message) {
+                    try {
+                      await sendStatusNotification(
+                        projectId,
+                        selectedFine.userId,
+                        'Fine Update',
+                        message,
+                        'تحديث الغرامة',
+                        message,
+                        'alert'
+                      );
+                      alert('Notification sent successfully!');
+                    } catch (error) {
+                      alert('Failed to send notification: ' + error.message);
+                    }
+                  }
+                }}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                Send Custom Notification
+              </button>
+            </div>
+
+            {/* Status Update Actions */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Update Status</h3>
+              <div className="flex gap-2 flex-wrap">
+                {selectedFine.status === 'issued' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        handleStatusUpdate(selectedFine.id, 'paid', 'Payment confirmed by admin');
+                        setShowDetailModal(false);
+                      }}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Mark as Paid
+                    </button>
+                    <button
+                      onClick={() => {
+                        const reason = prompt('Enter reason for dispute:');
+                        if (reason) {
+                          handleStatusUpdate(selectedFine.id, 'disputed', reason);
+                          setShowDetailModal(false);
+                        }
+                      }}
+                      className="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 flex items-center gap-2"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                      Mark as Disputed
+                    </button>
+                    <button
+                      onClick={() => {
+                        const reason = prompt('Enter reason for cancellation:');
+                        if (reason) {
+                          handleStatusUpdate(selectedFine.id, 'cancelled', reason);
+                          setShowDetailModal(false);
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Cancel Fine
+                    </button>
+                  </>
+                )}
+                {selectedFine.status === 'disputed' && (
+                  <>
+                    <button
+                      onClick={() => {
+                        handleStatusUpdate(selectedFine.id, 'paid', 'Dispute resolved - payment confirmed');
+                        setShowDetailModal(false);
+                      }}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Resolve & Mark Paid
+                    </button>
+                    <button
+                      onClick={() => {
+                        const reason = prompt('Enter reason for cancellation:');
+                        if (reason) {
+                          handleStatusUpdate(selectedFine.id, 'cancelled', reason);
+                          setShowDetailModal(false);
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Cancel Fine
+                    </button>
+                  </>
+                )}
+                {(selectedFine.status === 'paid' || selectedFine.status === 'cancelled') && (
+                  <p className="text-sm text-gray-500 py-2">
+                    This fine is {selectedFine.status}. No further actions available.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t mt-4">
               <button
                 onClick={() => setShowDetailModal(false)}
                 className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"

@@ -25,12 +25,9 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { useQuickNotifications } from './DashboardAcceptanceNotification';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { sendStatusNotification } from '../services/statusNotificationService';
 
 const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) => {
-  const { currentAdmin } = useAdminAuth();
-  const { quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,26 +131,34 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
       if (submission?.userId) {
         try {
           const requestName = submission.categoryName || 'your request';
-          let notificationMessage = '';
+          let title_en = 'Request Status Update';
+          let title_ar = 'تحديث حالة الطلب';
+          let body_en = '';
+          let body_ar = '';
           
           switch (newStatus) {
             case 'pending':
-              notificationMessage = `Your request for "${requestName}" is now pending review by our team.`;
+              body_en = `Your request for "${requestName}" is now pending review by our team.`;
+              body_ar = `طلبك لـ "${requestName}" قيد المراجعة من قبل فريقنا.`;
               break;
             case 'in_progress':
-              notificationMessage = `Great news! Work has started on your request for "${requestName}". Our team is now processing your request.`;
+              body_en = `Great news! Work has started on your request for "${requestName}". Our team is now processing your request.`;
+              body_ar = `أخبار رائعة! بدأ العمل على طلبك لـ "${requestName}". فريقنا يعمل الآن على طلبك.`;
               break;
             case 'completed':
-              notificationMessage = `Your request for "${requestName}" has been completed! Thank you for using our services.`;
+              body_en = `Your request for "${requestName}" has been completed! Thank you for using our services.`;
+              body_ar = `تم إكمال طلبك لـ "${requestName}"! شكراً لاستخدام خدماتنا.`;
               break;
             case 'rejected':
-              notificationMessage = `Your request for "${requestName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`;
+              body_en = `Your request for "${requestName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`;
+              body_ar = `تمت مراجعة طلبك لـ "${requestName}" ولكن لا يمكن الموافقة عليه في هذا الوقت. يرجى الاتصال بمكتب الإدارة للحصول على مزيد من المعلومات.`;
               break;
             default:
-              notificationMessage = `Your request for "${requestName}" status has been updated to ${newStatus.toUpperCase()}.`;
+              body_en = `Your request for "${requestName}" status has been updated to ${newStatus.toUpperCase()}.`;
+              body_ar = `تم تحديث حالة طلبك لـ "${requestName}" إلى ${newStatus.toUpperCase()}.`;
           }
           
-          await quickSendApproval(submission.userId, notificationMessage);
+          await sendStatusNotification(projectId, submission.userId, title_en, body_en, title_ar, body_ar, 'alert');
           console.log('Request status notification sent successfully');
         } catch (notificationError) {
           console.warn('Failed to send status notification:', notificationError);

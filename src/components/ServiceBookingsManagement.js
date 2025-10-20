@@ -25,12 +25,9 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { useQuickNotifications } from './DashboardAcceptanceNotification';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { sendStatusNotification } from '../services/statusNotificationService';
 
 const ServiceBookingsManagement = ({ projectId }) => {
-  const { currentAdmin } = useAdminAuth();
-  const { quickSendBookingConfirmation, quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
   
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
@@ -204,31 +201,31 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
       // Send appropriate notification based on status
       try {
+        const serviceName = selectedBooking.serviceName || 'the requested service';
+        let title_en = 'Service Booking Update';
+        let title_ar = 'تحديث حجز الخدمة';
+        let body_en = '';
+        let body_ar = '';
+        
         switch (updateData.status) {
           case 'confirmed':
-            await quickSendBookingConfirmation(
-              selectedBooking.userId,
-              `Your service booking for "${selectedBooking.serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`;
+            body_ar = `تم تأكيد حجز خدمتك لـ "${serviceName}"! سيتواصل معك فريقنا قريباً لجدولة الخدمة.`;
             break;
           case 'completed':
-            await quickSendApproval(
-              selectedBooking.userId,
-              `Your service booking for "${selectedBooking.serviceName}" has been completed! Thank you for using our services.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been completed! Thank you for using our services.`;
+            body_ar = `تم إكمال حجز خدمتك لـ "${serviceName}"! شكراً لاستخدام خدماتنا.`;
             break;
           case 'rejected':
-            await quickSendApproval(
-              selectedBooking.userId,
-              `Your service booking for "${selectedBooking.serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`;
+            body_ar = `تمت مراجعة حجز خدمتك لـ "${serviceName}" ولكن لا يمكن الموافقة عليه في هذا الوقت. يرجى الاتصال بمكتب الإدارة للحصول على مزيد من المعلومات.`;
             break;
           default:
-            await quickSendApproval(
-              selectedBooking.userId,
-              `Your service booking for "${selectedBooking.serviceName}" status has been updated to ${updateData.status.toUpperCase()}. ${updateData.reason ? `Reason: ${updateData.reason}` : ''}`
-            );
+            body_en = `Your service booking for "${serviceName}" status has been updated to ${updateData.status.toUpperCase()}. ${updateData.reason ? `Reason: ${updateData.reason}` : ''}`;
+            body_ar = `تم تحديث حالة حجز خدمتك لـ "${serviceName}" إلى ${updateData.status.toUpperCase()}. ${updateData.reason ? `السبب: ${updateData.reason}` : ''}`;
         }
+        
+        await sendStatusNotification(projectId, selectedBooking.userId, title_en, body_en, title_ar, body_ar, 'booking');
         console.log('Booking status notification sent');
       } catch (notificationError) {
         console.warn('Failed to send notification:', notificationError);
@@ -1085,9 +1082,15 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
                           // Send push notification to user
                           try {
-                            await quickSendBookingConfirmation(
+                            const serviceName = selectedBooking.serviceName || 'the requested service';
+                            await sendStatusNotification(
+                              projectId,
                               selectedBooking.userId,
-                              `Your service booking for "${selectedBooking.serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`
+                              'Service Booking Confirmed',
+                              `Your service booking for "${serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`,
+                              'تأكيد حجز الخدمة',
+                              `تم تأكيد حجز خدمتك لـ "${serviceName}"! سيتواصل معك فريقنا قريباً لجدولة الخدمة.`,
+                              'booking'
                             );
                             console.log('Booking confirmation notification sent');
                           } catch (notificationError) {
@@ -1126,9 +1129,15 @@ const ServiceBookingsManagement = ({ projectId }) => {
 
                           // Send push notification to user
                           try {
-                            await quickSendApproval(
+                            const serviceName = selectedBooking.serviceName || 'the requested service';
+                            await sendStatusNotification(
+                              projectId,
                               selectedBooking.userId,
-                              `Your service booking for "${selectedBooking.serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`
+                              'Service Booking Rejected',
+                              `Your service booking for "${serviceName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`,
+                              'رفض حجز الخدمة',
+                              `تمت مراجعة حجز خدمتك لـ "${serviceName}" ولكن لا يمكن الموافقة عليه في هذا الوقت. يرجى الاتصال بمكتب الإدارة للحصول على مزيد من المعلومات.`,
+                              'alert'
                             );
                             console.log('Booking rejection notification sent');
                           } catch (notificationError) {

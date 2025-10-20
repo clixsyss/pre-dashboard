@@ -23,12 +23,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserDetails, getUserProjects } from '../services/userService';
-import { useQuickNotifications } from './DashboardAcceptanceNotification';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { sendStatusNotification } from '../services/statusNotificationService';
 
 const ServiceBookingRequests = ({ projectId }) => {
-  const { currentAdmin } = useAdminAuth();
-  const { quickSendBookingConfirmation, quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
   
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -169,37 +166,35 @@ const ServiceBookingRequests = ({ projectId }) => {
 
       // Send appropriate notification based on status
       try {
+        const serviceName = booking.serviceName || 'the requested service';
+        let title_en = 'Service Booking Update';
+        let title_ar = 'تحديث حجز الخدمة';
+        let body_en = '';
+        let body_ar = '';
+        
         switch (newStatus) {
           case 'confirmed':
-            await quickSendBookingConfirmation(
-              booking.userId,
-              `Your service booking for "${booking.serviceName || 'the requested service'}" has been confirmed! Our team will contact you soon to schedule the service.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been confirmed! Our team will contact you soon to schedule the service.`;
+            body_ar = `تم تأكيد حجز خدمتك لـ "${serviceName}"! سيتواصل معك فريقنا قريباً لجدولة الخدمة.`;
             break;
           case 'in_progress':
-            await quickSendApproval(
-              booking.userId,
-              `Work has started on your service booking for "${booking.serviceName || 'the requested service'}". Our team is now working on your request.`
-            );
+            body_en = `Work has started on your service booking for "${serviceName}". Our team is now working on your request.`;
+            body_ar = `بدأ العمل على حجز خدمتك لـ "${serviceName}". فريقنا يعمل الآن على طلبك.`;
             break;
           case 'completed':
-            await quickSendApproval(
-              booking.userId,
-              `Your service booking for "${booking.serviceName || 'the requested service'}" has been completed! Thank you for using our services.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been completed! Thank you for using our services.`;
+            body_ar = `تم إكمال حجز خدمتك لـ "${serviceName}"! شكراً لاستخدام خدماتنا.`;
             break;
           case 'cancelled':
-            await quickSendApproval(
-              booking.userId,
-              `Your service booking for "${booking.serviceName || 'the requested service'}" has been cancelled. Please contact the management office if you have any questions.`
-            );
+            body_en = `Your service booking for "${serviceName}" has been cancelled. Please contact the management office if you have any questions.`;
+            body_ar = `تم إلغاء حجز خدمتك لـ "${serviceName}". يرجى الاتصال بمكتب الإدارة إذا كان لديك أي أسئلة.`;
             break;
           default:
-            await quickSendApproval(
-              booking.userId,
-              `Your service booking status has been updated to ${newStatus.toUpperCase()}.`
-            );
+            body_en = `Your service booking status has been updated to ${newStatus.toUpperCase()}.`;
+            body_ar = `تم تحديث حالة حجز خدمتك إلى ${newStatus.toUpperCase()}.`;
         }
+        
+        await sendStatusNotification(projectId, booking.userId, title_en, body_en, title_ar, body_ar, 'booking');
         console.log(`Booking ${bookingId} status notification sent`);
       } catch (notificationError) {
         console.warn('Failed to send notification:', notificationError);

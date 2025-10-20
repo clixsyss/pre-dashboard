@@ -37,24 +37,14 @@ export const createFine = async (projectId, fineData) => {
     // Send push notification to user when fine is created
     if (fineData.userId) {
       try {
-        // Import dynamically to avoid circular dependency
-        const { default: mobilePushService } = await import('./mobilePushService');
+        const { sendStatusNotification } = await import('./statusNotificationService');
         
-        const notificationMessage = `A fine of ${fineData.amount} EGP has been issued to your account. Reason: ${fineData.reason}. Please check your account for details.`;
+        const title_en = 'Fine Issued';
+        const title_ar = 'تم إصدار غرامة';
+        const body_en = `A fine of ${fineData.amount} EGP has been issued to your account. Reason: ${fineData.reason}. Please check your account for details.`;
+        const body_ar = `تم إصدار غرامة بقيمة ${fineData.amount} جنيه على حسابك. السبب: ${fineData.reason}. يرجى التحقق من حسابك للحصول على التفاصيل.`;
         
-        await mobilePushService.sendPushNotification(fineData.userId, projectId, {
-          title: 'Fine Issued',
-          message: notificationMessage,
-          actionType: 'fine_issued',
-          category: 'fine',
-          priority: 'high',
-          metadata: {
-            fineId: docRef.id,
-            amount: fineData.amount,
-            reason: fineData.reason
-          }
-        });
-        
+        await sendStatusNotification(projectId, fineData.userId, title_en, body_en, title_ar, body_ar, 'alert');
         console.log('Fine creation notification sent successfully');
       } catch (notificationError) {
         console.warn('Failed to send fine notification:', notificationError);
@@ -176,35 +166,36 @@ export const updateFineStatus = async (projectId, fineId, status, reason = '', u
     // Send push notification to user if userId provided
     if (userId) {
       try {
-        // Import dynamically to avoid circular dependency
-        const { default: mobilePushService } = await import('./mobilePushService');
+        const { sendStatusNotification } = await import('./statusNotificationService');
         
-        let notificationMessage = '';
+        let title_en = 'Fine Status Update';
+        let title_ar = 'تحديث حالة الغرامة';
+        let body_en = '';
+        let body_ar = '';
+        
         switch (status) {
           case 'issued':
-            notificationMessage = `A fine has been issued to your account. ${reason ? `Reason: ${reason}` : 'Please check your account for details.'}`;
+            body_en = `A fine has been issued to your account. ${reason ? `Reason: ${reason}` : 'Please check your account for details.'}`;
+            body_ar = `تم إصدار غرامة على حسابك. ${reason ? `السبب: ${reason}` : 'يرجى التحقق من حسابك للحصول على التفاصيل.'}`;
             break;
           case 'paid':
-            notificationMessage = `Your fine payment has been confirmed and recorded. Thank you for your prompt payment.`;
+            body_en = `Your fine payment has been confirmed and recorded. Thank you for your prompt payment.`;
+            body_ar = `تم تأكيد وتسجيل دفع غرامتك. شكراً لدفعك السريع.`;
             break;
           case 'disputed':
-            notificationMessage = `Your fine dispute has been received and is under review. We will contact you soon.`;
+            body_en = `Your fine dispute has been received and is under review. We will contact you soon.`;
+            body_ar = `تم استلام اعتراضك على الغرامة وهو قيد المراجعة. سنتواصل معك قريباً.`;
             break;
           case 'cancelled':
-            notificationMessage = `The fine on your account has been cancelled. ${reason ? `Reason: ${reason}` : ''}`;
+            body_en = `The fine on your account has been cancelled. ${reason ? `Reason: ${reason}` : ''}`;
+            body_ar = `تم إلغاء الغرامة على حسابك. ${reason ? `السبب: ${reason}` : ''}`;
             break;
           default:
-            notificationMessage = `Your fine status has been updated to ${status.toUpperCase()}.`;
+            body_en = `Your fine status has been updated to ${status.toUpperCase()}.`;
+            body_ar = `تم تحديث حالة غرامتك إلى ${status.toUpperCase()}.`;
         }
         
-        await mobilePushService.sendPushNotification(userId, projectId, {
-          title: 'Fine Status Update',
-          message: notificationMessage,
-          actionType: 'fine_update',
-          category: 'fine',
-          priority: 'high'
-        });
-        
+        await sendStatusNotification(projectId, userId, title_en, body_en, title_ar, body_ar, 'alert');
         console.log('Fine status notification sent successfully');
       } catch (notificationError) {
         console.warn('Failed to send fine notification:', notificationError);
