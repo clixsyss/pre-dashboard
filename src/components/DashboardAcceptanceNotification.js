@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { CheckCircle, Send, User, MessageSquare, AlertCircle } from 'lucide-react';
+import { CheckCircle, Send } from 'lucide-react';
 import useCustomUserNotifications from '../hooks/useCustomUserNotifications';
 
 const DashboardAcceptanceNotification = ({ 

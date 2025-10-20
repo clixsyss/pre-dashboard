@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Search, 
-  Plus, 
-  Filter, 
-  Eye, 
-  MessageCircle, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Search,
+  Plus,
+  Filter,
+  Eye,
+  MessageCircle,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
   DollarSign,
   User,
   Upload,
   X
 } from 'lucide-react';
-import { 
-  getFines, 
-  createFine, 
-  updateFineStatus, 
+import {
+  getFines,
+  createFine,
+  updateFineStatus,
   searchUsers,
   uploadFineImage,
   addMessage,
@@ -68,14 +68,14 @@ const FinesManagement = ({ projectId }) => {
       const finesData = await getFines(projectId);
       setFines(finesData);
       setFilteredFines(finesData);
-      
+
       // Calculate stats
       const stats = finesData.reduce((acc, fine) => {
         acc.total++;
         acc[fine.status] = (acc[fine.status] || 0) + 1;
         return acc;
       }, { total: 0, issued: 0, paid: 0, disputed: 0, cancelled: 0 });
-      
+
       setStats(stats);
     } catch (error) {
       console.error('Error loading fines:', error);
@@ -101,11 +101,11 @@ const FinesManagement = ({ projectId }) => {
   // Setup real-time listener when chat opens
   useEffect(() => {
     let unsubscribe = null;
-    
+
     if (showChat && selectedFine) {
       unsubscribe = setupChatListener(selectedFine.id);
     }
-    
+
     return () => {
       if (unsubscribe) {
         unsubscribe();
@@ -119,7 +119,7 @@ const FinesManagement = ({ projectId }) => {
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(fine => 
+      filtered = filtered.filter(fine =>
         fine.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         fine.userUnit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         fine.reason?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -173,7 +173,7 @@ const FinesManagement = ({ projectId }) => {
 
     try {
       setUploading(true);
-      
+
       let evidenceUrl = null;
       if (formData.evidenceImage) {
         evidenceUrl = await uploadFineImage(projectId, 'temp', formData.evidenceImage);
@@ -227,7 +227,11 @@ const FinesManagement = ({ projectId }) => {
   // Handle status update
   const handleStatusUpdate = async (fineId, newStatus, reason) => {
     try {
-      await updateFineStatus(projectId, fineId, newStatus, reason);
+      // Find the fine to get userId
+      const fine = fines.find(f => f.id === fineId);
+      const userId = fine?.userId;
+
+      await updateFineStatus(projectId, fineId, newStatus, reason, userId);
       await loadFines();
       alert('Status updated successfully!');
     } catch (error) {
@@ -258,7 +262,7 @@ const FinesManagement = ({ projectId }) => {
 
     try {
       setSendingMessage(true);
-      
+
       let imageUrl = null;
       if (selectedImage) {
         setUploadingImage(true);
@@ -275,7 +279,7 @@ const FinesManagement = ({ projectId }) => {
       await addMessage(projectId, selectedFine.id, messageData);
       setNewMessage('');
       removeSelectedImage();
-      
+
       // The real-time listener will update the messages
     } catch (error) {
       console.error('Error sending message:', error);
@@ -315,7 +319,7 @@ const FinesManagement = ({ projectId }) => {
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    
+
     let date;
     // Handle different date formats
     if (dateString?.toDate) {
@@ -328,12 +332,12 @@ const FinesManagement = ({ projectId }) => {
     } else {
       return 'Invalid date';
     }
-    
+
     // Check if date is valid
     if (isNaN(date.getTime())) {
       return 'Invalid date';
     }
-    
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -367,7 +371,7 @@ const FinesManagement = ({ projectId }) => {
   // Format message time
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
-    
+
     let date;
     // Handle different timestamp formats
     if (timestamp?.toDate) {
@@ -380,12 +384,12 @@ const FinesManagement = ({ projectId }) => {
     } else {
       return '';
     }
-    
+
     // Check if date is valid
     if (isNaN(date.getTime())) {
       return '';
     }
-    
+
     return date.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit'
@@ -401,204 +405,206 @@ const FinesManagement = ({ projectId }) => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fines & Violations</h1>
-          <p className="text-gray-600">Manage user fines and violations</p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Issue Fine
-        </button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Fines</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-            </div>
-            <DollarSign className="w-8 h-8 text-blue-600" />
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Fines & Violations</h1>
+            <p className="text-gray-600">Manage user fines and violations</p>
           </div>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Issued</p>
-              <p className="text-2xl font-bold text-orange-600">{stats.issued}</p>
-            </div>
-            <AlertTriangle className="w-8 h-8 text-orange-600" />
-          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Issue Fine
+          </button>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Paid</p>
-              <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 stats-cards">
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Fines</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              </div>
+              <DollarSign className="w-8 h-8 text-blue-600" />
             </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Issued</p>
+                <p className="text-2xl font-bold text-orange-600">{stats.issued}</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-orange-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Paid</p>
+                <p className="text-2xl font-bold text-green-600">{stats.paid}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Disputed</p>
+                <p className="text-2xl font-bold text-red-600">{stats.disputed}</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Cancelled</p>
+                <p className="text-2xl font-bold text-gray-600">{stats.cancelled}</p>
+              </div>
+              <XCircle className="w-8 h-8 text-gray-600" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Disputed</p>
-              <p className="text-2xl font-bold text-red-600">{stats.disputed}</p>
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by user, unit, reason, or amount..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
-            <XCircle className="w-8 h-8 text-red-600" />
+
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-400" />
+              <select
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Status</option>
+                <option value="issued">Issued</option>
+                <option value="paid">Paid</option>
+                <option value="disputed">Disputed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Cancelled</p>
-              <p className="text-2xl font-bold text-gray-600">{stats.cancelled}</p>
-            </div>
-            <XCircle className="w-8 h-8 text-gray-600" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by user, unit, reason, or amount..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">All Status</option>
-              <option value="issued">Issued</option>
-              <option value="paid">Paid</option>
-              <option value="disputed">Disputed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Fines List */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredFines.map((fine) => (
-                <tr key={fine.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="w-5 h-5 text-blue-600" />
+        {/* Fines List */}
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredFines.map((fine) => (
+                  <tr key={fine.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="w-5 h-5 text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{fine.userName}</div>
+                          <div className="text-sm text-gray-500">Unit {fine.userUnit}</div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{fine.userName}</div>
-                        <div className="text-sm text-gray-500">Unit {fine.userUnit}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{fine.reason}</div>
-                    {fine.description && (
-                      <div className="text-sm text-gray-500 truncate max-w-xs">{fine.description}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{formatCurrency(fine.amount)}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(fine.status)}`}>
-                      {getStatusIcon(fine.status)}
-                      {fine.status.charAt(0).toUpperCase() + fine.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(fine.createdAt)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedFine(fine);
-                          setShowDetailModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openChat(fine)}
-                        className="text-green-600 hover:text-green-900"
-                        title="Chat"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </button>
-                      {fine.status === 'issued' && (
-                        <button
-                          onClick={() => handleStatusUpdate(fine.id, 'paid', 'Marked as paid by admin')}
-                          className="text-green-600 hover:text-green-900"
-                          title="Mark as Paid"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">{fine.reason}</div>
+                      {fine.description && (
+                        <div className="text-sm text-gray-500 truncate max-w-xs">{fine.description}</div>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {filteredFines.length === 0 && (
-          <div className="text-center py-12">
-            <DollarSign className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No fines found</h3>
-            <p className="text-gray-500">No fines match your current filters.</p>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{formatCurrency(fine.amount)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(fine.status)}`}>
+                        {getStatusIcon(fine.status)}
+                        {fine.status.charAt(0).toUpperCase() + fine.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(fine.createdAt)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedFine(fine);
+                            setShowDetailModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openChat(fine)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Chat"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </button>
+                        {fine.status === 'issued' && (
+                          <button
+                            onClick={() => handleStatusUpdate(fine.id, 'paid', 'Marked as paid by admin')}
+                            className="text-green-600 hover:text-green-900"
+                            title="Mark as Paid"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+
+          {filteredFines.length === 0 && (
+            <div className="text-center py-12">
+              <DollarSign className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No fines found</h3>
+              <p className="text-gray-500">No fines match your current filters.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create Fine Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 finesModal">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[75vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Issue New Fine</h2>
@@ -627,7 +633,7 @@ const FinesManagement = ({ projectId }) => {
                   onChange={(e) => handleUserSearch(e.target.value)}
                   required
                 />
-                
+
                 {/* Search Results */}
                 {userSearchTerm.length > 2 && (
                   <div className="mt-2 border border-gray-300 rounded-lg max-h-40 overflow-y-auto">
@@ -642,11 +648,11 @@ const FinesManagement = ({ projectId }) => {
                             setSearchResults([]);
                           }}
                         >
-                        <div className="font-medium">{user.name}</div>
-                        <div className="text-sm text-gray-500">
-                          Unit {user.unitNumber || user.userUnit || 'N/A'} • {user.email}
-                          {user.phone && <span> • {user.phone}</span>}
-                        </div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-gray-500">
+                            Unit {user.unitNumber || user.userUnit || 'N/A'} • {user.email}
+                            {user.phone && <span> • {user.phone}</span>}
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -656,7 +662,7 @@ const FinesManagement = ({ projectId }) => {
                     )}
                   </div>
                 )}
-                
+
                 {/* Selected User */}
                 {selectedUser && (
                   <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -680,7 +686,7 @@ const FinesManagement = ({ projectId }) => {
                     type="text"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.reason}
-                    onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     placeholder="e.g., Parking violation, Noise complaint"
                     required
                   />
@@ -696,7 +702,7 @@ const FinesManagement = ({ projectId }) => {
                     step="0.01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.amount}
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     placeholder="0.00"
                     required
                   />
@@ -710,7 +716,7 @@ const FinesManagement = ({ projectId }) => {
                     type="date"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.occurrenceDate}
-                    onChange={(e) => setFormData({...formData, occurrenceDate: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, occurrenceDate: e.target.value })}
                     required
                   />
                 </div>
@@ -723,7 +729,7 @@ const FinesManagement = ({ projectId }) => {
                     type="date"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={formData.issuingDate}
-                    onChange={(e) => setFormData({...formData, issuingDate: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, issuingDate: e.target.value })}
                   />
                 </div>
               </div>
@@ -736,7 +742,7 @@ const FinesManagement = ({ projectId }) => {
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Additional details about the violation..."
                 />
               </div>
@@ -749,7 +755,7 @@ const FinesManagement = ({ projectId }) => {
                   type="file"
                   accept="image/*"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  onChange={(e) => setFormData({...formData, evidenceImage: e.target.files[0]})}
+                  onChange={(e) => setFormData({ ...formData, evidenceImage: e.target.files[0] })}
                 />
               </div>
 
@@ -791,7 +797,7 @@ const FinesManagement = ({ projectId }) => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -814,31 +820,31 @@ const FinesManagement = ({ projectId }) => {
                   </span>
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">Reason</label>
                 <p className="text-sm text-gray-900">{selectedFine.reason}</p>
               </div>
-              
+
               {selectedFine.description && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
                   <p className="text-sm text-gray-900">{selectedFine.description}</p>
                 </div>
               )}
-              
+
               {selectedFine.evidenceImage && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Evidence</label>
-                  <img 
-                    src={selectedFine.evidenceImage} 
-                    alt="Evidence" 
+                  <img
+                    src={selectedFine.evidenceImage}
+                    alt="Evidence"
                     className="mt-2 max-w-xs rounded-lg border"
                   />
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-end gap-3 pt-4">
               <button
                 onClick={() => setShowDetailModal(false)}
@@ -853,8 +859,8 @@ const FinesManagement = ({ projectId }) => {
 
       {/* Chat Modal */}
       {showChat && selectedFine && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 finesModal">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white ">
             <div className="flex flex-col" style={{ height: '80vh' }}>
               {/* Chat Header */}
               <div className="flex items-center justify-between p-4 border-b">
@@ -888,28 +894,26 @@ const FinesManagement = ({ projectId }) => {
                       className={`flex ${message.sender === 'admin' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                          message.sender === 'admin'
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.sender === 'admin'
                             ? 'bg-blue-500 text-white'
                             : message.sender === 'system'
-                            ? 'bg-gray-200 text-gray-700 text-center'
-                            : 'bg-gray-200 text-gray-700'
-                        }`}
+                              ? 'bg-gray-200 text-gray-700 text-center'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}
                       >
                         {message.text && <p className="text-sm">{message.text}</p>}
                         {message.imageUrl && (
                           <div className="mt-2">
-                            <img 
-                              src={message.imageUrl} 
-                              alt="Attached file" 
+                            <img
+                              src={message.imageUrl}
+                              alt="Attached file"
                               className="max-w-xs rounded-lg cursor-pointer hover:opacity-90"
                               onClick={() => window.open(message.imageUrl, '_blank')}
                             />
                           </div>
                         )}
-                        <p className={`text-xs mt-1 ${
-                          message.sender === 'admin' ? 'text-blue-100' : 'text-gray-500'
-                        }`}>
+                        <p className={`text-xs mt-1 ${message.sender === 'admin' ? 'text-blue-100' : 'text-gray-500'
+                          }`}>
                           {formatMessageTime(message.timestamp)}
                         </p>
                       </div>
@@ -923,9 +927,9 @@ const FinesManagement = ({ projectId }) => {
                 {/* Image Preview */}
                 {imagePreview && (
                   <div className="mb-3 relative inline-block">
-                    <img 
-                      src={imagePreview} 
-                      alt="Selected file" 
+                    <img
+                      src={imagePreview}
+                      alt="Selected file"
                       className="max-w-xs max-h-32 rounded-lg border"
                     />
                     <button
@@ -936,7 +940,7 @@ const FinesManagement = ({ projectId }) => {
                     </button>
                   </div>
                 )}
-                
+
                 <div className="flex space-x-2">
                   <input
                     type="text"
@@ -947,7 +951,7 @@ const FinesManagement = ({ projectId }) => {
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={sendingMessage}
                   />
-                  
+
                   {/* Image Upload Button */}
                   <input
                     type="file"
@@ -963,7 +967,7 @@ const FinesManagement = ({ projectId }) => {
                   >
                     <Upload className="w-4 h-4" />
                   </label>
-                  
+
                   <button
                     onClick={sendMessage}
                     disabled={(!newMessage.trim() && !selectedImage) || sendingMessage || uploadingImage}
@@ -980,8 +984,8 @@ const FinesManagement = ({ projectId }) => {
           </div>
         </div>
       )}
-    </div>
-  );
+        </>
+      );
 };
 
-export default FinesManagement;
+      export default FinesManagement;

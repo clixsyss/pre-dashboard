@@ -258,12 +258,8 @@ const NotificationManagement = ({ projectId }) => {
       return;
     }
     
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
-
+    // Validate required fields first
     try {
-      // Validate required fields
       if (!formData.title_en || !formData.body_en) {
         throw new Error('English title and body are required');
       }
@@ -275,6 +271,50 @@ const NotificationManagement = ({ projectId }) => {
       if (!projectId) {
         throw new Error('Project ID is missing');
       }
+      
+      // Calculate recipient count and show confirmation
+      let recipientCount = 0;
+      let recipientNames = [];
+      
+      if (formData.audienceType === 'all') {
+        recipientCount = stats.totalUsers;
+        recipientNames = ['All project users'];
+      } else if (formData.audienceType === 'specific') {
+        recipientCount = selectedUserIds.length;
+        const selectedUsers = getSelectedUsers();
+        recipientNames = selectedUsers.map(u => `${u.firstName} ${u.lastName}`);
+        
+        if (recipientCount === 0) {
+          throw new Error('Please select at least one user');
+        }
+      } else if (formData.audienceType === 'topic') {
+        if (!formData.topic) {
+          throw new Error('Please enter a topic name');
+        }
+        recipientNames = [`Topic: ${formData.topic}`];
+        recipientCount = 'Unknown';
+      }
+      
+      // Show confirmation dialog
+      const userList = recipientNames.length <= 10 
+        ? recipientNames.join(', ')
+        : `${recipientNames.slice(0, 10).join(', ')} and ${recipientNames.length - 10} more`;
+      
+      const confirmMessage = `You are about to send this notification to ${recipientCount} ${recipientCount === 1 ? 'user' : 'users'}:\n\n${userList}\n\nDo you want to continue?`;
+      
+      if (!window.confirm(confirmMessage)) {
+        return; // User cancelled
+      }
+    } catch (validationError) {
+      setError(validationError.message);
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
 
       // Get project name
       const projectDoc = await getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId)));

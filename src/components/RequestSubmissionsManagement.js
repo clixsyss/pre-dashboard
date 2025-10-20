@@ -25,8 +25,12 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useQuickNotifications } from './DashboardAcceptanceNotification';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) => {
+  const { currentAdmin } = useAdminAuth();
+  const { quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -122,6 +126,40 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
         status: newStatus,
         updatedAt: serverTimestamp()
       });
+      
+      // Find submission to get user details
+      const submission = submissions.find(s => s.id === submissionId);
+      
+      // Send push notification to user
+      if (submission?.userId) {
+        try {
+          const requestName = submission.categoryName || 'your request';
+          let notificationMessage = '';
+          
+          switch (newStatus) {
+            case 'pending':
+              notificationMessage = `Your request for "${requestName}" is now pending review by our team.`;
+              break;
+            case 'in_progress':
+              notificationMessage = `Great news! Work has started on your request for "${requestName}". Our team is now processing your request.`;
+              break;
+            case 'completed':
+              notificationMessage = `Your request for "${requestName}" has been completed! Thank you for using our services.`;
+              break;
+            case 'rejected':
+              notificationMessage = `Your request for "${requestName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`;
+              break;
+            default:
+              notificationMessage = `Your request for "${requestName}" status has been updated to ${newStatus.toUpperCase()}.`;
+          }
+          
+          await quickSendApproval(submission.userId, notificationMessage);
+          console.log('Request status notification sent successfully');
+        } catch (notificationError) {
+          console.warn('Failed to send status notification:', notificationError);
+          // Don't fail the status update if notification fails
+        }
+      }
       
       setSubmissions(prev => 
         prev.map(sub => 

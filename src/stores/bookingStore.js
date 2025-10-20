@@ -269,10 +269,56 @@ export const useBookingStore = create((set, get) => ({
       set({ loading: true, error: null });
       const bookingRef = doc(db, `projects/${projectId}/bookings`, bookingId);
       
+      // Get booking details before updating for notification
+      const bookings = get().bookings;
+      const booking = bookings.find(b => b.id === bookingId);
+      
       await updateDoc(bookingRef, { 
         status: newStatus,
         updatedAt: serverTimestamp()
       });
+
+      // Send push notification to user
+      if (booking?.userId) {
+        try {
+          // Import dynamically to avoid circular dependency
+          const { default: mobilePushService } = await import('../services/mobilePushService');
+          
+          const bookingType = booking.type || 'booking';
+          const resourceName = booking.courtName || booking.academyName || booking.eventName || 'your booking';
+          let notificationMessage = '';
+          
+          switch (newStatus) {
+            case 'confirmed':
+              notificationMessage = `Your ${bookingType} for "${resourceName}" has been confirmed! ${booking.date ? `Date: ${booking.date}` : ''} ${booking.startTime ? `at ${booking.startTime}` : ''}`;
+              break;
+            case 'cancelled':
+              notificationMessage = `Your ${bookingType} for "${resourceName}" has been cancelled. If you have any questions, please contact the management office.`;
+              break;
+            case 'completed':
+              notificationMessage = `Your ${bookingType} for "${resourceName}" has been completed. Thank you for using our services!`;
+              break;
+            case 'pending':
+              notificationMessage = `Your ${bookingType} for "${resourceName}" is pending approval.`;
+              break;
+            default:
+              notificationMessage = `Your ${bookingType} for "${resourceName}" status has been updated to ${newStatus.toUpperCase()}.`;
+          }
+          
+          await mobilePushService.sendPushNotification(booking.userId, projectId, {
+            title: 'Booking Status Update',
+            message: notificationMessage,
+            actionType: 'booking_update',
+            category: 'booking',
+            priority: 'normal'
+          });
+          
+          console.log('Booking status notification sent successfully');
+        } catch (notificationError) {
+          console.warn('Failed to send booking notification:', notificationError);
+          // Don't fail the status update if notification fails
+        }
+      }
 
       // Update local state
       set((state) => ({

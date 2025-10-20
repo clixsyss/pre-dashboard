@@ -57,3 +57,7 @@
 .top-header {
   z-index: 99999!important;
 }
+
+.finesModal {
+  z-index: 99999!important;
+}

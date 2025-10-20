@@ -23,6 +23,8 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useQuickNotifications } from './DashboardAcceptanceNotification';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const AdminRequestChat = ({ 
   projectId, 
@@ -31,6 +33,8 @@ const AdminRequestChat = ({
   onBack, 
   onStatusUpdate 
 }) => {
+  const { currentAdmin } = useAdminAuth();
+  const { quickSendApproval } = useQuickNotifications(projectId, currentAdmin);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -209,6 +213,37 @@ const AdminRequestChat = ({
         senderName: 'System',
         createdAt: serverTimestamp()
       });
+
+      // Send push notification to user
+      try {
+        const requestName = requestData?.categoryName || 'your request';
+        let notificationMessage = '';
+        
+        switch (status) {
+          case 'pending':
+            notificationMessage = `Your request for "${requestName}" is now pending review by our team.`;
+            break;
+          case 'in_progress':
+            notificationMessage = `Great news! Work has started on your request for "${requestName}". Our team is now processing your request.`;
+            break;
+          case 'completed':
+            notificationMessage = `Your request for "${requestName}" has been completed! Thank you for using our services.`;
+            break;
+          case 'rejected':
+            notificationMessage = `Your request for "${requestName}" has been reviewed but cannot be approved at this time. Please contact the management office for more information.`;
+            break;
+          default:
+            notificationMessage = `Your request for "${requestName}" status has been updated to ${status.toUpperCase()}.`;
+        }
+        
+        if (requestData?.userId) {
+          await quickSendApproval(requestData.userId, notificationMessage);
+          console.log('Request status notification sent successfully');
+        }
+      } catch (notificationError) {
+        console.warn('Failed to send status notification:', notificationError);
+        // Don't fail the status update if notification fails
+      }
 
       if (onStatusUpdate) {
         onStatusUpdate(requestId, status);

@@ -33,6 +33,35 @@ export const createFine = async (projectId, fineData) => {
     };
 
     const docRef = await addDoc(finesCollection, fine);
+    
+    // Send push notification to user when fine is created
+    if (fineData.userId) {
+      try {
+        // Import dynamically to avoid circular dependency
+        const { default: mobilePushService } = await import('./mobilePushService');
+        
+        const notificationMessage = `A fine of ${fineData.amount} EGP has been issued to your account. Reason: ${fineData.reason}. Please check your account for details.`;
+        
+        await mobilePushService.sendPushNotification(fineData.userId, projectId, {
+          title: 'Fine Issued',
+          message: notificationMessage,
+          actionType: 'fine_issued',
+          category: 'fine',
+          priority: 'high',
+          metadata: {
+            fineId: docRef.id,
+            amount: fineData.amount,
+            reason: fineData.reason
+          }
+        });
+        
+        console.log('Fine creation notification sent successfully');
+      } catch (notificationError) {
+        console.warn('Failed to send fine notification:', notificationError);
+        // Don't fail the fine creation if notification fails
+      }
+    }
+    
     return { id: docRef.id, ...fine };
   } catch (error) {
     console.error('Error creating fine:', error);
@@ -117,7 +146,7 @@ export const getFine = async (projectId, fineId) => {
 };
 
 // Update fine status
-export const updateFineStatus = async (projectId, fineId, status, reason = '') => {
+export const updateFineStatus = async (projectId, fineId, status, reason = '', userId = null) => {
   try {
     const fineDoc = doc(db, 'projects', projectId, 'fines', fineId);
     
@@ -143,6 +172,46 @@ export const updateFineStatus = async (projectId, fineId, status, reason = '') =
     }
 
     await updateDoc(fineDoc, updateData);
+    
+    // Send push notification to user if userId provided
+    if (userId) {
+      try {
+        // Import dynamically to avoid circular dependency
+        const { default: mobilePushService } = await import('./mobilePushService');
+        
+        let notificationMessage = '';
+        switch (status) {
+          case 'issued':
+            notificationMessage = `A fine has been issued to your account. ${reason ? `Reason: ${reason}` : 'Please check your account for details.'}`;
+            break;
+          case 'paid':
+            notificationMessage = `Your fine payment has been confirmed and recorded. Thank you for your prompt payment.`;
+            break;
+          case 'disputed':
+            notificationMessage = `Your fine dispute has been received and is under review. We will contact you soon.`;
+            break;
+          case 'cancelled':
+            notificationMessage = `The fine on your account has been cancelled. ${reason ? `Reason: ${reason}` : ''}`;
+            break;
+          default:
+            notificationMessage = `Your fine status has been updated to ${status.toUpperCase()}.`;
+        }
+        
+        await mobilePushService.sendPushNotification(userId, projectId, {
+          title: 'Fine Status Update',
+          message: notificationMessage,
+          actionType: 'fine_update',
+          category: 'fine',
+          priority: 'high'
+        });
+        
+        console.log('Fine status notification sent successfully');
+      } catch (notificationError) {
+        console.warn('Failed to send fine notification:', notificationError);
+        // Don't fail the status update if notification fails
+      }
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Error updating fine status:', error);

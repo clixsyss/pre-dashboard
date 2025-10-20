@@ -7,8 +7,8 @@
  * while providing a clean, reusable interface for user-specific notifications.
  */
 
-import { collection, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { serverTimestamp } from 'firebase/firestore';
+// import { db } from '../config/firebase';
 import notificationService from './notificationService';
 import mobilePushService from './mobilePushService';
 
