@@ -162,6 +162,25 @@ const SupportManagement = () => {
         updatedAt: new Date()
       })
 
+      // Send notification to user about new message
+      if (selectedChat?.userId) {
+        try {
+          const { sendStatusNotification } = await import('../services/statusNotificationService')
+          await sendStatusNotification(
+            projectId,
+            selectedChat.userId,
+            'New Support Message',
+            `You have a new message from support team: ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'رسالة جديدة من الدعم',
+            `لديك رسالة جديدة من فريق الدعم: ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'alert'
+          )
+          console.log('Support chat message notification sent')
+        } catch (notifError) {
+          console.warn('Failed to send chat notification:', notifError)
+        }
+      }
+
       // Update the selectedChat state to show the new message immediately
       setSelectedChat(prev => ({
         ...prev,

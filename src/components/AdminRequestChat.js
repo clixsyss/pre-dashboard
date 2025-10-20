@@ -123,6 +123,25 @@ const AdminRequestChat = ({
         createdAt: serverTimestamp()
       });
 
+      // Send notification to user about new message
+      if (requestData?.userId) {
+        try {
+          const requestName = requestData?.categoryName || 'your request';
+          await sendStatusNotification(
+            projectId,
+            requestData.userId,
+            'New Message from Admin',
+            `You have a new message regarding your request for "${requestName}": ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'رسالة جديدة من الإدارة',
+            `لديك رسالة جديدة بخصوص طلبك لـ "${requestName}": ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'alert'
+          );
+          console.log('Chat message notification sent');
+        } catch (notifError) {
+          console.warn('Failed to send chat notification:', notifError);
+        }
+      }
+
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);

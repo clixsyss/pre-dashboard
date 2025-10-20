@@ -279,6 +279,25 @@ const FinesManagement = ({ projectId }) => {
       };
 
       await addMessage(projectId, selectedFine.id, messageData);
+      
+      // Send notification to user about new message
+      if (selectedFine?.userId && newMessage.trim()) {
+        try {
+          await sendStatusNotification(
+            projectId,
+            selectedFine.userId,
+            'New Message from Admin',
+            `You have a new message about your fine (${selectedFine.reason}): ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'رسالة جديدة من الإدارة',
+            `لديك رسالة جديدة بخصوص غرامتك (${selectedFine.reason}): ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'alert'
+          );
+          console.log('Chat message notification sent');
+        } catch (notifError) {
+          console.warn('Failed to send chat notification:', notifError);
+        }
+      }
+      
       setNewMessage('');
       removeSelectedImage();
 

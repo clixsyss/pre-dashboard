@@ -168,6 +168,25 @@ const ServiceBookingsManagement = ({ projectId }) => {
         updatedAt: serverTimestamp()
       });
 
+      // Send notification to user about new message
+      if (selectedBooking?.userId) {
+        try {
+          const serviceName = selectedBooking.serviceName || 'your service booking';
+          await sendStatusNotification(
+            projectId,
+            selectedBooking.userId,
+            'New Message from Admin',
+            `You have a new message about your service booking for "${serviceName}": ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'رسالة جديدة من الإدارة',
+            `لديك رسالة جديدة بخصوص حجز خدمتك لـ "${serviceName}": ${newMessage.trim().substring(0, 100)}${newMessage.trim().length > 100 ? '...' : ''}`,
+            'alert'
+          );
+          console.log('Chat message notification sent');
+        } catch (notifError) {
+          console.warn('Failed to send chat notification:', notifError);
+        }
+      }
+
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
