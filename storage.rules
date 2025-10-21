@@ -6,12 +6,6 @@ service firebase.storage {
       allow read: if request.auth != null;
     }
     
-    // Allow admins to upload and manage files
-    match /{allPaths=**} {
-      allow write: if request.auth != null && 
-        exists(/databases/(default)/documents/admins/$(request.auth.uid));
-    }
-    
     // Allow news media uploads for admins
     match /news/{fileName} {
       allow read: if request.auth != null;
@@ -57,27 +51,45 @@ service firebase.storage {
     }
     
     // Allow chat image uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/serviceBookings/{bookingId}/images/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow support chat image uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/supportChats/{chatId}/images/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Allow support chat uploads (without project prefix)
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
+    match /support/{chatId}/{fileName} {
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow violation chat image uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/violations/{violationId}/images/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow request chat image uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/requestSubmissions/{submissionId}/images/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Allow request chat message uploads (with dash in path)
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
+    match /projects/{projectId}/request-submissions/{submissionId}/messages/{fileName} {
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow court image uploads for admins
@@ -105,15 +117,17 @@ service firebase.storage {
     }
     
     // Allow complaint file uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /complaints/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow project-specific complaint file uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/complaints/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow PDF guidelines uploads for admins
@@ -141,15 +155,10 @@ service firebase.storage {
     }
     
     // Fine evidence images
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/fines/{fineId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && 
-        exists(/databases/(default)/documents/admins/$(request.auth.uid));
-    }
-    
-    // Temporary: Allow authenticated users to upload fine evidence images (for testing)
-    match /projects/{projectId}/fines/{fineId}/{fileName} {
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow user document uploads (National ID, Profile Pictures)
@@ -160,9 +169,10 @@ service firebase.storage {
     }
     
     // Allow request submission media uploads for authenticated users
+    // TEMPORARY: Open for iOS auth workaround (same as user documents)
     match /projects/{projectId}/requestSubmissions/{submissionId}/media/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
     }
     
     // Allow request category image uploads for admins

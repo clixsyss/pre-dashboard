@@ -558,18 +558,6 @@ service cloud.firestore {
       allow list: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Push Notifications collection - allow admins to create and read
-    match /pushNotifications/{notificationId} {
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-    
-    // Allow listing push notifications
-    match /pushNotifications {
-      allow list: if request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-    
     // Pending Admins collection - allow anyone to create (for registration)
     // Allow authenticated users to read (for status checking)
     // Only approved admins can update/delete (for approval process)
@@ -750,7 +738,7 @@ service cloud.firestore {
          request.auth != null);
     }
 
-    // GUEST PASSES COLLECTION - Allow authenticated users to create and manage guest passes
+    // GUEST PASSES COLLECTION - Legacy (for backward compatibility)
     match /guestPasses/{passId} {
       allow read, write: if request.auth != null && 
         (resource == null || resource.data.userId == request.auth.uid || 
@@ -806,6 +794,27 @@ service cloud.firestore {
     // Allow listing user notification read status
     match /users/{userId}/notificationReadStatus {
       allow list: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // PUSH NOTIFICATIONS QUEUE - Allow admins to create notification records
+    // Cloud Functions will process the queue and actually send the notifications
+    match /pushNotifications/{notificationId} {
+      // Allow admins to create notification records for the queue
+      allow create: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Allow reading for debugging (admins only)
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Only Cloud Functions can update/delete (no client write access for security)
+      allow update, delete: if false;
+    }
+    
+    // Allow listing push notifications (admins only, for debugging)
+    match /pushNotifications {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
   }
 }
