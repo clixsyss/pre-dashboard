@@ -35,7 +35,8 @@ const ComplaintsManagement = ({ projectId }) => {
     fetchComplaints,
     fetchStats,
     setFilters,
-    deleteComplaint
+    deleteComplaint,
+    updateComplaintStatus
   } = useComplaintStore();
 
   const [showFilters, setShowFilters] = useState(false);
@@ -45,6 +46,7 @@ const ComplaintsManagement = ({ projectId }) => {
   const [userDetails, setUserDetails] = useState(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
 
   useEffect(() => {
     if (projectId) {
@@ -52,6 +54,18 @@ const ComplaintsManagement = ({ projectId }) => {
       fetchStats(projectId);
     }
   }, [projectId, fetchComplaints, fetchStats]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (statusDropdownOpen && !event.target.closest('.relative.inline-block')) {
+        setStatusDropdownOpen(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [statusDropdownOpen]);
 
   const handleFilterChange = (key, value) => {
     setFilters({ [key]: value });
@@ -101,6 +115,24 @@ const ComplaintsManagement = ({ projectId }) => {
       }
     }
   };
+
+  const handleStatusUpdate = async (complaintId, newStatus) => {
+    try {
+      await updateComplaintStatus(projectId, complaintId, newStatus);
+      setStatusDropdownOpen(null);
+      // Refresh complaints to get updated data
+      await fetchComplaints(projectId);
+    } catch (error) {
+      console.error('Error updating complaint status:', error);
+      alert('Failed to update status. Please try again.');
+    }
+  };
+
+  const statusOptions = [
+    { value: 'Open', label: 'Open', color: 'blue', icon: '🆕' },
+    { value: 'In Progress', label: 'In Progress', color: 'orange', icon: '⏳' },
+    { value: 'Resolved', label: 'Resolved', color: 'green', icon: '✅' }
+  ];
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -179,13 +211,6 @@ const ComplaintsManagement = ({ projectId }) => {
           <h2 className="text-2xl font-bold text-gray-900">Complaints Management</h2>
           <p className="text-gray-600">Manage user complaints and support requests</p>
         </div>
-        <button
-          onClick={() => setShowComplaintModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          New Complaint
-        </button>
       </div>
 
       {/* Stats Cards */}
@@ -279,10 +304,9 @@ const ComplaintsManagement = ({ projectId }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">All Statuses</option>
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
+                <option value="Open">🆕 Open</option>
+                <option value="In Progress">⏳ In Progress</option>
+                <option value="Resolved">✅ Resolved</option>
               </select>
             </div>
 
@@ -384,11 +408,43 @@ const ComplaintsManagement = ({ projectId }) => {
                         <div className="text-sm text-gray-900">{complaint.userId}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(complaint.status)}`}>
-                        {getStatusIcon(complaint.status)}
-                        <span className="ml-1">{complaint.status}</span>
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap relative">
+                      <div className="relative inline-block">
+                        <button
+                          onClick={() => setStatusDropdownOpen(statusDropdownOpen === complaint.id ? null : complaint.id)}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${getStatusColor(complaint.status)} hover:shadow-md`}
+                          title="Click to change status"
+                        >
+                          <span className="mr-1.5">
+                            {statusOptions.find(s => s.value === complaint.status)?.icon || '📋'}
+                          </span>
+                          <span>{complaint.status}</span>
+                          <ChevronDown className="w-3 h-3 ml-1.5" />
+                        </button>
+                        
+                        {statusDropdownOpen === complaint.id && (
+                          <div className="absolute z-50 mt-2 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                            <div className="py-1">
+                              {statusOptions.map((option) => (
+                                <button
+                                  key={option.value}
+                                  onClick={() => handleStatusUpdate(complaint.id, option.value)}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center transition-colors ${
+                                    complaint.status === option.value ? 'bg-gray-50 font-medium' : ''
+                                  }`}
+                                  disabled={complaint.status === option.value}
+                                >
+                                  <span className="mr-2">{option.icon}</span>
+                                  <span>{option.label}</span>
+                                  {complaint.status === option.value && (
+                                    <CheckCircle className="w-4 h-4 ml-auto text-green-500" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(complaint.priority)}`}>
@@ -540,7 +596,7 @@ const ComplaintDetailModal = ({ complaint, projectId, onClose, userDetails, show
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
       <div className="bg-white rounded-lg max-w-6xl w-full h-[90vh] flex flex-col">
         {/* Header */}
         <div className="relative px-6 py-4 border-b border-gray-200 bg-white">

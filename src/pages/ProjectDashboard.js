@@ -25,6 +25,7 @@ import {
   ShoppingCart,
   X,
   MessageCircle,
+  MessageSquare,
   Wrench,
   Menu,
   Bell,
@@ -51,6 +52,7 @@ import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
 import ComplaintsManagement from '../components/ComplaintsManagement';
+import ComplaintCategoriesManagement from '../components/ComplaintCategoriesManagement';
 import ServicesManagement from '../components/ServicesManagement';
 import RequestsManagement from '../components/RequestsManagement';
 import ServiceBookingsManagement from '../components/ServiceBookingsManagement';
@@ -84,6 +86,7 @@ const ProjectDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
+  const [complaintsSubTab, setComplaintsSubTab] = useState('complaints');
   // Notification counts are now memoized for better performance
   
   // Data state for notification counts and comprehensive analytics
@@ -653,7 +656,6 @@ const ProjectDashboard = () => {
   }, [
     pendingUsersCount, 
     pendingServiceRequestsCount, 
-    upcomingBookingsCount, 
     pendingOrdersCount, 
     unreadNotificationsCount, 
     openComplaintsCount, 
@@ -2507,20 +2509,22 @@ const ProjectDashboard = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleBackToProjects}
-              className="p-2 rounded-lg"
+                className="p-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition-colors"
+                title="Back to Projects List"
               >
-              <ArrowLeft className="h-5 w-5 text-white" />
+                <ArrowLeft className="h-5 w-5 text-white" />
               </button>
               <div>
-              <h1 className="text-2xl font-bold text-white">{project?.name || 'Loading...'}</h1>
-                </div>
+                <h1 className="text-2xl font-bold text-white">{project?.name || 'Loading...'}</h1>
               </div>
+            </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="p-2 rounded-xl text-white hover:bg-white hover:bg-opacity-20 transition-colors"
+            title="Close Sidebar"
           >
             <X className="h-6 w-6" />
-              </button>
+          </button>
       </div>
 
         <nav className="mt-10 px-6 overflow-y-auto h-full pb-32">
@@ -2589,6 +2593,7 @@ const ProjectDashboard = () => {
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                title={sidebarOpen ? "Close Navigation Menu" : "Open Navigation Menu"}
               >
                 <Menu className="h-7 w-7" />
               </button>
@@ -2640,7 +2645,10 @@ const ProjectDashboard = () => {
                   </span>
                 )}
               </button>
-              <button className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+              <button 
+                className="p-3 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                title="Project Settings"
+              >
                 <Settings className="h-6 w-6" />
               </button>
             </div>
@@ -2655,7 +2663,11 @@ const ProjectDashboard = () => {
             {/* Hero Stats - Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Users Overview */}
-              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg border-2 border-red-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('users')}>
+              <div 
+                className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg border-2 border-red-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" 
+                onClick={() => handleTabChange('users')}
+                title="Click to manage users"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-red-700 uppercase tracking-wide">Users</p>
@@ -2680,7 +2692,11 @@ const ProjectDashboard = () => {
               </div>
 
               {/* Bookings Overview */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border-2 border-blue-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('bookings')}>
+              <div 
+                className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border-2 border-blue-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" 
+                onClick={() => handleTabChange('bookings')}
+                title="Click to manage bookings"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Bookings</p>
@@ -2707,7 +2723,11 @@ const ProjectDashboard = () => {
               </div>
 
               {/* Orders Overview */}
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg border-2 border-green-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('orders')}>
+              <div 
+                className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg border-2 border-green-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" 
+                onClick={() => handleTabChange('orders')}
+                title="Click to manage orders"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Orders</p>
@@ -2732,7 +2752,11 @@ const ProjectDashboard = () => {
               </div>
 
               {/* Support Overview */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg border-2 border-purple-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" onClick={() => handleTabChange('complaints')}>
+              <div 
+                className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg border-2 border-purple-200 p-6 hover:shadow-xl transition-all hover:scale-105 cursor-pointer" 
+                onClick={() => handleTabChange('complaints')}
+                title="Click to view support & complaints"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-purple-700 uppercase tracking-wide">Support</p>
@@ -2861,8 +2885,9 @@ const ProjectDashboard = () => {
                     <button
                   onClick={() => handleTabChange('bookings')}
                   className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-lg hover:bg-blue-200 transition-colors"
+                  title="View all bookings in detail"
                     >
-                  View All
+                  View All Bookings
                 </button>
                       </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2933,9 +2958,10 @@ const ProjectDashboard = () => {
                 <button 
                   onClick={() => handleTabChange('orders')}
                   className="px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-lg hover:bg-green-200 transition-colors"
+                  title="View all orders in detail"
                 >
-                  View Orders
-                    </button>
+                  View All Orders
+                </button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-lg p-4 text-center border-2 border-green-200">
@@ -2992,7 +3018,12 @@ const ProjectDashboard = () => {
                       );
                       
                       return (
-                        <div key={store.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer" onClick={() => handleTabChange('store')}>
+                        <div 
+                          key={store.id} 
+                          className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all cursor-pointer" 
+                          onClick={() => handleTabChange('store')}
+                          title={`View ${store.name} store details`}
+                        >
                           <p className="text-sm font-semibold text-gray-900 truncate">{store.name}</p>
                           <div className="flex items-center justify-between mt-2">
                             <span className="text-xs text-gray-600">{storeOrders.length} orders</span>
@@ -3002,7 +3033,11 @@ const ProjectDashboard = () => {
                   );
                 })}
                     {stores.length > 4 && (
-                      <div className="bg-gray-100 rounded-lg p-3 border border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => handleTabChange('store')}>
+                      <div 
+                        className="bg-gray-100 rounded-lg p-3 border border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors" 
+                        onClick={() => handleTabChange('store')}
+                        title="View all stores"
+                      >
                         <p className="text-sm font-bold text-gray-600">+{stores.length - 4} more</p>
               </div>
                     )}
@@ -3214,7 +3249,11 @@ const ProjectDashboard = () => {
                 </div>
               <div className="space-y-3">
                   {/* Users System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('users')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('users')}
+                    title="Click to manage users"
+                  >
                     <div className="p-2 bg-red-100 rounded-lg">
                       <Users className="h-5 w-5 text-red-600" />
                 </div>
@@ -3237,7 +3276,11 @@ const ProjectDashboard = () => {
                 </div>
 
                   {/* Bookings System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4 border-blue-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('bookings')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4 border-blue-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('bookings')}
+                    title="Click to manage bookings"
+                  >
                     <div className="p-2 bg-blue-100 rounded-lg">
                       <Calendar className="h-5 w-5 text-blue-600" />
               </div>
@@ -3257,7 +3300,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Orders System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('orders')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-l-4 border-green-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('orders')}
+                    title="Click to manage e-commerce orders"
+                  >
                     <div className="p-2 bg-green-100 rounded-lg">
                       <ShoppingCart className="h-5 w-5 text-green-600" />
                     </div>
@@ -3277,7 +3324,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Requests System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-cyan-50 to-teal-50 rounded-lg border-l-4 border-cyan-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('requests')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-cyan-50 to-teal-50 rounded-lg border-l-4 border-cyan-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('requests')}
+                    title="Click to manage user requests"
+                  >
                     <div className="p-2 bg-cyan-100 rounded-lg">
                       <FileText className="h-5 w-5 text-cyan-600" />
                     </div>
@@ -3298,7 +3349,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Communications */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('events')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-l-4 border-purple-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('events')}
+                    title="Click to manage notifications & communications"
+                  >
                     <div className="p-2 bg-purple-100 rounded-lg">
                       <Target className="h-5 w-5 text-purple-600" />
                     </div>
@@ -3318,7 +3373,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Support System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border-l-4 border-orange-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('complaints')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border-l-4 border-orange-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('complaints')}
+                    title="Click to manage support tickets & complaints"
+                  >
                     <div className="p-2 bg-orange-100 rounded-lg">
                       <MessageCircle className="h-5 w-5 text-orange-600" />
                     </div>
@@ -3343,7 +3402,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Security System */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg border-l-4 border-slate-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('fines')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg border-l-4 border-slate-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('fines')}
+                    title="Click to manage security, fines & gate passes"
+                  >
                     <div className="p-2 bg-slate-100 rounded-lg">
                       <Shield className="h-5 w-5 text-slate-600" />
                     </div>
@@ -3363,7 +3426,11 @@ const ProjectDashboard = () => {
                   </div>
 
                   {/* Facilities */}
-                  <div className="flex items-start p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg border-l-4 border-indigo-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('courts')}>
+                  <div 
+                    className="flex items-start p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg border-l-4 border-indigo-500 hover:shadow-md transition-all cursor-pointer" 
+                    onClick={() => handleTabChange('courts')}
+                    title="Click to manage sports facilities"
+                  >
                     <div className="p-2 bg-indigo-100 rounded-lg">
                       <MapPin className="h-5 w-5 text-indigo-600" />
                     </div>
@@ -3378,7 +3445,11 @@ const ProjectDashboard = () => {
 
                   {/* Admin Accounts - Super Admin or Full Access Only */}
                   {(isSuperAdmin() || currentAdmin?.accountType === 'full_access') && (
-                    <div className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" onClick={() => handleTabChange('admins')}>
+                    <div 
+                      className="flex items-start p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-all cursor-pointer" 
+                      onClick={() => handleTabChange('admins')}
+                      title="Click to manage admin accounts"
+                    >
                       <div className="p-2 bg-red-100 rounded-lg">
                         <UserPlus className="h-5 w-5 text-red-600" />
                       </div>
@@ -3656,7 +3727,11 @@ const ProjectDashboard = () => {
               </div>
 
               {/* Admin Accounts */}
-              <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5 hover:shadow-lg transition-all cursor-pointer" onClick={() => handleTabChange('admins')}>
+              <div 
+                className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5 hover:shadow-lg transition-all cursor-pointer" 
+                onClick={() => handleTabChange('admins')}
+                title="Click to manage admin accounts & permissions"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <div className="p-3 bg-red-100 rounded-xl">
                     <UserPlus className="h-7 w-7 text-red-600" />
@@ -4004,10 +4079,11 @@ const ProjectDashboard = () => {
                     <PermissionGate entity="users" action="create">
               <button 
                 onClick={() => setShowAddUserModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                title="Create a new user account for this project"
               >
-                <Plus className="h-4 w-4 mr-2 inline" />
-                Add User
+                <Plus className="h-4 w-4 mr-2" />
+                Add New User
               </button>
                     </PermissionGate>
                   </div>
@@ -4176,10 +4252,11 @@ const ProjectDashboard = () => {
                         setUserStatusFilter('all');
                         setMigrationStatusFilter('all');
                       }}
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                      className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center font-medium"
+                      title="Reset all filters to show all users"
                     >
                       <X className="h-3 w-3 mr-1" />
-                      Clear Filters
+                      Clear All Filters
                     </button>
                   )}
                 </div>
@@ -4362,14 +4439,15 @@ const ProjectDashboard = () => {
                                 )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-1">
                                   <PermissionGate entity="users" action="read">
                               <button
                                 onClick={() => handleUserAction('view', user)}
-                                className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                      title="View Details"
+                                className="group relative text-blue-600 hover:text-blue-900 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                                      title="View user details and full profile"
                               >
                                 <Eye className="h-4 w-4" />
+                                <span className="text-xs font-medium hidden xl:inline">View</span>
                               </button>
                                   </PermissionGate>
                                   
@@ -4378,12 +4456,13 @@ const ProjectDashboard = () => {
                                     <PermissionGate entity="users" action="write">
                                       <button
                                         onClick={() => handleUserAction('resend_email', user)}
-                                        className="text-purple-600 hover:text-purple-900 p-2 rounded-lg hover:bg-purple-50 transition-colors"
-                                        title="Resend Password Setup Email"
+                                        className="group relative text-purple-600 hover:text-purple-900 px-3 py-2 rounded-lg hover:bg-purple-50 transition-colors flex items-center gap-1 animate-pulse"
+                                        title="Resend password setup email to user"
                                       >
                                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                         </svg>
+                                        <span className="text-xs font-medium hidden xl:inline">Resend</span>
                                       </button>
                                     </PermissionGate>
                                   )}
@@ -4394,19 +4473,21 @@ const ProjectDashboard = () => {
                                       <PermissionGate entity="users" action="write">
                                         <button
                                           onClick={() => handleUserAction('approve', user)}
-                                          className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                          title="Approve User"
+                                          className="group relative text-green-600 hover:text-green-900 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                                          title="Approve this user's registration"
                                         >
                                           <UserCheck className="h-4 w-4" />
+                                          <span className="text-xs font-medium hidden xl:inline">Approve</span>
                                         </button>
                                       </PermissionGate>
                                       <PermissionGate entity="users" action="write">
                                         <button
                                           onClick={() => handleUserAction('reject', user)}
-                                          className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                          title="Reject User"
+                                          className="group relative text-red-600 hover:text-red-900 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
+                                          title="Reject this user's registration"
                                         >
                                           <UserX className="h-4 w-4" />
+                                          <span className="text-xs font-medium hidden xl:inline">Reject</span>
                                         </button>
                                       </PermissionGate>
                                     </>
@@ -4418,30 +4499,33 @@ const ProjectDashboard = () => {
                                       <PermissionGate entity="users" action="write">
                               <button
                                 onClick={() => handleUserAction('edit', user)}
-                                className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                          title="Edit User"
+                                className="group relative text-green-600 hover:text-green-900 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                                          title="Edit user information"
                               >
                                 <Edit className="h-4 w-4" />
+                                <span className="text-xs font-medium hidden xl:inline">Edit</span>
                               </button>
                                       </PermissionGate>
                                       {user.isSuspended ? (
                                         <PermissionGate entity="users" action="write">
                               <button
                                             onClick={() => handleUserAction('unsuspend', user)}
-                                            className="text-green-600 hover:text-green-900 p-2 rounded-lg hover:bg-green-50 transition-colors"
-                                            title="Unsuspend User"
+                                            className="group relative text-green-600 hover:text-green-900 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                                            title="Restore user account access"
                                           >
                                             <UserCheck className="h-4 w-4" />
+                                            <span className="text-xs font-medium hidden xl:inline">Unsuspend</span>
                                           </button>
                                         </PermissionGate>
                                       ) : (
                                         <PermissionGate entity="users" action="write">
                                           <button
                                             onClick={() => handleUserAction('suspend', user)}
-                                            className="text-orange-600 hover:text-orange-900 p-2 rounded-lg hover:bg-orange-50 transition-colors"
-                                            title="Suspend User"
+                                            className="group relative text-orange-600 hover:text-orange-900 px-3 py-2 rounded-lg hover:bg-orange-50 transition-colors flex items-center gap-1"
+                                            title="Temporarily or permanently suspend user"
                                           >
                                             <UserX className="h-4 w-4" />
+                                            <span className="text-xs font-medium hidden xl:inline">Suspend</span>
                                           </button>
                                         </PermissionGate>
                                       )}
@@ -4451,10 +4535,11 @@ const ProjectDashboard = () => {
                                   <PermissionGate entity="users" action="delete">
                                     <button
                                       onClick={() => handleUserAction('remove', user)}
-                                className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                      title="Remove from Project"
+                                className="group relative text-red-600 hover:text-red-900 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
+                                      title="Remove user from this project"
                               >
                                 <Trash2 className="h-4 w-4" />
+                                <span className="text-xs font-medium hidden xl:inline">Remove</span>
                               </button>
                                   </PermissionGate>
                             </div>
@@ -4763,16 +4848,21 @@ const ProjectDashboard = () => {
               <div className="flex space-x-2">
                 <button
                   onClick={refreshAllData}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                  title="Refresh all bookings data"
                 >
-                  <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Refresh
+                  Refresh Data
                 </button>
 
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <Plus className="h-4 w-4 mr-2 inline" />
+                <button 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                  title="Create a new booking (coming soon)"
+                  disabled
+                >
+                  <Plus className="h-4 w-4 mr-2" />
                   New Booking
                 </button>
               </div>
@@ -5055,22 +5145,24 @@ const ProjectDashboard = () => {
                                 <div className="flex items-center space-x-2">
                                   <button
                                     onClick={() => handleViewBooking(booking)}
-                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                    title="View Details"
+                                    className="group relative text-blue-600 hover:text-blue-900 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                                    title="View full booking details"
                                   >
                                     <Eye className="h-4 w-4" />
+                                    <span className="text-xs font-medium hidden xl:inline">View</span>
                                   </button>
 
                                   {/* Status Change Dropdown */}
                                   <select
                                     value={booking.status || 'pending'}
                                     onChange={(e) => handleStatusChange(booking.id, e.target.value)}
-                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+                                    title="Update booking status"
                                   >
-                                    <option value="pending">Pending</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                    <option value="completed">Completed</option>
+                                    <option value="pending">⏳ Pending</option>
+                                    <option value="confirmed">✅ Confirmed</option>
+                                    <option value="cancelled">❌ Cancelled</option>
+                                    <option value="completed">✔️ Completed</option>
                                   </select>
                                 </div>
                               </td>
@@ -5220,10 +5312,11 @@ const ProjectDashboard = () => {
                                 <div className="flex items-center space-x-2">
                                   <button
                                     onClick={() => handleViewBooking(booking)}
-                                    className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                    title="View Details"
+                                    className="group relative text-blue-600 hover:text-blue-900 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                                    title="View full booking details and history"
                                   >
                                     <Eye className="h-4 w-4" />
+                                    <span className="text-xs font-medium hidden xl:inline">View</span>
                                   </button>
 
                                   {/* Status Change Dropdown */}
@@ -5231,11 +5324,12 @@ const ProjectDashboard = () => {
                                     value={booking.status || 'pending'}
                                     onChange={(e) => handleStatusChange(booking.id, e.target.value)}
                                     className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    title="Update booking status"
                                   >
-                                    <option value="pending">Pending</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                    <option value="completed">Completed</option>
+                                    <option value="pending">⏳ Pending</option>
+                                    <option value="confirmed">✅ Confirmed</option>
+                                    <option value="cancelled">❌ Cancelled</option>
+                                    <option value="completed">✔️ Completed</option>
                                   </select>
                                 </div>
                               </td>
@@ -5406,7 +5500,62 @@ const ProjectDashboard = () => {
 
             {activeTab === 'complaints' && (
               <PermissionGate entity="complaints" action="read" showMessage={true}>
-                <ComplaintsManagement projectId={projectId} />
+                <div className="services-management">
+                  {/* Complaints Header */}
+                  <div className="page-header bg-gradient-to-r from-red-600 to-red-700 text-white">
+                    <div className="header-content">
+                      <div className="header-left">
+                        <div className="header-icon">
+                          <MessageSquare className="h-6 w-6" />
+                        </div>
+                        <div className="header-text">
+                          <h1>Complaints Management</h1>
+                          <p>Manage complaint categories and user complaints</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Complaints Navigation Cards */}
+                  <div className="services-nav-grid">
+                    <div 
+                      className={`nav-card ${complaintsSubTab === 'complaints' ? 'active' : ''}`}
+                      onClick={() => setComplaintsSubTab('complaints')}
+                    >
+                      <div className="nav-card-icon">
+                        <MessageSquare className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>User Complaints</h3>
+                        <p>View and manage user complaints</p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`nav-card ${complaintsSubTab === 'categories' ? 'active' : ''}`}
+                      onClick={() => setComplaintsSubTab('categories')}
+                    >
+                      <div className="nav-card-icon">
+                        <Building className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>Complaint Categories</h3>
+                        <p>Manage complaint categories and types</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Complaints Content */}
+                  <div className="services-content">
+                    {complaintsSubTab === 'complaints' && (
+                      <ComplaintsManagement projectId={projectId} />
+                    )}
+                    
+                    {complaintsSubTab === 'categories' && (
+                      <ComplaintCategoriesManagement projectId={projectId} />
+                    )}
+                  </div>
+                </div>
               </PermissionGate>
             )}
 
@@ -5582,12 +5731,13 @@ const ProjectDashboard = () => {
               <div className="flex space-x-2">
                 <button
                   onClick={refreshAllData}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                  title="Refresh all orders data"
                 >
-                  <svg className="h-4 w-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Refresh
+                  Refresh Data
                 </button>
               </div>
             </div>
@@ -5757,9 +5907,11 @@ const ProjectDashboard = () => {
                       setOrderDateFilter('all');
                       setOrderDateRange({ start: '', end: '' });
                     }}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center font-medium"
+                    title="Reset all filters to show all orders"
                   >
-                    Clear Filters
+                    <X className="h-4 w-4 mr-2" />
+                    Clear All Filters
                   </button>
                 )}
               </div>
@@ -5897,10 +6049,11 @@ const ProjectDashboard = () => {
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleViewOrder(order)}
-                                className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                title="View Details"
+                                className="group relative text-blue-600 hover:text-blue-900 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                                title="View complete order details"
                               >
                                 <Eye className="h-4 w-4" />
+                                <span className="text-xs font-medium hidden xl:inline">View</span>
                               </button>
 
                               {/* Status Change Dropdown */}
@@ -5908,12 +6061,13 @@ const ProjectDashboard = () => {
                                 value={order.status || 'pending'}
                                 onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
                                 className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                title="Update order status and notify customer"
                               >
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
-                                <option value="shipped">Shipped</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="cancelled">Cancelled</option>
+                                <option value="pending">⏳ Pending</option>
+                                <option value="processing">🔄 Processing</option>
+                                <option value="shipped">🚚 Shipped</option>
+                                <option value="delivered">✅ Delivered</option>
+                                <option value="cancelled">❌ Cancelled</option>
                               </select>
                             </div>
                           </td>
@@ -6319,24 +6473,26 @@ const ProjectDashboard = () => {
                             handleConfirmBooking(selectedBookingForModal.id);
                             setIsBookingModalOpen(false);
                           }}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                          title="Approve this booking and notify the user"
                         >
                           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
-                          Confirm
+                          Confirm Booking
                         </button>
                         <button
                           onClick={() => {
                             handleCancelBooking(selectedBookingForModal.id);
                             setIsBookingModalOpen(false);
                           }}
-                          className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                          className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                          title="Cancel this booking and notify the user"
                         >
                           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
-                          Cancel
+                          Cancel Booking
                         </button>
                       </>
                     )}
@@ -6346,12 +6502,13 @@ const ProjectDashboard = () => {
                           handleCompleteBooking(selectedBookingForModal.id);
                           setIsBookingModalOpen(false);
                         }}
-                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+                        className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                        title="Mark this booking as completed"
                       >
                         <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Mark Complete
+                        Mark as Complete
                       </button>
                     )}
                   </div>
@@ -6400,8 +6557,10 @@ const ProjectDashboard = () => {
             <div className="flex items-center justify-end p-6 border-t border-gray-100">
               <button
                 onClick={() => setIsBookingModalOpen(false)}
-                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                title="Close this modal"
               >
+                <X className="h-4 w-4 mr-2" />
                 Close
               </button>
             </div>
@@ -6411,7 +6570,7 @@ const ProjectDashboard = () => {
 
       {/* Order Details Modal */}
       {isOrderModalOpen && selectedOrderForModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[75vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -6686,8 +6845,10 @@ const ProjectDashboard = () => {
             <div className="flex items-center justify-end p-6 border-t border-gray-100">
               <button
                 onClick={() => setIsOrderModalOpen(false)}
-                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                title="Close this modal"
               >
+                <X className="h-4 w-4 mr-2" />
                 Close
               </button>
             </div>
@@ -6697,7 +6858,7 @@ const ProjectDashboard = () => {
 
       {/* Store Details Modal */}
       {isStoreModalOpen && selectedStoreForModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
@@ -6898,8 +7059,10 @@ const ProjectDashboard = () => {
                             setStoreOrderDateFilter('all');
                             setStoreOrderDateRange({ start: '', end: '' });
                           }}
-                          className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                          className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center font-medium"
+                          title="Reset all filters to show all store orders"
                         >
+                          <X className="h-4 w-4 mr-1" />
                           Clear Filters
                         </button>
                       </div>
@@ -7103,21 +7266,23 @@ const ProjectDashboard = () => {
                                   <div className="flex items-center space-x-2">
                                     <button
                                       onClick={() => handleViewOrder(order)}
-                                      className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50 transition-colors"
-                                      title="View Details"
+                                      className="group relative text-blue-600 hover:text-blue-900 px-3 py-2 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-1"
+                                      title="View complete order details and customer info"
                                     >
                                       <Eye className="h-4 w-4" />
+                                      <span className="text-xs font-medium hidden xl:inline">View</span>
                                     </button>
                                     <select
                                       value={order.status || 'pending'}
                                       onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
                                       className="px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      title="Update order status - customer will be notified"
                                     >
-                                      <option value="pending">Pending</option>
-                                      <option value="processing">Processing</option>
-                                      <option value="shipped">Shipped</option>
-                                      <option value="delivered">Delivered</option>
-                                      <option value="cancelled">Cancelled</option>
+                                      <option value="pending">⏳ Pending</option>
+                                      <option value="processing">🔄 Processing</option>
+                                      <option value="shipped">🚚 Shipped</option>
+                                      <option value="delivered">✅ Delivered</option>
+                                      <option value="cancelled">❌ Cancelled</option>
                                     </select>
                                   </div>
                                 </td>
@@ -7223,8 +7388,10 @@ const ProjectDashboard = () => {
                 </div> */}
                 <button
                   onClick={() => setIsStoreModalOpen(false)}
-                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                  title="Close store details modal"
                 >
+                  <X className="h-4 w-4 mr-2" />
                   Close
                 </button>
               </div>
@@ -7235,7 +7402,7 @@ const ProjectDashboard = () => {
 
       {/* User Details Modal */}
       {showUserModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[75vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -8092,7 +8259,8 @@ const ProjectDashboard = () => {
                           handleApproveUser(selectedUser);
                           setShowUserModal(false);
                         }}
-                        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                        title="Approve this user's registration and grant access"
                       >
                         <UserCheck className="h-4 w-4 mr-2" />
                         Approve User
@@ -8104,7 +8272,8 @@ const ProjectDashboard = () => {
                           handleRejectUser(selectedUser);
                           setShowUserModal(false);
                         }}
-                        className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                        className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                        title="Reject this user's registration request"
                       >
                         <UserX className="h-4 w-4 mr-2" />
                         Reject User
@@ -8122,7 +8291,8 @@ const ProjectDashboard = () => {
                           setShowUserModal(false);
                           handleUserAction('edit', selectedUser);
                         }}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                        title="Edit user information and project details"
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Edit User
@@ -8135,10 +8305,11 @@ const ProjectDashboard = () => {
                             handleUnsuspendUser(selectedUser);
                             setShowUserModal(false);
                           }}
-                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center"
+                          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                          title="Restore user access and remove suspension"
                         >
                           <UserCheck className="h-4 w-4 mr-2" />
-                          Unsuspend
+                          Restore Access
                         </button>
                       </PermissionGate>
                     ) : (
@@ -8152,10 +8323,11 @@ const ProjectDashboard = () => {
                             setShowSuspendModal(true);
                             setShowUserModal(false);
                           }}
-                          className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center"
+                          className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                          title="Suspend user account temporarily or permanently"
                         >
                           <UserX className="h-4 w-4 mr-2" />
-                          Suspend
+                          Suspend Account
                         </button>
                       </PermissionGate>
                     )}
@@ -8165,8 +8337,10 @@ const ProjectDashboard = () => {
               
               <button
                 onClick={() => setShowUserModal(false)}
-                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-6 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+                title="Close user details modal"
               >
+                <X className="h-4 w-4 mr-2" />
                 Close
               </button>
             </div>
@@ -8176,7 +8350,7 @@ const ProjectDashboard = () => {
 
       {/* Suspend User Modal */}
       {showSuspendModal && userToSuspend && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -8268,15 +8442,19 @@ const ProjectDashboard = () => {
             <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-100">
               <button
                 onClick={() => setShowSuspendModal(false)}
-                className="px-4 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                className="px-4 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors flex items-center"
+                title="Cancel and close without suspending"
               >
+                <X className="h-4 w-4 mr-2" />
                 Cancel
               </button>
               <button
                 onClick={handleSuspendUser}
-                className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors"
+                className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                title="Confirm suspension with the specified reason and duration"
               >
-                Suspend User
+                <UserX className="h-4 w-4 mr-2" />
+                Confirm Suspension
               </button>
             </div>
           </div>
@@ -8285,7 +8463,7 @@ const ProjectDashboard = () => {
 
       {/* Edit User Modal */}
       {showEditUserModal && editUserData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
@@ -8629,14 +8807,17 @@ const ProjectDashboard = () => {
                       setEditBackIdPreview(null);
                     }}
                     disabled={editingUser || editUploadingFiles}
-                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    title="Cancel editing and close without saving"
                   >
+                    <X className="h-4 w-4 mr-2" />
                     Cancel
                   </button>
                   <button
                     onClick={handleEditUser}
                     disabled={editingUser || editUploadingFiles}
-                    className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-md hover:shadow-lg"
+                    title="Save all changes to user information"
                   >
                     {editingUser || editUploadingFiles ? (
                       <>
@@ -8648,8 +8829,10 @@ const ProjectDashboard = () => {
                       </>
                     ) : (
                       <>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Update User
+                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save Changes
                       </>
                     )}
                   </button>
@@ -8662,7 +8845,7 @@ const ProjectDashboard = () => {
 
       {/* Add User Modal */}
       {showAddUserModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
@@ -9092,14 +9275,17 @@ const ProjectDashboard = () => {
                       setBackIdPreview(null);
                     }}
                     disabled={addingUser || uploadingFiles}
-                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-2 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    title="Cancel and close without creating user"
                   >
+                    <X className="h-4 w-4 mr-2" />
                     Cancel
                   </button>
                   <button
                     onClick={handleAddNewUser}
                     disabled={addingUser || uploadingFiles}
-                    className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-md hover:shadow-lg"
+                    title="Create user account and send password setup email"
                   >
                     {addingUser || uploadingFiles ? (
                       <>
@@ -9111,8 +9297,8 @@ const ProjectDashboard = () => {
                       </>
                     ) : (
                       <>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create User
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Create User & Send Email
                       </>
                     )}
                   </button>
@@ -9125,7 +9311,7 @@ const ProjectDashboard = () => {
 
       {/* Family Member Assignment Modal */}
       {showFamilyMemberModal && selectedParentUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[75vh] overflow-hidden">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-pink-600 to-rose-600 p-6 text-white">
@@ -9282,8 +9468,10 @@ const ProjectDashboard = () => {
             <div className="bg-gray-50 p-4 flex justify-end border-t border-gray-200">
               <button
                 onClick={() => setShowFamilyMemberModal(false)}
-                className="px-6 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-6 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors flex items-center"
+                title="Close family member selection modal"
               >
+                <X className="h-4 w-4 mr-2" />
                 Close
               </button>
             </div>

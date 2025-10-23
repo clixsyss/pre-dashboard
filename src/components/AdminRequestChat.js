@@ -331,7 +331,7 @@ const AdminRequestChat = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal"
       onClick={(e) => {
         console.log('Main modal clicked, closing...');
         onBack();
@@ -566,7 +566,7 @@ const AdminRequestChat = ({
       {/* Invoice Creation Modal */}
       {showInvoiceModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 finesModal"
           onClick={(e) => {
             console.log('Invoice modal backdrop clicked, closing...');
             e.stopPropagation();
