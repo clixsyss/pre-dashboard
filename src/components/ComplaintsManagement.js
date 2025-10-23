@@ -3,12 +3,10 @@ import {
   MessageSquare,
   Filter,
   Search,
-  Plus,
   Eye,
   Trash2,
   User,
   Clock,
-  AlertCircle,
   CheckCircle,
   XCircle,
   ChevronDown,
@@ -21,7 +19,8 @@ import {
   MapPin,
   Activity,
   TrendingUp,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import useComplaintStore from '../stores/complaintStore';
 import { getComprehensiveUserDetails, formatUserForDisplay } from '../services/userService';
@@ -133,21 +132,6 @@ const ComplaintsManagement = ({ projectId }) => {
     { value: 'In Progress', label: 'In Progress', color: 'orange', icon: '⏳' },
     { value: 'Resolved', label: 'Resolved', color: 'green', icon: '✅' }
   ];
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'Open':
-        return <AlertCircle className="w-4 h-4 text-blue-500" />;
-      case 'In Progress':
-        return <Clock className="w-4 h-4 text-orange-500" />;
-      case 'Resolved':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'Closed':
-        return <XCircle className="w-4 h-4 text-gray-500" />;
-      default:
-        return <AlertCircle className="w-4 h-4 text-gray-500" />;
-    }
-  };
 
   const getStatusColor = (status) => {
     switch (status) {

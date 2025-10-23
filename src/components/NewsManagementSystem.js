@@ -8,7 +8,6 @@ import {
   Video, 
   Eye,
   EyeOff,
-  Tag,
   X,
   Save,
   Globe,
@@ -58,11 +57,12 @@ const NewsManagementSystem = ({ projectId }) => {
   const [groupedComments, setGroupedComments] = useState([]);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [currentSortOption, setCurrentSortOption] = useState('Most relevant');
+  const [newsCategories, setNewsCategories] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     excerpt: '',
-    category: 'general',
+    category: '',
     featured: false,
     isPublished: false,
     interactionsEnabled: true,
@@ -71,6 +71,27 @@ const NewsManagementSystem = ({ projectId }) => {
     linkUrl: '',
     linkTitle: ''
   });
+
+  const fetchCategories = useCallback(async () => {
+    if (!projectId) return;
+    
+    try {
+      const q = query(
+        collection(db, `projects/${projectId}/newsCategories`),
+        orderBy('displayOrder', 'asc')
+      );
+      const querySnapshot = await getDocs(q);
+      const cats = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setNewsCategories(cats.filter(c => c.isActive !== false));
+    } catch (error) {
+      console.error('Error fetching news categories:', error);
+      // Keep empty if fetch fails
+      setNewsCategories([]);
+    }
+  }, [projectId]);
 
   const fetchNews = useCallback(async () => {
     if (!projectId) return;
@@ -99,9 +120,10 @@ const NewsManagementSystem = ({ projectId }) => {
 
   useEffect(() => {
     if (projectId) {
+      fetchCategories();
       fetchNews();
     }
-  }, [projectId, fetchNews]);
+  }, [projectId, fetchCategories, fetchNews]);
 
   // Cleanup comments subscription on unmount
   useEffect(() => {
@@ -352,14 +374,21 @@ const NewsManagementSystem = ({ projectId }) => {
     setEditingItem(null);
   };
 
-  const getCategoryColor = (category) => {
-    switch (category) {
-      case 'general': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'announcement': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'event': return 'bg-green-100 text-green-800 border-green-200';
-      case 'update': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
+  const getCategoryStyle = (categoryId) => {
+    const category = newsCategories.find(c => c.id === categoryId);
+    if (!category) return {};
+    
+    const color = category.color || '#6B7280';
+    return {
+      backgroundColor: `${color}20`,
+      color: color,
+      borderColor: `${color}50`
+    };
+  };
+
+  const getCategoryName = (categoryId) => {
+    const category = newsCategories.find(c => c.id === categoryId);
+    return category ? `${category.icon} ${category.name}` : categoryId;
   };
 
   // Comments functions
@@ -923,9 +952,11 @@ const NewsManagementSystem = ({ projectId }) => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(item.category)}`}>
-                        <Tag className="h-3 w-3 mr-1" />
-                        {item.category}
+                      <span 
+                        className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold border-2"
+                        style={getCategoryStyle(item.category)}
+                      >
+                        {getCategoryName(item.category)}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -1154,12 +1185,24 @@ const NewsManagementSystem = ({ projectId }) => {
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
                 >
-                  <option value="general">General</option>
-                  <option value="announcement">Announcement</option>
-                  <option value="event">Event</option>
-                  <option value="update">Update</option>
+                  <option value="">Select a category...</option>
+                  {newsCategories.length > 0 ? (
+                    newsCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.icon} {cat.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No categories available - create one first</option>
+                  )}
                 </select>
+                {newsCategories.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Please create news categories first in the Categories tab
+                  </p>
+                )}
               </div>
 
               {/* Link URL and Title */}

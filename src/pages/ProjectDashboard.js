@@ -39,6 +39,7 @@ import {
   UserPlus,
   Link2,
   Unlink,
+  Tag,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -51,6 +52,7 @@ import AcademiesManagement from '../components/AcademiesManagement';
 import StoreManagement from '../components/StoreManagement';
 import NotificationManagement from '../components/NotificationManagement';
 import NewsManagementSystem from '../components/NewsManagementSystem';
+import NewsCategoriesManagement from '../components/NewsCategoriesManagement';
 import ComplaintsManagement from '../components/ComplaintsManagement';
 import ComplaintCategoriesManagement from '../components/ComplaintCategoriesManagement';
 import ServicesManagement from '../components/ServicesManagement';
@@ -87,6 +89,7 @@ const ProjectDashboard = () => {
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
   const [complaintsSubTab, setComplaintsSubTab] = useState('complaints');
+  const [newsSubTab, setNewsSubTab] = useState('news');
   // Notification counts are now memoized for better performance
   
   // Data state for notification counts and comprehensive analytics
@@ -5378,7 +5381,62 @@ const ProjectDashboard = () => {
 
         {activeTab === 'news' && (
               <PermissionGate entity="news" action="read" showMessage={true}>
-          <NewsManagementSystem projectId={projectId} />
+                <div className="services-management">
+                  {/* News Header */}
+                  <div className="page-header bg-gradient-to-r from-red-600 to-red-700 text-white">
+                    <div className="header-content">
+                      <div className="header-left">
+                        <div className="header-icon">
+                          <Newspaper className="h-6 w-6" />
+                        </div>
+                        <div className="header-text">
+                          <h1>News Management</h1>
+                          <p>Manage news categories and posts</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* News Navigation Cards */}
+                  <div className="services-nav-grid">
+                    <div 
+                      className={`nav-card ${newsSubTab === 'news' ? 'active' : ''}`}
+                      onClick={() => setNewsSubTab('news')}
+                    >
+                      <div className="nav-card-icon">
+                        <Newspaper className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>News Posts</h3>
+                        <p>Create and manage news posts</p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`nav-card ${newsSubTab === 'categories' ? 'active' : ''}`}
+                      onClick={() => setNewsSubTab('categories')}
+                    >
+                      <div className="nav-card-icon">
+                        <Tag className="h-6 w-6" />
+                      </div>
+                      <div className="nav-card-content">
+                        <h3>News Categories</h3>
+                        <p>Manage news categories and types</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* News Content */}
+                  <div className="services-content">
+                    {newsSubTab === 'news' && (
+                      <NewsManagementSystem projectId={projectId} />
+                    )}
+                    
+                    {newsSubTab === 'categories' && (
+                      <NewsCategoriesManagement projectId={projectId} />
+                    )}
+                  </div>
+                </div>
               </PermissionGate>
             )}
 
