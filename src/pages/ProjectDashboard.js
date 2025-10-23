@@ -1563,7 +1563,6 @@ const ProjectDashboard = () => {
 
     try {
       const suspensionData = {
-        isSuspended: true,
         suspensionReason: suspensionReason.trim(),
         suspensionType: suspensionType,
         suspendedAt: new Date(),
@@ -1576,17 +1575,45 @@ const ProjectDashboard = () => {
         suspensionData.suspensionEndDate = endDate;
       }
 
-      // Update user in Firestore
+      // Get current user data
       const userRef = doc(db, 'users', userToSuspend.id);
-      await updateDoc(userRef, suspensionData);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+      
+      // Update the projects array to mark this specific project as suspended
+      const updatedProjects = (userData.projects || []).map(proj => {
+        if (proj.projectId === projectId) {
+          return {
+            ...proj,
+            isSuspended: true,
+            ...suspensionData
+          };
+        }
+        return proj;
+      });
+
+      // Update user in Firestore with project-specific suspension
+      await updateDoc(userRef, {
+        projects: updatedProjects,
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ User suspended for project:', projectId);
       
       // Update local state
       setProjectUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userToSuspend.id 
-            ? { ...user, ...suspensionData }
-            : user
-        )
+        prevUsers.map(user => {
+          if (user.id === userToSuspend.id) {
+            const userProjects = (user.projects || []).map(proj => {
+              if (proj.projectId === projectId) {
+                return { ...proj, isSuspended: true, ...suspensionData };
+              }
+              return proj;
+            });
+            return { ...user, projects: userProjects };
+          }
+          return user;
+        })
       );
 
       setShowSuspendModal(false);
@@ -1617,17 +1644,44 @@ const ProjectDashboard = () => {
         unsuspendedBy: currentAdmin?.uid || 'admin'
       };
 
-      // Update user in Firestore
+      // Get current user data
       const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, unsuspensionData);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+      
+      // Update the projects array to remove suspension for this specific project
+      const updatedProjects = (userData.projects || []).map(proj => {
+        if (proj.projectId === projectId) {
+          return {
+            ...proj,
+            ...unsuspensionData
+          };
+        }
+        return proj;
+      });
+
+      // Update user in Firestore with project-specific unsuspension
+      await updateDoc(userRef, {
+        projects: updatedProjects,
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ User unsuspended for project:', projectId);
       
       // Update local state
       setProjectUsers(prevUsers => 
-        prevUsers.map(u => 
-          u.id === user.id 
-            ? { ...u, ...unsuspensionData }
-            : u
-        )
+        prevUsers.map(u => {
+          if (u.id === user.id) {
+            const userProjects = (u.projects || []).map(proj => {
+              if (proj.projectId === projectId) {
+                return { ...proj, ...unsuspensionData };
+              }
+              return proj;
+            });
+            return { ...u, projects: userProjects };
+          }
+          return u;
+        })
       );
 
       // Refresh filtered users
@@ -4369,15 +4423,15 @@ const ProjectDashboard = () => {
                             <span className="capitalize">{userProject?.role || 'N/A'}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                                {user.isSuspended ? (
+                                {userProject?.isSuspended ? (
                                   <div className="flex items-center space-x-2">
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                       <UserX className="h-3 w-3 mr-1" />
                                       Suspended
                                     </span>
-                                    {user.suspensionType === 'temporary' && user.suspensionEndDate && (
+                                    {userProject.suspensionType === 'temporary' && userProject.suspensionEndDate && (
                                       <span className="text-xs text-gray-500">
-                                        Until {new Date(user.suspensionEndDate).toLocaleDateString()}
+                                        Until {new Date(userProject.suspensionEndDate).toLocaleDateString()}
                                       </span>
                                     )}
                                   </div>
@@ -4509,12 +4563,12 @@ const ProjectDashboard = () => {
                                 <span className="text-xs font-medium hidden xl:inline">Edit</span>
                               </button>
                                       </PermissionGate>
-                                      {user.isSuspended ? (
+                                      {userProject?.isSuspended ? (
                                         <PermissionGate entity="users" action="write">
                               <button
                                             onClick={() => handleUserAction('unsuspend', user)}
                                             className="group relative text-green-600 hover:text-green-900 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
-                                            title="Restore user account access"
+                                            title="Restore user account access for this project"
                                           >
                                             <UserCheck className="h-4 w-4" />
                                             <span className="text-xs font-medium hidden xl:inline">Unsuspend</span>
@@ -4525,7 +4579,7 @@ const ProjectDashboard = () => {
                                           <button
                                             onClick={() => handleUserAction('suspend', user)}
                                             className="group relative text-orange-600 hover:text-orange-900 px-3 py-2 rounded-lg hover:bg-orange-50 transition-colors flex items-center gap-1"
-                                            title="Temporarily or permanently suspend user"
+                                            title="Suspend user from this project only"
                                           >
                                             <UserX className="h-4 w-4" />
                                             <span className="text-xs font-medium hidden xl:inline">Suspend</span>
