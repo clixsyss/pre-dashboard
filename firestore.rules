@@ -840,6 +840,36 @@ service cloud.firestore {
       allow list: if request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
+    
+    // DEVICE KEY RESET REQUESTS - Allow users to request device key resets
+    // Users can create and read their own requests
+    // Admins can read all requests and update them (approve/reject)
+    match /deviceKeyResetRequests/{requestId} {
+      // Users can create their own reset requests
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Users can read their own requests
+      // Admins can read all requests
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      
+      // Only admins can update requests (for approval/rejection)
+      allow update: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Only admins can delete requests
+      allow delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing device key reset requests
+    // Users can only list their own
+    // Admins can list all
+    match /deviceKeyResetRequests {
+      allow list: if request.auth != null;
+    }
   }
 }
 

@@ -40,6 +40,7 @@ import {
   Link2,
   Unlink,
   Tag,
+  Smartphone,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -66,6 +67,7 @@ import FinesManagement from '../components/FinesManagement';
 import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
 import GuestPasses from './GuestPasses';
+import DeviceKeysManagement from '../components/DeviceKeysManagement';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -110,6 +112,7 @@ const ProjectDashboard = () => {
   const [serviceCategories, setServiceCategories] = useState([]);
   const [projectAdmins, setProjectAdmins] = useState([]);
   const [pendingAdminsCount, setPendingAdminsCount] = useState(0);
+  const [deviceResetRequests, setDeviceResetRequests] = useState([]);
   
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
@@ -293,7 +296,8 @@ const ProjectDashboard = () => {
         { id: 'fines', name: 'Fines & Violations', icon: AlertTriangle, description: 'Issue and manage user fines', permission: 'fines' },
         { id: 'guards', name: 'Guards', icon: Shield, description: 'Guard account management', permission: 'guards' },
         { id: 'support', name: 'Support', icon: MessageCircle, description: 'Customer support management', permission: 'support' },
-        { id: 'guestpasses', name: 'Guest Passes', icon: UserX, description: 'Manage guest passes and user limits', permission: 'guest_passes' }
+        { id: 'guestpasses', name: 'Guest Passes', icon: UserX, description: 'Manage guest passes and user limits', permission: 'guest_passes' },
+        { id: 'device_keys', name: 'Device Keys', icon: Smartphone, description: 'Manage device restrictions and reset requests', permission: 'device_keys' }
       ]
     },
     {
@@ -646,13 +650,17 @@ const ProjectDashboard = () => {
       case 'admins':
         // Show pending admin requests (super admins only)
         return isSuperAdmin() ? pendingAdminsCount : 0;
+      case 'device_keys':
+        // Show pending device reset requests
+        return deviceResetRequests?.filter(r => r.status === 'pending').length || 0;
       case 'dashboard':
         // Dashboard shows total pending items requiring action
         return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
                openComplaintsCount + pendingFinesCount + 
                (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
                openSupportTicketsCount +
-               (isSuperAdmin() ? pendingAdminsCount : 0);
+               (isSuperAdmin() ? pendingAdminsCount : 0) +
+               (deviceResetRequests?.filter(r => r.status === 'pending').length || 0);
       default:
         return 0;
     }
@@ -672,6 +680,7 @@ const ProjectDashboard = () => {
     adsItems,
     guards,
     pendingAdminsCount,
+    deviceResetRequests,
     isSuperAdmin
   ]);
 
@@ -964,6 +973,27 @@ const ProjectDashboard = () => {
     }
   }, [setPendingAdminsCount]);
 
+  // Fetch device reset requests
+  const fetchDeviceResetRequests = useCallback(async (projectId) => {
+    try {
+      const requestsSnapshot = await getDocs(
+        query(
+          collection(db, 'deviceResetRequests'),
+          where('projectId', '==', projectId),
+          orderBy('timestamp', 'desc')
+        )
+      );
+      const requestsData = requestsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setDeviceResetRequests(requestsData);
+    } catch (error) {
+      console.error('Error fetching device reset requests:', error);
+      setDeviceResetRequests([]);
+    }
+  }, []);
+
   // Load all data on mount for best user experience
   useEffect(() => {
     if (projectId && dataLoaded) {
@@ -989,7 +1019,8 @@ const ProjectDashboard = () => {
             fetchStores(projectId),
             fetchServiceCategories(projectId),
             fetchProjectAdmins(projectId),
-            fetchPendingAdmins()
+            fetchPendingAdmins(),
+            fetchDeviceResetRequests(projectId)
           ]);
           console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
@@ -999,7 +1030,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins]);
+  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests]);
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
@@ -1025,13 +1056,14 @@ const ProjectDashboard = () => {
         fetchStores(projectId),
         fetchServiceCategories(projectId),
         fetchProjectAdmins(projectId),
-        fetchPendingAdmins()
+        fetchPendingAdmins(),
+        fetchDeviceResetRequests(projectId)
       ]);
       console.log('✅ All data refreshed successfully - Dashboard updated!');
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
-  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins]);
+  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests]);
 
   // Reset filters when switching tabs (no data fetching needed)
   useEffect(() => {
@@ -2674,7 +2706,7 @@ const ProjectDashboard = () => {
 
             <div className="flex items-center space-x-4">
               {/* Total Pending Items Indicator */}
-              {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0)) > 0 && (
+              {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0) + (deviceResetRequests?.filter(r => r.status === 'pending').length || 0)) > 0 && (
                 <button 
                   onClick={() => handleTabChange('dashboard')}
                   className="hidden md:flex items-center space-x-2 px-4 py-2 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 transition-all hover:scale-105"
@@ -2684,7 +2716,7 @@ const ProjectDashboard = () => {
                   <div className="text-left">
                     <p className="text-xs font-medium text-red-600">Pending Actions</p>
                     <p className="text-sm font-bold text-red-700">
-                      {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0)} Items
+                      {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0) + (deviceResetRequests?.filter(r => r.status === 'pending').length || 0)} Items
                     </p>
                   </div>
                 </button>
@@ -3113,7 +3145,7 @@ const ProjectDashboard = () => {
                     Pending Actions
                   </h3>
                   <span className="px-3 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">
-                    {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0)} Total
+                    {pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0) + (deviceResetRequests?.filter(r => r.status === 'pending').length || 0)} Total
                   </span>
                 </div>
                 <div className="space-y-3">
@@ -3277,7 +3309,27 @@ const ProjectDashboard = () => {
                     </button>
                   )}
 
-                  {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0)) === 0 && (
+                  {deviceResetRequests?.filter(r => r.status === 'pending').length > 0 && (
+                    <button 
+                      onClick={() => handleTabChange('device_keys')}
+                      className="w-full flex items-center justify-between p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <div className="p-2 bg-indigo-100 rounded-lg">
+                          <Smartphone className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <div className="ml-3 text-left">
+                          <p className="text-sm font-bold text-gray-900">Device Reset Requests</p>
+                          <p className="text-xs text-gray-600">Users requesting new device access</p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-indigo-600 text-white text-sm font-bold rounded-full animate-pulse">
+                        {deviceResetRequests.filter(r => r.status === 'pending').length}
+                      </span>
+                    </button>
+                  )}
+
+                  {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + (requestSubmissions?.filter(r => r.status === 'pending').length || 0) + (isSuperAdmin() ? pendingAdminsCount : 0) + (deviceResetRequests?.filter(r => r.status === 'pending').length || 0)) === 0 && (
                     <div className="text-center py-8">
                       <div className="p-4 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center shadow-lg">
                         <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5705,6 +5757,12 @@ const ProjectDashboard = () => {
               <PermissionGate entity="guards" action="read" showMessage={true}>
                 <GuardsManagement projectId={projectId} />
               </PermissionGate>
+        )}
+
+        {activeTab === 'device_keys' && (
+          <PermissionGate entity="device_keys" action="read" showMessage={true}>
+            <DeviceKeysManagement projectId={projectId} />
+          </PermissionGate>
         )}
 
         {activeTab === 'admins' && (
