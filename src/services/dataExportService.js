@@ -36,6 +36,8 @@ class DataExportService {
   // Fetch user's gate passes
   async fetchUserGatePasses(projectId, userId) {
     try {
+      console.log(`Fetching gate passes for project: ${projectId}, user: ${userId}`);
+      
       const gatePassesQuery = query(
         collection(db, `projects/${projectId}/gatePasses`),
         where('userId', '==', userId),
@@ -43,7 +45,9 @@ class DataExportService {
       );
       
       const querySnapshot = await getDocs(gatePassesQuery);
-      return querySnapshot.docs.map(doc => ({
+      console.log(`Found ${querySnapshot.size} gate passes`);
+      
+      const gatePasses = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         // Convert timestamps to readable format
@@ -54,6 +58,9 @@ class DataExportService {
         entryTime: doc.data().entryTime,
         exitTime: doc.data().exitTime
       }));
+      
+      console.log('Gate passes data:', gatePasses);
+      return gatePasses;
     } catch (error) {
       console.error('Error fetching gate passes:', error);
       return [];
@@ -63,6 +70,8 @@ class DataExportService {
   // Fetch user's guest passes
   async fetchUserGuestPasses(projectId, userId) {
     try {
+      console.log(`Fetching guest passes for project: ${projectId}, user: ${userId}`);
+      
       const guestPassesQuery = query(
         collection(db, `projects/${projectId}/guestPasses`),
         where('userId', '==', userId),
@@ -70,7 +79,9 @@ class DataExportService {
       );
       
       const querySnapshot = await getDocs(guestPassesQuery);
-      return querySnapshot.docs.map(doc => ({
+      console.log(`Found ${querySnapshot.size} guest passes`);
+      
+      const guestPasses = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         // Convert timestamps to readable format
@@ -79,6 +90,9 @@ class DataExportService {
         validFrom: doc.data().validFrom,
         validUntil: doc.data().validUntil
       }));
+      
+      console.log('Guest passes data:', guestPasses);
+      return guestPasses;
     } catch (error) {
       console.error('Error fetching guest passes:', error);
       return [];
@@ -88,6 +102,8 @@ class DataExportService {
   // Fetch user's orders/purchases
   async fetchUserOrders(projectId, userId) {
     try {
+      console.log(`Fetching orders for project: ${projectId}, user: ${userId}`);
+      
       const ordersQuery = query(
         collection(db, `projects/${projectId}/orders`),
         where('userId', '==', userId),
@@ -95,7 +111,9 @@ class DataExportService {
       );
       
       const querySnapshot = await getDocs(ordersQuery);
-      return querySnapshot.docs.map(doc => ({
+      console.log(`Found ${querySnapshot.size} orders`);
+      
+      const orders = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         // Convert timestamps to readable format
@@ -105,6 +123,9 @@ class DataExportService {
         estimatedDelivery: doc.data().estimatedDelivery,
         actualDelivery: doc.data().actualDelivery
       }));
+      
+      console.log('Orders data:', orders);
+      return orders;
     } catch (error) {
       console.error('Error fetching orders:', error);
       return [];
@@ -114,6 +135,8 @@ class DataExportService {
   // Fetch user's bookings
   async fetchUserBookings(projectId, userId) {
     try {
+      console.log(`Fetching bookings for project: ${projectId}, user: ${userId}`);
+      
       const bookingsQuery = query(
         collection(db, `projects/${projectId}/bookings`),
         where('userId', '==', userId),
@@ -121,7 +144,9 @@ class DataExportService {
       );
       
       const querySnapshot = await getDocs(bookingsQuery);
-      return querySnapshot.docs.map(doc => ({
+      console.log(`Found ${querySnapshot.size} bookings`);
+      
+      const bookings = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         // Convert timestamps to readable format
@@ -131,6 +156,9 @@ class DataExportService {
         startTime: doc.data().startTime,
         endTime: doc.data().endTime
       }));
+      
+      console.log('Bookings data:', bookings);
+      return bookings;
     } catch (error) {
       console.error('Error fetching bookings:', error);
       return [];
@@ -185,9 +213,55 @@ class DataExportService {
     }
   }
 
+  // Check what data exists in the project
+  async checkProjectData(projectId, userId) {
+    try {
+      console.log(`Checking data for project: ${projectId}, user: ${userId}`);
+      
+      // Check all collections
+      const collections = ['gatePasses', 'guestPasses', 'orders', 'bookings'];
+      const results = {};
+      
+      for (const collectionName of collections) {
+        try {
+          const collectionRef = collection(db, `projects/${projectId}/${collectionName}`);
+          const snapshot = await getDocs(collectionRef);
+          results[collectionName] = {
+            total: snapshot.size,
+            userSpecific: 0
+          };
+          
+          // Check how many belong to this user
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.userId === userId) {
+              results[collectionName].userSpecific++;
+            }
+          });
+          
+          console.log(`${collectionName}: ${results[collectionName].total} total, ${results[collectionName].userSpecific} for user`);
+        } catch (error) {
+          console.error(`Error checking ${collectionName}:`, error);
+          results[collectionName] = { total: 0, userSpecific: 0, error: error.message };
+        }
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('Error checking project data:', error);
+      return {};
+    }
+  }
+
   // Get all user data for export
   async getAllUserData(projectId, userId) {
     try {
+      console.log(`Getting all user data for project: ${projectId}, user: ${userId}`);
+      
+      // First check what data exists
+      const dataCheck = await this.checkProjectData(projectId, userId);
+      console.log('Data check results:', dataCheck);
+      
       const [profile, projectData, gatePasses, guestPasses, orders, bookings] = await Promise.all([
         this.fetchUserProfile(userId),
         this.fetchUserProjectData(projectId, userId),
@@ -197,7 +271,7 @@ class DataExportService {
         this.fetchUserBookings(projectId, userId)
       ]);
 
-      return {
+      const result = {
         profile,
         projectData,
         gatePasses,
@@ -215,9 +289,13 @@ class DataExportService {
             guestPasses: guestPasses.length,
             orders: orders.length,
             bookings: bookings.length
-          }
+          },
+          dataCheck
         }
       };
+      
+      console.log('Final export result:', result);
+      return result;
     } catch (error) {
       console.error('Error fetching all user data:', error);
       throw error;
