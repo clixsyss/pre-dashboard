@@ -40,8 +40,7 @@ class DataExportService {
       
       const gatePassesQuery = query(
         collection(db, `projects/${projectId}/gatePasses`),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(gatePassesQuery);
@@ -57,7 +56,12 @@ class DataExportService {
         validUntil: doc.data().validUntil,
         entryTime: doc.data().entryTime,
         exitTime: doc.data().exitTime
-      }));
+      })).sort((a, b) => {
+        // Sort by createdAt descending (newest first)
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
       
       console.log('Gate passes data:', gatePasses);
       return gatePasses;
@@ -74,8 +78,7 @@ class DataExportService {
       
       const guestPassesQuery = query(
         collection(db, `projects/${projectId}/guestPasses`),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(guestPassesQuery);
@@ -89,7 +92,12 @@ class DataExportService {
         updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
         validFrom: doc.data().validFrom,
         validUntil: doc.data().validUntil
-      }));
+      })).sort((a, b) => {
+        // Sort by createdAt descending (newest first)
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
       
       console.log('Guest passes data:', guestPasses);
       return guestPasses;
@@ -106,8 +114,7 @@ class DataExportService {
       
       const ordersQuery = query(
         collection(db, `projects/${projectId}/orders`),
-        where('userId', '==', userId),
-        orderBy('orderDate', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(ordersQuery);
@@ -122,7 +129,12 @@ class DataExportService {
         orderDate: doc.data().orderDate,
         estimatedDelivery: doc.data().estimatedDelivery,
         actualDelivery: doc.data().actualDelivery
-      }));
+      })).sort((a, b) => {
+        // Sort by orderDate descending (newest first)
+        const dateA = new Date(a.orderDate || 0);
+        const dateB = new Date(b.orderDate || 0);
+        return dateB - dateA;
+      });
       
       console.log('Orders data:', orders);
       return orders;
@@ -139,8 +151,7 @@ class DataExportService {
       
       const bookingsQuery = query(
         collection(db, `projects/${projectId}/bookings`),
-        where('userId', '==', userId),
-        orderBy('bookingDate', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(bookingsQuery);
@@ -155,7 +166,12 @@ class DataExportService {
         bookingDate: doc.data().bookingDate,
         startTime: doc.data().startTime,
         endTime: doc.data().endTime
-      }));
+      })).sort((a, b) => {
+        // Sort by bookingDate descending (newest first)
+        const dateA = new Date(a.bookingDate || 0);
+        const dateB = new Date(b.bookingDate || 0);
+        return dateB - dateA;
+      });
       
       console.log('Bookings data:', bookings);
       return bookings;

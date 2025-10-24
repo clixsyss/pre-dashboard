@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileText, Database, User, ShoppingCart, Calendar, Key, CheckCircle, AlertCircle, Bug } from 'lucide-react';
+import { AlertCircle, Bug } from 'lucide-react';
 import dataExportService from '../services/dataExportService';
 
 const DataExportDebug = () => {
