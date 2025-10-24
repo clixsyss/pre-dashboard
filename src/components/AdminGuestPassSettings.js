@@ -63,9 +63,10 @@ const AdminGuestPassSettings = ({ projectId }) => {
         restrictionEnabled: doc.data().restrictionEnabled || false,
       }));
 
-      // Filter projects for regular admins - only show the current project
-      if (!isSuper && projectId) {
+      // If projectId is provided, always show only that project
+      if (projectId) {
         projectsData = projectsData.filter(p => p.id === projectId);
+        console.log(`Filtering to show only current project: ${projectId}`);
       }
 
       setProjects(projectsData);
@@ -255,23 +256,20 @@ const AdminGuestPassSettings = ({ projectId }) => {
           <div>
             <h2 className="text-2xl font-bold text-gray-900 flex items-center">
               <MapPin className="h-6 w-6 mr-2 text-blue-600" />
-              {projectId ? 'Project Location Settings' : 'Global Location Settings'}
+              Location Settings
             </h2>
             <p className="mt-2 text-gray-600">
-              {projectId 
-                ? 'Control location-based guest pass restrictions for this project.'
-                : 'Configure location-based guest pass restrictions for all projects. Users will only be able to generate passes when physically present at enabled project locations.'
-              }
+              Control location-based guest pass restrictions for this project. Users will only be able to generate passes when physically present at the project location.
             </p>
           </div>
-          {!isSuper && projectId && (
+          {!isSuper && (
             <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg">
               <Lock className="h-4 w-4 text-amber-600" />
               <span className="text-sm text-amber-800 font-medium">Limited Access</span>
             </div>
           )}
         </div>
-        {!isSuper && projectId && (
+        {!isSuper && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
               <strong>Note:</strong> You can enable/disable location restrictions, but only Super Admins can configure GPS coordinates and radius settings.
@@ -295,13 +293,13 @@ const AdminGuestPassSettings = ({ projectId }) => {
         </div>
       )}
 
-      {/* Map View - Only show for super admin or when viewing all projects */}
-      {(!projectId || isSuper) && (
+      {/* Map View - Show when there are projects with coordinates */}
+      {projects.length > 0 && projects.some(p => p.latitude && p.longitude) && (
         <div className="mb-6 bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold flex items-center">
               <MapPin className="h-5 w-5 mr-2 text-blue-600" />
-              Project Locations Map
+              Project Location Map
             </h3>
             {mapClickMode && (
               <button
@@ -375,7 +373,7 @@ const AdminGuestPassSettings = ({ projectId }) => {
           <div className="mt-2 text-sm text-gray-500 flex items-center justify-between">
             <div className="flex items-center">
               <AlertCircle className="h-4 w-4 mr-1" />
-              <span>Green circles indicate active restriction zones. {isSuper && 'Click "Pin Location" to set coordinates on map.'}</span>
+              <span>Green circle indicates active restriction zone. {isSuper && 'Click "Pin Location" to set coordinates on map.'}</span>
             </div>
           </div>
         </div>
@@ -573,14 +571,13 @@ const AdminGuestPassSettings = ({ projectId }) => {
         <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
           {isSuper ? (
             <>
-              <li>Configure GPS coordinates and radius for each project location</li>
+              <li>Configure GPS coordinates and radius for this project location</li>
               <li>Enable the restriction toggle to activate location-based validation</li>
               <li>Users will need to be within the specified radius to generate guest passes</li>
-              <li>Multiple projects can have restrictions enabled simultaneously</li>
             </>
           ) : (
             <>
-              <li>Toggle location restrictions on/off for your project</li>
+              <li>Toggle location restrictions on/off for this project</li>
               <li>GPS coordinates and radius are configured by Super Admins</li>
               <li>When enabled, users must be within the project location to generate passes</li>
             </>

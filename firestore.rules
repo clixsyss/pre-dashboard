@@ -786,6 +786,33 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // PER-PROJECT USER GUEST PASS SETTINGS - New architecture for project-specific limits
+    // Users can read their own settings, admins can read/write all settings
+    match /projects/{projectId}/userGuestPassSettings/{userId} {
+      // Users can read their own settings
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Admins can read and write all user settings
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Users can update their own usage count (when creating passes)
+      allow update: if request.auth != null && 
+        request.auth.uid == userId &&
+        // Only allow updating specific fields (usedThisMonth, lastPassCreated)
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedThisMonth', 'lastPassCreated', 'updatedAt']);
+    }
+    
+    // Allow listing per-project user guest pass settings
+    match /projects/{projectId}/userGuestPassSettings {
+      // Admins can list all settings
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Users can list (but Firestore will filter to only their own)
+      allow list: if request.auth != null;
+    }
+    
     // GUEST PASS USERS COLLECTION - Allow users to read/write their own data
     match /guestPassUsers/{userId} {
       allow read, write: if request.auth != null && 

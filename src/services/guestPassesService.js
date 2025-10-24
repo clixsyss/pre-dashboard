@@ -19,9 +19,11 @@ class GuestPassesService {
   constructor() {
     this.collections = {
       users: 'users', // Use main users collection
-      settings: 'guestPassSettings'
+      settings: 'guestPassSettings',
+      userProjectSettings: (projectId) => `projects/${projectId}/userGuestPassSettings` // Per-project user settings
     };
     // Note: passes are now per-project subcollections: projects/{projectId}/guestPasses
+    // Note: user settings are now per-project: projects/{projectId}/userGuestPassSettings/{userId}
   }
 
   // Get statistics for a project
@@ -130,7 +132,20 @@ class GuestPassesService {
       // Get all users from main users collection
       const usersSnapshot = await getDocs(collection(db, this.collections.users));
       
-      // Filter users who belong to this project and have guest pass data
+      // Get all per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      let userSettings = {};
+      try {
+        const settingsSnapshot = await getDocs(collection(db, userSettingsPath));
+        settingsSnapshot.docs.forEach(doc => {
+          userSettings[doc.id] = doc.data();
+        });
+        console.log(`📋 Found ${Object.keys(userSettings).length} per-project user settings for project ${projectId}`);
+      } catch (error) {
+        console.log('No per-project user settings found, using defaults');
+      }
+      
+      // Filter users who belong to this project
       const projectUsers = [];
       
       usersSnapshot.docs.forEach(doc => {
@@ -141,13 +156,13 @@ class GuestPassesService {
           const projectInfo = userData.projects.find(project => project.projectId === projectId);
           
           if (projectInfo) {
-            // Check if user has guest pass data
-            const guestPassData = userData.guestPassData;
+            // Get per-project settings for this user, or use defaults
+            const projectSettings = userSettings[doc.id] || {};
             
-            // Use guestPassData if it exists, otherwise use global defaults
-            const monthlyLimit = guestPassData?.monthlyLimit ?? defaultLimit;
-            const usedThisMonth = guestPassData?.usedThisMonth ?? 0;
-            const blocked = guestPassData?.blocked ?? false;
+            // Use per-project settings if they exist, otherwise use global defaults
+            const monthlyLimit = projectSettings.monthlyLimit ?? defaultLimit;
+            const usedThisMonth = projectSettings.usedThisMonth ?? 0;
+            const blocked = projectSettings.blocked ?? false;
             
             projectUsers.push({
               id: doc.id,
@@ -156,15 +171,15 @@ class GuestPassesService {
               monthlyLimit: monthlyLimit,
               usedThisMonth: usedThisMonth,
               blocked: blocked,
-              hasGuestPassData: !!guestPassData, // Track if user has explicit data
+              hasCustomSettings: !!Object.keys(projectSettings).length, // Track if user has per-project settings
               createdAt: userData.createdAt?.toDate?.() || new Date(),
-              updatedAt: userData.updatedAt?.toDate?.() || new Date()
+              updatedAt: projectSettings.updatedAt?.toDate?.() || new Date()
             });
           }
         }
       });
       
-      console.log(`Fetched ${projectUsers.length} users for project ${projectId} (default limit: ${defaultLimit})`);
+      console.log(`✅ Fetched ${projectUsers.length} users for project ${projectId} (default limit: ${defaultLimit})`);
       
       return projectUsers;
     } catch (error) {
@@ -277,22 +292,25 @@ class GuestPassesService {
         throw new Error('User not found');
       }
       
-      const userData = userDoc.data();
+      // Get per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const userSettingsRef = doc(db, userSettingsPath, userId);
+      const userSettingsDoc = await getDoc(userSettingsRef);
+      const userSettings = userSettingsDoc.exists() ? userSettingsDoc.data() : {};
       
       // Get global settings to use as default
       const globalSettings = await this.getGlobalSettings(projectId);
       
-      const guestPassData = userData.guestPassData || { 
-        blocked: false, 
-        monthlyLimit: globalSettings.monthlyLimit, 
-        usedThisMonth: 0 
-      };
+      // Use per-project settings or defaults
+      const blocked = userSettings.blocked ?? false;
+      const monthlyLimit = userSettings.monthlyLimit ?? globalSettings.monthlyLimit;
+      const usedThisMonth = userSettings.usedThisMonth ?? 0;
       
-      if (guestPassData.blocked) {
-        throw new Error('User is blocked from generating passes');
+      if (blocked) {
+        throw new Error(`User is blocked from generating passes in this project`);
       }
       
-      // Check monthly limit
+      // Check monthly limit by counting actual passes
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
@@ -303,8 +321,8 @@ class GuestPassesService {
       );
       const userPassesSnapshot = await getDocs(userPassesQuery);
       
-      if (userPassesSnapshot.size >= guestPassData.monthlyLimit) {
-        throw new Error('User has reached their monthly limit');
+      if (userPassesSnapshot.size >= monthlyLimit) {
+        throw new Error('User has reached their monthly limit for this project');
       }
       
       // Generate unique pass ID
@@ -325,15 +343,11 @@ class GuestPassesService {
       
       const docRef = await addDoc(collection(db, `projects/${projectId}/guestPasses`), passDoc);
       
-      // Update user's used count in guestPassData
-      await updateDoc(userRef, {
-        guestPassData: {
-          ...guestPassData,
-          usedThisMonth: guestPassData.usedThisMonth + 1,
-          updatedAt: serverTimestamp()
-        },
+      // Update user's used count in per-project settings
+      await setDoc(userSettingsRef, {
+        usedThisMonth: userPassesSnapshot.size + 1,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
       
       return {
         id: docRef.id,
@@ -377,99 +391,105 @@ class GuestPassesService {
     }
   }
 
-  // Block a user
+  // Block a user from generating guest passes in a specific project
   async blockUser(projectId, userId) {
     try {
-      const userRef = doc(db, this.collections.users, userId);
-      const userDoc = await getDoc(userRef);
+      // Get or create per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const userSettingsRef = doc(db, userSettingsPath, userId);
       
-      if (userDoc.exists()) {
-        // Use nested field updates to preserve existing fields
-        await updateDoc(userRef, {
-          'guestPassData.blocked': true,
-          'guestPassData.blockedAt': serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        
-        console.log(`✅ Blocked user ${userId}`);
-      }
+      // Use setDoc with merge to create or update the document
+      await setDoc(userSettingsRef, {
+        blocked: true,
+        blockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ Blocked user ${userId} for project ${projectId}`);
     } catch (error) {
       console.error('Error blocking user:', error);
       throw new Error('Failed to block user');
     }
   }
 
-  // Unblock a user
+  // Unblock a user from generating guest passes in a specific project
   async unblockUser(projectId, userId) {
     try {
-      const userRef = doc(db, this.collections.users, userId);
-      const userDoc = await getDoc(userRef);
+      // Get or create per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const userSettingsRef = doc(db, userSettingsPath, userId);
       
-      if (userDoc.exists()) {
-        // Use nested field updates to preserve existing fields
-        await updateDoc(userRef, {
-          'guestPassData.blocked': false,
-          'guestPassData.unblockedAt': serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        
-        console.log(`✅ Unblocked user ${userId}`);
-      }
+      // Use setDoc with merge to update the document
+      await setDoc(userSettingsRef, {
+        blocked: false,
+        unblockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ Unblocked user ${userId} for project ${projectId}`);
     } catch (error) {
       console.error('Error unblocking user:', error);
       throw new Error('Failed to unblock user');
     }
   }
 
-  // Update user monthly limit
+  // Update user monthly limit for a specific project
   // If newLimit is null, undefined, or empty string, it REMOVES the custom limit
   // This makes the user follow the global limit instead
   async updateUserLimit(projectId, userId, newLimit) {
     try {
-      const userRef = doc(db, this.collections.users, userId);
-      const userDoc = await getDoc(userRef);
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const userSettingsRef = doc(db, userSettingsPath, userId);
       
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const guestPassData = userData.guestPassData || {};
+      // Get current settings
+      const userSettingsDoc = await getDoc(userSettingsRef);
+      const currentSettings = userSettingsDoc.exists() ? userSettingsDoc.data() : {};
+      
+      // If newLimit is null/undefined/empty, REMOVE the custom limit
+      if (newLimit === null || newLimit === undefined || newLimit === '' || newLimit === 'null') {
+        console.log(`🔧 [Service] Removing custom limit for user ${userId} in project ${projectId} - will use global limit`);
         
-        // If newLimit is null/undefined/empty, REMOVE the custom limit
-        if (newLimit === null || newLimit === undefined || newLimit === '' || newLimit === 'null') {
-          console.log(`🔧 [Service] Removing custom limit for user ${userId} - will use global limit`);
-          
-          // Remove monthlyLimit field while keeping other guestPassData
-          const { monthlyLimit, remainingQuota, limitUpdatedAt, ...restOfGuestPassData } = guestPassData;
-          
-          await updateDoc(userRef, {
-            guestPassData: restOfGuestPassData,
+        // Remove monthlyLimit field while keeping other settings
+        const { monthlyLimit, remainingQuota, limitUpdatedAt, ...restOfSettings } = currentSettings;
+        
+        if (Object.keys(restOfSettings).length > 0) {
+          // If there are other settings, update without monthlyLimit
+          await setDoc(userSettingsRef, {
+            ...restOfSettings,
             updatedAt: serverTimestamp()
           });
-          
-          console.log(`✅ User ${userId} now uses global limit`);
-          return;
+        } else {
+          // If no other settings exist, we can leave the document empty or just not create it
+          // For now, we'll keep an empty document with just updatedAt
+          await setDoc(userSettingsRef, {
+            updatedAt: serverTimestamp()
+          });
         }
         
-        // Ensure the limit is a number, not a string
-        const limitAsNumber = typeof newLimit === 'string' ? parseInt(newLimit, 10) : newLimit;
-        if (isNaN(limitAsNumber) || limitAsNumber < 0) {
-          throw new Error(`Invalid limit value: ${newLimit}`);
-        }
-        
-        console.log(`🔧 [Service] Setting CUSTOM limit for user ${userId}:`, limitAsNumber, '(type:', typeof limitAsNumber, ')');
-        
-        const usedThisMonth = guestPassData.usedThisMonth || 0;
-        const remainingQuota = Math.max(0, limitAsNumber - usedThisMonth);
-        
-        // Use nested field updates to preserve existing fields
-        await updateDoc(userRef, {
-          'guestPassData.monthlyLimit': limitAsNumber,  // ✅ Save as number
-          'guestPassData.remainingQuota': remainingQuota,
-          'guestPassData.limitUpdatedAt': serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        
-        console.log(`✅ Updated user ${userId} CUSTOM limit: limit=${limitAsNumber}, used=${usedThisMonth}, remaining=${remainingQuota}`);
+        console.log(`✅ User ${userId} now uses global limit for project ${projectId}`);
+        return;
       }
+      
+      // Ensure the limit is a number, not a string
+      const limitAsNumber = typeof newLimit === 'string' ? parseInt(newLimit, 10) : newLimit;
+      if (isNaN(limitAsNumber) || limitAsNumber < 0) {
+        throw new Error(`Invalid limit value: ${newLimit}`);
+      }
+      
+      console.log(`🔧 [Service] Setting CUSTOM limit for user ${userId} in project ${projectId}:`, limitAsNumber, '(type:', typeof limitAsNumber, ')');
+      
+      const usedThisMonth = currentSettings.usedThisMonth || 0;
+      const remainingQuota = Math.max(0, limitAsNumber - usedThisMonth);
+      
+      // Use setDoc with merge to create or update
+      await setDoc(userSettingsRef, {
+        monthlyLimit: limitAsNumber,  // ✅ Save as number
+        remainingQuota: remainingQuota,
+        limitUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ Updated user ${userId} CUSTOM limit in project ${projectId}: limit=${limitAsNumber}, used=${usedThisMonth}, remaining=${remainingQuota}`);
     } catch (error) {
       console.error('Error updating user limit:', error);
       throw new Error('Failed to update user limit');
@@ -523,35 +543,31 @@ class GuestPassesService {
     }
   }
 
-  // Reset monthly usage for all users
+  // Reset monthly usage for all users in a specific project
   async resetMonthlyUsage(projectId) {
     try {
-      const usersSnapshot = await getDocs(collection(db, this.collections.users));
+      console.log(`🔧 [Service] Resetting monthly usage for all users in project ${projectId}`);
+      
+      // Get all per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const settingsSnapshot = await getDocs(collection(db, userSettingsPath));
+      
+      if (settingsSnapshot.empty) {
+        console.log('No per-project user settings found, nothing to reset');
+        return;
+      }
+      
       const batch = writeBatch(db);
       
-      usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        
-        // Check if user belongs to this project
-        if (userData.projects && Array.isArray(userData.projects)) {
-          const projectInfo = userData.projects.find(project => project.projectId === projectId);
-          
-          if (projectInfo) {
-            const guestPassData = userData.guestPassData || {};
-            
-            batch.update(doc.ref, {
-              guestPassData: {
-                ...guestPassData,
-                usedThisMonth: 0,
-                updatedAt: serverTimestamp()
-              },
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
+      settingsSnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          usedThisMonth: 0,
+          updatedAt: serverTimestamp()
+        });
       });
       
       await batch.commit();
+      console.log(`✅ [Service] Reset monthly usage for ${settingsSnapshot.size} users in project ${projectId}`);
     } catch (error) {
       console.error('Error resetting monthly usage:', error);
       throw new Error('Failed to reset monthly usage');
@@ -659,15 +675,6 @@ class GuestPassesService {
       
       const userData = userDoc.data();
       
-      // Get global settings to use as default
-      const globalSettings = await this.getGlobalSettings(projectId);
-      
-      const guestPassData = userData.guestPassData || { 
-        blocked: false, 
-        monthlyLimit: globalSettings.monthlyLimit, 
-        usedThisMonth: 0 
-      };
-      
       // Check if user belongs to this project
       if (!userData.projects || !Array.isArray(userData.projects)) {
         return {
@@ -686,18 +693,31 @@ class GuestPassesService {
         };
       }
       
-      console.log(`📊 [Service] User guest pass data:`, {
-        blocked: guestPassData.blocked,
-        monthlyLimit: guestPassData.monthlyLimit,
-        usedThisMonth: guestPassData.usedThisMonth
+      // Get per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const userSettingsRef = doc(db, userSettingsPath, userId);
+      const userSettingsDoc = await getDoc(userSettingsRef);
+      const userSettings = userSettingsDoc.exists() ? userSettingsDoc.data() : {};
+      
+      // Get global settings to use as default
+      const globalSettings = await this.getGlobalSettings(projectId);
+      
+      // Use per-project settings or defaults
+      const blocked = userSettings.blocked ?? false;
+      const monthlyLimit = userSettings.monthlyLimit ?? globalSettings.monthlyLimit;
+      
+      console.log(`📊 [Service] User guest pass settings for project ${projectId}:`, {
+        blocked,
+        monthlyLimit,
+        hasCustomSettings: Object.keys(userSettings).length > 0
       });
       
-      if (guestPassData.blocked) {
-        console.warn(`🚫 [Service] User ${userId} is BLOCKED from generating passes`);
+      if (blocked) {
+        console.warn(`🚫 [Service] User ${userId} is BLOCKED from generating passes in project ${projectId}`);
         return {
           success: false,
           error: 'User blocked',
-          message: 'User is blocked from generating guest passes',
+          message: 'User is blocked from generating guest passes in this project',
           data: {
             canGenerate: false,
             reason: 'blocked',
@@ -711,7 +731,7 @@ class GuestPassesService {
         };
       }
       
-      // Check monthly limit
+      // Check monthly limit by counting actual passes
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
@@ -723,13 +743,13 @@ class GuestPassesService {
       
       const passesSnapshot = await getDocs(passesQuery);
       const usedThisMonth = passesSnapshot.size;
-      const canGenerate = usedThisMonth < guestPassData.monthlyLimit;
+      const canGenerate = usedThisMonth < monthlyLimit;
       
       if (!canGenerate) {
         return {
           success: false,
           error: 'Limit reached',
-          message: 'User has reached their monthly limit',
+          message: 'User has reached their monthly limit for this project',
           data: {
             canGenerate: false,
             reason: 'limit_reached',
@@ -738,7 +758,7 @@ class GuestPassesService {
               name: userData.fullName || (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : userData.email),
               email: userData.email,
               usedThisMonth,
-              monthlyLimit: guestPassData.monthlyLimit
+              monthlyLimit
             }
           }
         };
@@ -753,15 +773,15 @@ class GuestPassesService {
             name: userData.fullName || (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : userData.email),
             email: userData.email,
             usedThisMonth,
-            monthlyLimit: guestPassData.monthlyLimit,
-            remainingQuota: guestPassData.monthlyLimit - usedThisMonth
+            monthlyLimit,
+            remainingQuota: monthlyLimit - usedThisMonth
           },
           reason: 'eligible'
         },
-        message: 'User can generate guest passes'
+        message: 'User can generate guest passes in this project'
       };
     } catch (error) {
-      console.error(`Error checking user eligibility for ${userId}:`, error);
+      console.error(`Error checking user eligibility for ${userId} in project ${projectId}:`, error);
       return {
         success: false,
         error: error.message,

@@ -22,6 +22,7 @@ const ProjectSelection = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showLocationSettingsModal, setShowLocationSettingsModal] = useState(false);
+  const [selectedProjectForLocation, setSelectedProjectForLocation] = useState(null);
   const navigate = useNavigate();
   const { currentAdmin, getFilteredProjects, loading: adminLoading, isSuperAdmin } = useAdminAuth();
   const { logout } = useAuth();
@@ -145,6 +146,17 @@ const ProjectSelection = () => {
     navigate(`/project/${project.id}/dashboard`);
   };
 
+  const handleViewProjectLocation = (project, e) => {
+    e.stopPropagation(); // Prevent project selection
+    setSelectedProjectForLocation(project);
+    setShowLocationSettingsModal(true);
+  };
+
+  const closeLocationModal = () => {
+    setShowLocationSettingsModal(false);
+    setSelectedProjectForLocation(null);
+  };
+
   const getProjectStats = (project) => {
     // Get real stats from the projects array
     const projectWithStats = projects.find(p => p.id === project.id);
@@ -218,11 +230,14 @@ const ProjectSelection = () => {
               <div className="flex items-center space-x-4">
                 {isSuper && (
                   <button
-                    onClick={() => setShowLocationSettingsModal(true)}
+                    onClick={() => {
+                      setSelectedProjectForLocation(null);
+                      setShowLocationSettingsModal(true);
+                    }}
                     className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                   >
                     <SettingsIcon className="h-5 w-5 mr-2" />
-                    Location Settings
+                    All Locations
                   </button>
                 )}
                 <div className="relative">
@@ -334,9 +349,18 @@ const ProjectSelection = () => {
 
                     {/* Quick Actions */}
                     <div className="mt-4 pt-4 border-t border-gray-100">
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>Last updated: {project.updatedAt ? new Date(project.updatedAt.toDate()).toLocaleDateString() : 'N/A'}</span>
-                        <span className="text-pre-red font-medium">Manage →</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Last updated: {project.updatedAt ? new Date(project.updatedAt.toDate()).toLocaleDateString() : 'N/A'}</span>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => handleViewProjectLocation(project, e)}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View location settings"
+                          >
+                            <MapPin className="h-4 w-4" />
+                          </button>
+                          <span className="text-pre-red font-medium">Manage →</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -355,18 +379,26 @@ const ProjectSelection = () => {
             {/* Background overlay */}
             <div 
               className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
-              onClick={() => setShowLocationSettingsModal(false)}
+              onClick={closeLocationModal}
             ></div>
 
             {/* Modal panel */}
             <div className="inline-block w-full max-w-7xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
               {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  Global Location Settings
-                </h3>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    {selectedProjectForLocation ? selectedProjectForLocation.name : 'All Projects'} - Location Settings
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedProjectForLocation 
+                      ? `Configure location restrictions for ${selectedProjectForLocation.name}`
+                      : 'Configure location restrictions for all projects'
+                    }
+                  </p>
+                </div>
                 <button
-                  onClick={() => setShowLocationSettingsModal(false)}
+                  onClick={closeLocationModal}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="h-6 w-6" />
@@ -375,7 +407,7 @@ const ProjectSelection = () => {
 
               {/* Modal Content */}
               <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
-                <AdminGuestPassSettings projectId={null} />
+                <AdminGuestPassSettings projectId={selectedProjectForLocation?.id || null} />
               </div>
             </div>
           </div>

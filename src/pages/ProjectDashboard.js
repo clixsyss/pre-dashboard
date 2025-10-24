@@ -978,9 +978,9 @@ const ProjectDashboard = () => {
     try {
       const requestsSnapshot = await getDocs(
         query(
-          collection(db, 'deviceResetRequests'),
+          collection(db, 'deviceKeyResetRequests'),
           where('projectId', '==', projectId),
-          orderBy('timestamp', 'desc')
+          orderBy('requestedAt', 'desc')
         )
       );
       const requestsData = requestsSnapshot.docs.map(doc => ({

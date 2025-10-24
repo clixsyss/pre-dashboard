@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import { 
   UserCheck, 
   Calendar, 
-  BarChart3, 
   Settings, 
   Search,
   Filter,
@@ -16,13 +15,12 @@ import {
 } from 'lucide-react';
 import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
-import PassAnalytics from '../components/PassAnalytics';
 import AdminControls from '../components/AdminControls';
 import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
 
 const GuestPasses = () => {
   const { projectId } = useParams();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('passes');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   
@@ -72,7 +70,6 @@ const GuestPasses = () => {
   }, [projectId, fetchStats, fetchUsers, fetchPasses, fetchGlobalSettings]);
 
   const tabs = [
-    { id: 'overview', name: 'Overview', icon: BarChart3 },
     { id: 'passes', name: 'Pass Logs', icon: Calendar },
     { id: 'admin', name: 'Admin Controls', icon: Settings },
     { id: 'location', name: 'Location Settings', icon: MapPin }
@@ -262,15 +259,6 @@ const GuestPasses = () => {
         </div>
 
         <div className="p-8">
-          {activeTab === 'overview' && (
-            <PassAnalytics 
-              stats={stats}
-              users={users}
-              passes={passes}
-              selectedProject={selectedProject}
-            />
-          )}
-
           {activeTab === 'passes' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
