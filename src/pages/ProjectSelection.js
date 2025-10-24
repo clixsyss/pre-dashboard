@@ -6,21 +6,26 @@ import {
   ArrowRight,
   Search,
   LogOut,
-  User
+  User,
+  Settings as SettingsIcon,
+  X
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { useAuth } from '../contexts/AuthContext';
+import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
 
 const ProjectSelection = () => {
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showLocationSettingsModal, setShowLocationSettingsModal] = useState(false);
   const navigate = useNavigate();
-  const { currentAdmin, getFilteredProjects, loading: adminLoading } = useAdminAuth();
+  const { currentAdmin, getFilteredProjects, loading: adminLoading, isSuperAdmin } = useAdminAuth();
   const { logout } = useAuth();
+  const isSuper = isSuperAdmin();
 
   const handleLogout = async () => {
     try {
@@ -200,26 +205,36 @@ const ProjectSelection = () => {
 
   // Simple test to see if basic render works
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Select Project</h1>
-              <p className="text-gray-600 mt-1">Choose which project you want to manage</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search projects..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+    <>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-20">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Select Project</h1>
+                <p className="text-gray-600 mt-1">Choose which project you want to manage</p>
               </div>
+              <div className="flex items-center space-x-4">
+                {isSuper && (
+                  <button
+                    onClick={() => setShowLocationSettingsModal(true)}
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    <SettingsIcon className="h-5 w-5 mr-2" />
+                    Location Settings
+                  </button>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search projects..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               
               {/* Admin Info and Logout */}
               <div className="flex items-center space-x-3">
@@ -332,6 +347,41 @@ const ProjectSelection = () => {
         )}
       </div>
     </div>
+
+      {/* Location Settings Modal */}
+      {showLocationSettingsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div 
+              className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
+              onClick={() => setShowLocationSettingsModal(false)}
+            ></div>
+
+            {/* Modal panel */}
+            <div className="inline-block w-full max-w-7xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Global Location Settings
+                </h3>
+                <button
+                  onClick={() => setShowLocationSettingsModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+                <AdminGuestPassSettings projectId={null} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

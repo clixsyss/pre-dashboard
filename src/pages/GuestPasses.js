@@ -11,12 +11,14 @@ import {
   CheckCircle,
   AlertCircle,
   Building2,
-  RefreshCw
+  RefreshCw,
+  MapPin
 } from 'lucide-react';
 import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
 import PassAnalytics from '../components/PassAnalytics';
 import AdminControls from '../components/AdminControls';
+import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
 
 const GuestPasses = () => {
   const { projectId } = useParams();
@@ -72,7 +74,8 @@ const GuestPasses = () => {
   const tabs = [
     { id: 'overview', name: 'Overview', icon: BarChart3 },
     { id: 'passes', name: 'Pass Logs', icon: Calendar },
-    { id: 'admin', name: 'Admin Controls', icon: Settings }
+    { id: 'admin', name: 'Admin Controls', icon: Settings },
+    { id: 'location', name: 'Location Settings', icon: MapPin }
   ];
 
   const filteredPasses = passes.filter(pass => 
@@ -317,6 +320,10 @@ const GuestPasses = () => {
                 projectId={projectId}
               />
             </div>
+          )}
+
+          {activeTab === 'location' && (
+            <AdminGuestPassSettings projectId={selectedProject?.id || projectId} />
           )}
         </div>
       </div>
