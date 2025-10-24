@@ -224,6 +224,31 @@ export const useGuestPassStore = create((set, get) => ({
     }
   },
 
+  // Update validity duration
+  updateValidityDuration: async (projectId, newDuration) => {
+    try {
+      console.log(`🔄 [Store] Updating validity duration for project ${projectId} to ${newDuration} hours`);
+      set({ loading: true, error: null });
+      
+      await guestPassesService.updateValidityDuration(projectId, newDuration);
+      
+      // Update local state
+      const currentSettings = get().globalSettings;
+      const updatedSettings = { ...currentSettings, validityDurationHours: newDuration };
+      
+      console.log(`✅ [Store] Updated validity duration:`, updatedSettings);
+      
+      set({ 
+        globalSettings: updatedSettings,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('❌ [Store] Error updating validity duration:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
   // Toggle block all users setting
   toggleBlockAll: async (projectId, blockAllUsers) => {
     try {

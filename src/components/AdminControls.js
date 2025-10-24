@@ -12,13 +12,15 @@ import {
   X,
   Search,
   UserCog,
-  RefreshCcw
+  RefreshCcw,
+  Clock
 } from 'lucide-react';
 
 const AdminControls = ({ 
   globalSettings, 
   users, 
   onUpdateGlobalLimit, 
+  onUpdateValidityDuration,
   onResetUsage,
   onUpdateUserLimit,
   onBlockUser,
@@ -29,6 +31,8 @@ const AdminControls = ({
   const [activeSection, setActiveSection] = useState('users');
   const [editingGlobalLimit, setEditingGlobalLimit] = useState(false);
   const [newGlobalLimit, setNewGlobalLimit] = useState(globalSettings?.monthlyLimit || 100);
+  const [editingValidityDuration, setEditingValidityDuration] = useState(false);
+  const [newValidityDuration, setNewValidityDuration] = useState(globalSettings?.validityDurationHours || 2);
   const [editingUserLimit, setEditingUserLimit] = useState(null);
   const [newUserLimit, setNewUserLimit] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -54,6 +58,23 @@ const AdminControls = ({
         setEditingGlobalLimit(false);
       } catch (error) {
         console.error('Error updating global limit:', error);
+      }
+    }
+  };
+
+  const handleUpdateValidityDuration = async () => {
+    if (newValidityDuration && newValidityDuration !== globalSettings?.validityDurationHours) {
+      try {
+        // Convert to number before saving to Firestore
+        const durationAsNumber = parseFloat(newValidityDuration);
+        if (isNaN(durationAsNumber) || durationAsNumber <= 0) {
+          console.error('Invalid validity duration value:', newValidityDuration);
+          return;
+        }
+        await onUpdateValidityDuration(projectId, durationAsNumber);
+        setEditingValidityDuration(false);
+      } catch (error) {
+        console.error('Error updating validity duration:', error);
       }
     }
   };
@@ -525,6 +546,67 @@ const AdminControls = ({
             ) : (
               <div className="text-3xl font-bold text-gray-900">
                 {globalSettings?.monthlyLimit || 100} passes
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Guest Pass Validity Duration</h3>
+                <p className="text-sm text-gray-500">How long guest passes remain valid after creation</p>
+              </div>
+              {!editingValidityDuration && (
+                <button
+                  onClick={() => setEditingValidityDuration(true)}
+                  className="flex items-center space-x-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span>Edit</span>
+                </button>
+              )}
+            </div>
+
+            {editingValidityDuration ? (
+              <div className="flex items-center space-x-3">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={newValidityDuration}
+                  onChange={(e) => setNewValidityDuration(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pre-red focus:border-transparent"
+                  placeholder="Enter duration in hours"
+                />
+                <button
+                  onClick={handleUpdateValidityDuration}
+                  className="flex items-center space-x-2 px-4 py-2 bg-pre-red text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Save</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingValidityDuration(false);
+                    setNewValidityDuration(globalSettings?.validityDurationHours || 2);
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  <span>Cancel</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-3">
+                <Clock className="h-8 w-8 text-blue-500" />
+                <div>
+                  <div className="text-3xl font-bold text-gray-900">
+                    {globalSettings?.validityDurationHours || 2} hours
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Guest passes expire {globalSettings?.validityDurationHours || 2} hours after generation
+                  </p>
+                </div>
               </div>
             )}
           </div>

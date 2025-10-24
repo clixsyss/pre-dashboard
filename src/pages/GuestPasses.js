@@ -38,6 +38,7 @@ const GuestPasses = () => {
     unblockUser,
     updateUserLimit,
     updateGlobalLimit,
+    updateValidityDuration,
     toggleBlockAll,
     resetMonthlyUsage
   } = useGuestPassStore();
@@ -300,6 +301,7 @@ const GuestPasses = () => {
                 globalSettings={globalSettings}
                 users={users}
                 onUpdateGlobalLimit={updateGlobalLimit}
+                onUpdateValidityDuration={updateValidityDuration}
                 onResetUsage={resetMonthlyUsage}
                 onUpdateUserLimit={updateUserLimit}
                 onBlockUser={blockUser}

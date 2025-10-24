@@ -524,6 +524,32 @@ class GuestPassesService {
     }
   }
 
+  // Update validity duration for guest passes
+  async updateValidityDuration(projectId, newDuration) {
+    try {
+      console.log(`🔧 [Service] Updating validity duration for project ${projectId} to ${newDuration} hours`);
+      
+      // Ensure the duration is a number, not a string
+      const durationAsNumber = typeof newDuration === 'string' ? parseFloat(newDuration) : newDuration;
+      if (isNaN(durationAsNumber) || durationAsNumber <= 0) {
+        throw new Error(`Invalid validity duration value: ${newDuration}`);
+      }
+      
+      console.log(`🔧 [Service] Saving as number:`, durationAsNumber, '(type:', typeof durationAsNumber, ')');
+      
+      // Use setDoc to create or update the document
+      await setDoc(doc(db, this.collections.settings, projectId), {
+        validityDurationHours: durationAsNumber,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ [Service] Validity duration updated successfully`);
+    } catch (error) {
+      console.error('❌ [Service] Error updating validity duration:', error);
+      throw new Error('Failed to update validity duration');
+    }
+  }
+
   // Toggle block all users setting
   async toggleBlockAll(projectId, blockAllUsers) {
     try {
