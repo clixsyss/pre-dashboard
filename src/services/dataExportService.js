@@ -23,6 +23,34 @@ class DataExportService {
     return user.uid;
   }
 
+  // Get all users in the project
+  async fetchProjectUsers(projectId) {
+    try {
+      console.log(`Fetching users for project: ${projectId}`);
+      
+      const usersQuery = query(
+        collection(db, `projects/${projectId}/users`)
+      );
+      
+      const querySnapshot = await getDocs(usersQuery);
+      console.log(`Found ${querySnapshot.size} users in project`);
+      
+      const users = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Convert timestamps to readable format
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
+        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
+      }));
+      
+      console.log('Project users:', users);
+      return users;
+    } catch (error) {
+      console.error('Error fetching project users:', error);
+      return [];
+    }
+  }
+
   // Get current project ID from localStorage
   getCurrentProjectId() {
     const selectedProject = localStorage.getItem('adminSelectedProject');
@@ -442,6 +470,107 @@ class DataExportService {
       return { success: true, dataType, format, recordCount: Array.isArray(data) ? data.length : 1 };
     } catch (error) {
       console.error('Error exporting data:', error);
+      throw error;
+    }
+  }
+
+  // Export data for a specific user
+  async exportUserData(targetUserId, format = 'json') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const results = [];
+      
+      // Export each data type separately for the target user
+      const dataTypes = ['profile', 'gatePasses', 'guestPasses', 'orders', 'bookings'];
+      
+      for (const dataType of dataTypes) {
+        try {
+          let data = null;
+          let filename = '';
+          
+          switch (dataType) {
+            case 'profile':
+              data = await this.fetchUserProfile(targetUserId);
+              filename = `user-${targetUserId}-profile-${dateStr}`;
+              break;
+            case 'gatePasses':
+              data = await this.fetchUserGatePasses(projectId, targetUserId);
+              filename = `user-${targetUserId}-gate-passes-${dateStr}`;
+              break;
+            case 'guestPasses':
+              data = await this.fetchUserGuestPasses(projectId, targetUserId);
+              filename = `user-${targetUserId}-guest-passes-${dateStr}`;
+              break;
+            case 'orders':
+              data = await this.fetchUserOrders(projectId, targetUserId);
+              filename = `user-${targetUserId}-orders-${dateStr}`;
+              break;
+            case 'bookings':
+              data = await this.fetchUserBookings(projectId, targetUserId);
+              filename = `user-${targetUserId}-bookings-${dateStr}`;
+              break;
+          }
+          
+          if (data && (Array.isArray(data) ? data.length > 0 : data)) {
+            if (format === 'csv') {
+              const csvContent = this.convertToCSV(Array.isArray(data) ? data : [data], dataType);
+              this.downloadFile(csvContent, `${filename}.csv`, 'text/csv');
+            } else {
+              const jsonContent = this.convertToJSON(data);
+              this.downloadFile(jsonContent, `${filename}.json`, 'application/json');
+            }
+            
+            results.push({
+              dataType,
+              filename,
+              recordCount: Array.isArray(data) ? data.length : 1,
+              success: true
+            });
+          } else {
+            results.push({
+              dataType,
+              filename,
+              recordCount: 0,
+              success: true,
+              message: 'No data found'
+            });
+          }
+        } catch (error) {
+          console.error(`Error exporting ${dataType} for user ${targetUserId}:`, error);
+          results.push({
+            dataType,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      // Create a summary file
+      const summary = {
+        exportDate: new Date().toISOString(),
+        projectId,
+        targetUserId,
+        format,
+        results: results,
+        totalFiles: results.filter(r => r.success && r.recordCount > 0).length,
+        totalRecords: results.reduce((sum, r) => sum + (r.recordCount || 0), 0)
+      };
+      
+      const summaryContent = format === 'csv' 
+        ? this.createSummaryCSV(summary)
+        : this.convertToJSON(summary);
+      
+      this.downloadFile(
+        summaryContent, 
+        `user-${targetUserId}-export-summary-${dateStr}.${format === 'csv' ? 'csv' : 'json'}`, 
+        format === 'csv' ? 'text/csv' : 'application/json'
+      );
+      
+      return { success: true, results, summary };
+    } catch (error) {
+      console.error('Error exporting user data:', error);
       throw error;
     }
   }
