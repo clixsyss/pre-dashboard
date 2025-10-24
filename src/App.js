@@ -11,6 +11,7 @@ import ProjectDashboard from './pages/ProjectDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminManagement from './components/AdminManagement';
 import NotificationManager from './components/NotificationManager';
+import DataExportPage from './pages/DataExport';
 import Layout from './components/Layout';
 import NotificationContainer from './components/NotificationContainer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -69,6 +70,7 @@ const AppRouter = () => {
           <Route path="admin-management" element={<AdminManagement />} />
           <Route path="project-selection" element={<ProjectSelection />} />
           <Route path="notifications" element={<NotificationManager />} />
+          <Route path="data-export" element={<DataExportPage />} />
         </Route>
         <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
       </Routes>

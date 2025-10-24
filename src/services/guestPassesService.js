@@ -304,7 +304,6 @@ class GuestPassesService {
       // Use per-project settings or defaults
       const blocked = userSettings.blocked ?? false;
       const monthlyLimit = userSettings.monthlyLimit ?? globalSettings.monthlyLimit;
-      const usedThisMonth = userSettings.usedThisMonth ?? 0;
       
       if (blocked) {
         throw new Error(`User is blocked from generating passes in this project`);

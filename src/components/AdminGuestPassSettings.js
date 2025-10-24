@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MapPin, Settings, Save, AlertCircle, CheckCircle, Loader, Lock, Target } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -42,11 +42,7 @@ const AdminGuestPassSettings = ({ projectId }) => {
   const [mapClickMode, setMapClickMode] = useState(false);
   const [selectedProjectForPin, setSelectedProjectForPin] = useState(null);
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMessage('');
@@ -85,7 +81,11 @@ const AdminGuestPassSettings = ({ projectId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   const handleToggleRestriction = async (projectId, currentValue) => {
     try {
