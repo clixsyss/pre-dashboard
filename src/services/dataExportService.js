@@ -3,8 +3,7 @@ import {
   collection, 
   getDocs, 
   query, 
-  where, 
-  orderBy,
+  where,
   doc,
   getDoc
 } from 'firebase/firestore';
@@ -324,13 +323,23 @@ class DataExportService {
       return `No ${dataType} data found`;
     }
 
-    const headers = Object.keys(data[0]);
+    // Flatten nested objects for better CSV readability
+    const flattenedData = data.map(item => this.flattenObject(item));
+    
+    if (flattenedData.length === 0) {
+      return `No ${dataType} data found`;
+    }
+
+    const headers = Object.keys(flattenedData[0]);
     const csvContent = [
       headers.join(','),
-      ...data.map(row => 
+      ...flattenedData.map(row => 
         headers.map(header => {
           const value = row[header];
-          // Handle nested objects and arrays
+          // Handle arrays and objects
+          if (Array.isArray(value)) {
+            return `"${value.join('; ')}"`;
+          }
           if (typeof value === 'object' && value !== null) {
             return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
           }
@@ -344,6 +353,26 @@ class DataExportService {
     ].join('\n');
 
     return csvContent;
+  }
+
+  // Helper function to flatten nested objects
+  flattenObject(obj, prefix = '') {
+    const flattened = {};
+    
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const newKey = prefix ? `${prefix}_${key}` : key;
+        
+        if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+          // Recursively flatten nested objects
+          Object.assign(flattened, this.flattenObject(obj[key], newKey));
+        } else {
+          flattened[newKey] = obj[key];
+        }
+      }
+    }
+    
+    return flattened;
   }
 
   // Convert data to JSON format
@@ -415,6 +444,133 @@ class DataExportService {
       console.error('Error exporting data:', error);
       throw error;
     }
+  }
+
+  // Export all data as separate files
+  async exportAllDataSeparate(format = 'json') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const userId = this.getCurrentUserId();
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const results = [];
+      
+      // Export each data type separately
+      const dataTypes = ['profile', 'gatePasses', 'guestPasses', 'orders', 'bookings'];
+      
+      for (const dataType of dataTypes) {
+        try {
+          let data = null;
+          let filename = '';
+          
+          switch (dataType) {
+            case 'profile':
+              data = await this.fetchUserProfile(userId);
+              filename = `profile-${dateStr}`;
+              break;
+            case 'gatePasses':
+              data = await this.fetchUserGatePasses(projectId, userId);
+              filename = `gate-passes-${dateStr}`;
+              break;
+            case 'guestPasses':
+              data = await this.fetchUserGuestPasses(projectId, userId);
+              filename = `guest-passes-${dateStr}`;
+              break;
+            case 'orders':
+              data = await this.fetchUserOrders(projectId, userId);
+              filename = `orders-${dateStr}`;
+              break;
+            case 'bookings':
+              data = await this.fetchUserBookings(projectId, userId);
+              filename = `bookings-${dateStr}`;
+              break;
+          }
+          
+          if (data && (Array.isArray(data) ? data.length > 0 : data)) {
+            if (format === 'csv') {
+              const csvContent = this.convertToCSV(Array.isArray(data) ? data : [data], dataType);
+              this.downloadFile(csvContent, `${filename}.csv`, 'text/csv');
+            } else {
+              const jsonContent = this.convertToJSON(data);
+              this.downloadFile(jsonContent, `${filename}.json`, 'application/json');
+            }
+            
+            results.push({
+              dataType,
+              filename,
+              recordCount: Array.isArray(data) ? data.length : 1,
+              success: true
+            });
+          } else {
+            results.push({
+              dataType,
+              filename,
+              recordCount: 0,
+              success: true,
+              message: 'No data found'
+            });
+          }
+        } catch (error) {
+          console.error(`Error exporting ${dataType}:`, error);
+          results.push({
+            dataType,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      // Create a summary file
+      const summary = {
+        exportDate: new Date().toISOString(),
+        projectId,
+        userId,
+        format,
+        results: results,
+        totalFiles: results.filter(r => r.success && r.recordCount > 0).length,
+        totalRecords: results.reduce((sum, r) => sum + (r.recordCount || 0), 0)
+      };
+      
+      const summaryContent = format === 'csv' 
+        ? this.createSummaryCSV(summary)
+        : this.convertToJSON(summary);
+      
+      this.downloadFile(
+        summaryContent, 
+        `export-summary-${dateStr}.${format === 'csv' ? 'csv' : 'json'}`, 
+        format === 'csv' ? 'text/csv' : 'application/json'
+      );
+      
+      return { success: true, results, summary };
+    } catch (error) {
+      console.error('Error exporting all data:', error);
+      throw error;
+    }
+  }
+
+  // Create a clean summary CSV
+  createSummaryCSV(summary) {
+    const headers = ['Data Type', 'Records Found', 'Status', 'File Name'];
+    const rows = summary.results.map(result => [
+      result.dataType,
+      result.recordCount || 0,
+      result.success ? 'Success' : 'Failed',
+      result.filename || 'N/A'
+    ]);
+    
+    const csvContent = [
+      'Export Summary',
+      `Export Date: ${summary.exportDate}`,
+      `Project ID: ${summary.projectId}`,
+      `User ID: ${summary.userId}`,
+      `Total Files: ${summary.totalFiles}`,
+      `Total Records: ${summary.totalRecords}`,
+      '',
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    return csvContent;
   }
 }
 

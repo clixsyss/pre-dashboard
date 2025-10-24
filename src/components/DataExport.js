@@ -81,18 +81,32 @@ const DataExport = () => {
     setExportStatus(null);
 
     try {
-      const results = [];
+      let results = [];
       
-      for (const dataType of selectedDataTypes) {
-        const result = await dataExportService.exportData(dataType, exportFormat);
-        results.push(result);
-      }
+      if (selectedDataTypes.includes('all')) {
+        // Use the new separate export method for cleaner organization
+        const result = await dataExportService.exportAllDataSeparate(exportFormat);
+        results = result.results;
+        
+        setExportStatus({
+          type: 'success',
+          message: `Successfully exported all data types as separate files`,
+          details: results,
+          summary: result.summary
+        });
+      } else {
+        // Export individual data types
+        for (const dataType of selectedDataTypes) {
+          const result = await dataExportService.exportData(dataType, exportFormat);
+          results.push(result);
+        }
 
-      setExportStatus({
-        type: 'success',
-        message: `Successfully exported ${results.length} data type(s)`,
-        details: results
-      });
+        setExportStatus({
+          type: 'success',
+          message: `Successfully exported ${results.length} data type(s)`,
+          details: results
+        });
+      }
     } catch (error) {
       console.error('Export error:', error);
       setExportStatus({
@@ -165,10 +179,19 @@ const DataExport = () => {
               <ul className="list-disc list-inside ml-4">
                 {exportStatus.details.map((detail, index) => (
                   <li key={index}>
-                    {detail.dataType} ({detail.recordCount} records) - {detail.format.toUpperCase()}
+                    {detail.dataType} ({detail.recordCount || 0} records) - {detail.success ? 'Success' : 'Failed'}
+                    {detail.filename && <span className="text-gray-600"> - {detail.filename}</span>}
                   </li>
                 ))}
               </ul>
+              {exportStatus.summary && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                  <p className="font-semibold text-blue-900">Export Summary:</p>
+                  <p className="text-blue-800">Total Files: {exportStatus.summary.totalFiles}</p>
+                  <p className="text-blue-800">Total Records: {exportStatus.summary.totalRecords}</p>
+                  <p className="text-blue-800">Format: {exportStatus.summary.format.toUpperCase()}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
