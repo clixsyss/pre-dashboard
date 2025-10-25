@@ -28,19 +28,35 @@ class DataExportService {
     try {
       console.log(`Fetching users for project: ${projectId}`);
       
-      const usersQuery = query(
-        collection(db, `projects/${projectId}/users`)
-      );
+      // Fetch from main users collection and filter by project
+      const usersSnapshot = await getDocs(collection(db, 'users'));
       
-      const querySnapshot = await getDocs(usersQuery);
-      console.log(`Found ${querySnapshot.size} users in project`);
+      // Filter users who belong to this project
+      const projectUsers = usersSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(user => {
+          // Check if user has projects array and this project is in it
+          if (user.projects && Array.isArray(user.projects)) {
+            return user.projects.some(p => p.projectId === projectId);
+          }
+          return false;
+        });
       
-      const users = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Convert timestamps to readable format
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-        updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
+      console.log(`Found ${projectUsers.length} users in project ${projectId}`);
+      
+      const users = projectUsers.map(user => ({
+        id: user.id,
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || user.mobile || '',
+        role: user.projects?.find(p => p.projectId === projectId)?.role || 'member',
+        unit: user.projects?.find(p => p.projectId === projectId)?.unit || '',
+        createdAt: user.createdAt?.toDate?.()?.toISOString() || user.createdAt,
+        updatedAt: user.updatedAt?.toDate?.()?.toISOString() || user.updatedAt
       }));
       
       console.log('Project users:', users);
