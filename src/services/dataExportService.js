@@ -60,6 +60,34 @@ class DataExportService {
     return JSON.parse(selectedProject).id;
   }
 
+  // Get current project name from localStorage
+  getCurrentProjectName() {
+    const selectedProject = localStorage.getItem('adminSelectedProject');
+    if (!selectedProject) {
+      return 'Unknown Project';
+    }
+    const project = JSON.parse(selectedProject);
+    return project.name || project.id;
+  }
+
+  // Fetch project details
+  async fetchProjectDetails(projectId) {
+    try {
+      const projectDoc = await getDoc(doc(db, 'projects', projectId));
+      if (projectDoc.exists()) {
+        return {
+          id: projectDoc.id,
+          name: projectDoc.data().name || projectId,
+          ...projectDoc.data()
+        };
+      }
+      return { id: projectId, name: projectId };
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+      return { id: projectId, name: projectId };
+    }
+  }
+
   // Fetch user's gate passes
   async fetchUserGatePasses(projectId, userId) {
     try {
@@ -675,6 +703,107 @@ class DataExportService {
       console.error('Error exporting all data:', error);
       throw error;
     }
+  }
+
+  // Generate user activity report
+  async generateUserActivityReport(projectId) {
+    try {
+      console.log('Generating user activity report for project:', projectId);
+      
+      const project = await this.fetchProjectDetails(projectId);
+      const users = await this.fetchProjectUsers(projectId);
+      
+      const userActivity = [];
+      
+      for (const user of users) {
+        const userId = user.id;
+        const userName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.email || 'Unknown User';
+        
+        // Fetch counts for each data type
+        const [gatePasses, guestPasses, orders, bookings] = await Promise.all([
+          this.fetchUserGatePasses(projectId, userId),
+          this.fetchUserGuestPasses(projectId, userId),
+          this.fetchUserOrders(projectId, userId),
+          this.fetchUserBookings(projectId, userId)
+        ]);
+        
+        userActivity.push({
+          userId,
+          userName,
+          email: user.email || 'N/A',
+          role: user.role || 'N/A',
+          gatePasses: gatePasses.length,
+          guestPasses: guestPasses.length,
+          orders: orders.length,
+          bookings: bookings.length,
+          totalRequests: gatePasses.length + guestPasses.length + orders.length + bookings.length
+        });
+      }
+      
+      return {
+        projectName: project.name,
+        projectId: project.id,
+        exportDate: new Date().toISOString(),
+        totalUsers: users.length,
+        userActivity
+      };
+    } catch (error) {
+      console.error('Error generating user activity report:', error);
+      throw error;
+    }
+  }
+
+  // Export user activity report as CSV
+  async exportUserActivityReport(format = 'csv') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const report = await this.generateUserActivityReport(projectId);
+      
+      if (format === 'csv') {
+        const csvContent = this.createUserActivityCSV(report);
+        this.downloadFile(csvContent, `user-activity-report-${dateStr}.csv`, 'text/csv');
+      } else {
+        const jsonContent = this.convertToJSON(report);
+        this.downloadFile(jsonContent, `user-activity-report-${dateStr}.json`, 'application/json');
+      }
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error exporting user activity report:', error);
+      throw error;
+    }
+  }
+
+  // Create user activity CSV
+  createUserActivityCSV(report) {
+    const headers = ['User Name', 'Email', 'Role', 'Gate Passes', 'Guest Passes', 'Orders', 'Bookings', 'Total Requests'];
+    const rows = report.userActivity.map(user => [
+      user.userName,
+      user.email,
+      user.role,
+      user.gatePasses,
+      user.guestPasses,
+      user.orders,
+      user.bookings,
+      user.totalRequests
+    ]);
+    
+    const csvContent = [
+      'User Activity Report',
+      `Project Name: ${report.projectName}`,
+      `Project ID: ${report.projectId}`,
+      `Export Date: ${report.exportDate}`,
+      `Total Users: ${report.totalUsers}`,
+      '',
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    return csvContent;
   }
 
   // Create a clean summary CSV

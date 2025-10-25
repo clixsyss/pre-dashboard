@@ -16,14 +16,15 @@ const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
       let result;
       
       if (dataType === 'all') {
-        result = await dataExportService.exportAllDataSeparate(format);
+        // Export user activity report instead of all data
+        result = await dataExportService.exportUserActivityReport(format);
       } else {
         result = await dataExportService.exportData(dataType, format);
       }
 
       setExportStatus({
         type: 'success',
-        message: `Exported ${dataType} successfully as CSV`,
+        message: `Exported ${dataType === 'all' ? 'user activity report' : dataType} successfully as CSV`,
         result
       });
       
