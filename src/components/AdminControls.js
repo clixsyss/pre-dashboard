@@ -15,6 +15,7 @@ import {
   RefreshCcw,
   Clock
 } from 'lucide-react';
+import ExportButton from './ExportButton';
 
 const AdminControls = ({ 
   globalSettings, 
@@ -720,13 +721,10 @@ const AdminControls = ({
                 <div>
                   <h4 className="font-medium text-blue-900">Export User Data</h4>
                   <p className="text-sm text-blue-700">
-                    Download all user data and usage statistics
+                    Download all user data and usage statistics as CSV
                   </p>
                 </div>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <Save className="h-4 w-4" />
-                  <span>Export</span>
-                </button>
+                <ExportButton dataType="all" className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" />
               </div>
 
               <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">

@@ -52,11 +52,11 @@ const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
       <button
         onClick={handleExport}
         disabled={isExporting}
-        className={`${className} px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`${className || 'px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400'} transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {isExporting ? (
           <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
             <span className="font-medium">Exporting...</span>
           </>
         ) : (
