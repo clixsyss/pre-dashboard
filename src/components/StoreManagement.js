@@ -7,7 +7,7 @@ import {
   Eye, 
   Search, 
   Package,
-  Store,
+  Store, 
   DollarSign,
   Tag,
   MapPin,
