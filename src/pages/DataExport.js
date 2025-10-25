@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import DataExport from '../components/DataExport';
 import DataExportDebug from '../components/DataExportDebug';
 import UserDataExport from '../components/UserDataExport';
-import { Bug, Download, Users, User } from 'lucide-react';
+import { Bug, Users, User } from 'lucide-react';
 
 const DataExportPage = () => {
   const [activeTab, setActiveTab] = useState('admin'); // 'admin', 'users', 'debug'

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileDown, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, CheckCircle, AlertCircle } from 'lucide-react';
 import dataExportService from '../services/dataExportService';
 
 const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
@@ -11,8 +11,7 @@ const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
     setExportStatus(null);
 
     try {
-      const targetUserId = userId || dataExportService.getCurrentUserId();
-      const format = 'json'; // Default to JSON for consistency
+      const format = 'csv'; // Export as CSV
       
       let result;
       
@@ -24,15 +23,25 @@ const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
 
       setExportStatus({
         type: 'success',
-        message: `Exported ${dataType} successfully`,
+        message: `Exported ${dataType} successfully as CSV`,
         result
       });
+      
+      // Auto-hide success message after 3 seconds
+      setTimeout(() => {
+        setExportStatus(null);
+      }, 3000);
     } catch (error) {
       console.error('Export error:', error);
       setExportStatus({
         type: 'error',
         message: `Export failed: ${error.message}`
       });
+      
+      // Auto-hide error message after 5 seconds
+      setTimeout(() => {
+        setExportStatus(null);
+      }, 5000);
     } finally {
       setIsExporting(false);
     }
