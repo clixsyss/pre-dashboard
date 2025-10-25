@@ -41,7 +41,6 @@ import {
   Unlink,
   Tag,
   Smartphone,
-  Download,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -69,7 +68,7 @@ import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
 import GuestPasses from './GuestPasses';
 import DeviceKeysManagement from '../components/DeviceKeysManagement';
-import DataExport from '../components/DataExport';
+import ExportButton from '../components/ExportButton';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -306,12 +305,6 @@ const ProjectDashboard = () => {
       category: 'Administration',
       items: [
         { id: 'admins', name: 'Admin Accounts', icon: UserPlus, description: 'Manage admin accounts & permissions', permission: 'admin_accounts' }
-      ]
-    },
-    {
-      category: 'Data Management',
-      items: [
-        { id: 'data-export', name: 'Export Data', icon: Download, description: 'Export your data', permission: null } // Always visible
       ]
     }
   ];
@@ -5005,6 +4998,7 @@ const ProjectDashboard = () => {
                 </p>
               </div>
               <div className="flex space-x-2">
+                <ExportButton dataType="bookings" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
                 <button
                   onClick={refreshAllData}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
@@ -5918,12 +5912,6 @@ const ProjectDashboard = () => {
               </PermissionGate>
         )}
 
-        {activeTab === 'data-export' && (
-          <div className="space-y-6">
-            <DataExport />
-          </div>
-        )}
-
         {activeTab === 'store' && (
               <PermissionGate entity="store" action="read" showMessage={true}>
           <div className="space-y-6">
@@ -5955,6 +5943,7 @@ const ProjectDashboard = () => {
                 </p>
               </div>
               <div className="flex space-x-2">
+                <ExportButton dataType="orders" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
                 <button
                   onClick={refreshAllData}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"

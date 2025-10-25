@@ -6,7 +6,6 @@ import {
   Settings, 
   Search,
   Filter,
-  Download,
   CheckCircle,
   AlertCircle,
   Building2,
@@ -16,6 +15,7 @@ import {
 import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
 import AdminControls from '../components/AdminControls';
+import ExportButton from '../components/ExportButton';
 import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
 
 const GuestPasses = () => {
@@ -140,10 +140,7 @@ const GuestPasses = () => {
         </div>
         
         <div className="flex items-center space-x-3">
-          <button className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md">
-            <Download className="h-5 w-5" />
-            <span className="font-medium">Export</span>
-          </button>
+          <ExportButton dataType="guestPasses" />
           <button 
             onClick={() => {
               const activeProjectId = selectedProject?.id || projectId;
