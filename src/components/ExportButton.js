@@ -1,0 +1,82 @@
+import React, { useState } from 'react';
+import { Download, FileDown, CheckCircle, AlertCircle } from 'lucide-react';
+import dataExportService from '../services/dataExportService';
+
+const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState(null);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    setExportStatus(null);
+
+    try {
+      const targetUserId = userId || dataExportService.getCurrentUserId();
+      const format = 'json'; // Default to JSON for consistency
+      
+      let result;
+      
+      if (dataType === 'all') {
+        result = await dataExportService.exportAllDataSeparate(format);
+      } else {
+        result = await dataExportService.exportData(dataType, format);
+      }
+
+      setExportStatus({
+        type: 'success',
+        message: `Exported ${dataType} successfully`,
+        result
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      setExportStatus({
+        type: 'error',
+        message: `Export failed: ${error.message}`
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={handleExport}
+        disabled={isExporting}
+        className={`${className} px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+      >
+        {isExporting ? (
+          <>
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+            <span className="font-medium">Exporting...</span>
+          </>
+        ) : (
+          <>
+            <Download className="h-5 w-5" />
+            <span className="font-medium">Export</span>
+          </>
+        )}
+      </button>
+
+      {/* Export Status Toast */}
+      {exportStatus && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-2 ${
+          exportStatus.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className="flex items-center space-x-2">
+            {exportStatus.type === 'success' ? (
+              <CheckCircle className="h-5 w-5" />
+            ) : (
+              <AlertCircle className="h-5 w-5" />
+            )}
+            <span className="font-medium">{exportStatus.message}</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default ExportButton;

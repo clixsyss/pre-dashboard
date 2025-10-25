@@ -41,7 +41,6 @@ import {
   Unlink,
   Tag,
   Smartphone,
-  Download,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -69,7 +68,6 @@ import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
 import GuestPasses from './GuestPasses';
 import DeviceKeysManagement from '../components/DeviceKeysManagement';
-import DataExport from '../components/DataExport';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -306,12 +304,6 @@ const ProjectDashboard = () => {
       category: 'Administration',
       items: [
         { id: 'admins', name: 'Admin Accounts', icon: UserPlus, description: 'Manage admin accounts & permissions', permission: 'admin_accounts' }
-      ]
-    },
-    {
-      category: 'Data Management',
-      items: [
-        { id: 'data-export', name: 'Export Data', icon: Download, description: 'Export your data', permission: null } // Always visible
       ]
     }
   ];
@@ -5874,12 +5866,6 @@ const ProjectDashboard = () => {
               </div>
             </div>
               </PermissionGate>
-        )}
-
-        {activeTab === 'data-export' && (
-          <div className="space-y-6">
-            <DataExport />
-          </div>
         )}
 
         {activeTab === 'store' && (

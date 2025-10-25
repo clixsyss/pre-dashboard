@@ -10,8 +10,7 @@ import {
   Bell,
   BarChart3,
   UserCheck,
-  Shield,
-  Download
+  Shield
 } from 'lucide-react';
 import logo from '../logo.png';
 
@@ -26,7 +25,6 @@ const Layout = () => {
     { name: 'Projects', href: '/projects', icon: Building2, description: 'Manage Projects' },
     { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
     { name: 'Admin Management', href: '/admin-management', icon: Shield, description: 'Manage Admin Accounts & Approvals' },
-    { name: 'Export Data', href: '/data-export', icon: Download, description: 'Export Your Data' },
   ];
 
   const handleLogout = async () => {
