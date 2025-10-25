@@ -14,17 +14,37 @@ const ExportButton = ({ dataType, userId, projectId, className = '' }) => {
       const format = 'csv'; // Export as CSV
       
       let result;
+      let message = '';
       
       if (dataType === 'all') {
-        // Export user activity report instead of all data
+        // Export user activity report
         result = await dataExportService.exportUserActivityReport(format);
+        message = 'User activity report exported successfully as CSV';
+      } else if (dataType === 'orders') {
+        // Export detailed orders report
+        result = await dataExportService.exportOrdersReport(format);
+        message = 'Orders report exported successfully as CSV';
+      } else if (dataType === 'bookings') {
+        // Export detailed bookings report
+        result = await dataExportService.exportBookingsReport(format);
+        message = 'Bookings report exported successfully as CSV';
+      } else if (dataType === 'gatePasses') {
+        // Export detailed gate passes report
+        result = await dataExportService.exportGatePassesReport(format);
+        message = 'Gate passes report exported successfully as CSV';
+      } else if (dataType === 'guestPasses') {
+        // Export detailed guest passes report
+        result = await dataExportService.exportGuestPassesReport(format);
+        message = 'Guest passes report exported successfully as CSV';
       } else {
+        // Export individual data type
         result = await dataExportService.exportData(dataType, format);
+        message = `Exported ${dataType} successfully as CSV`;
       }
 
       setExportStatus({
         type: 'success',
-        message: `Exported ${dataType === 'all' ? 'user activity report' : dataType} successfully as CSV`,
+        message,
         result
       });
       

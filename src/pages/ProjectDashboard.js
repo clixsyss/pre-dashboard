@@ -68,6 +68,7 @@ import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
 import GuestPasses from './GuestPasses';
 import DeviceKeysManagement from '../components/DeviceKeysManagement';
+import ExportButton from '../components/ExportButton';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
@@ -4955,6 +4956,7 @@ const ProjectDashboard = () => {
                 </p>
               </div>
               <div className="flex space-x-2">
+                <ExportButton dataType="bookings" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
                 <button
                   onClick={refreshAllData}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
@@ -5899,6 +5901,7 @@ const ProjectDashboard = () => {
                 </p>
               </div>
               <div className="flex space-x-2">
+                <ExportButton dataType="orders" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
                 <button
                   onClick={refreshAllData}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"

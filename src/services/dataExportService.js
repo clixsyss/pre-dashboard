@@ -822,6 +822,396 @@ class DataExportService {
     return csvContent;
   }
 
+  // Export detailed orders report
+  async exportOrdersReport(format = 'csv') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(projectId);
+      const users = await this.fetchProjectUsers(projectId);
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const report = {
+        projectName: project.name,
+        projectId: project.id,
+        exportDate: new Date().toISOString(),
+        userOrders: []
+      };
+      
+      for (const user of users) {
+        const orders = await this.fetchUserOrders(projectId, user.id);
+        
+        if (orders.length > 0) {
+          const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+          
+          report.userOrders.push({
+            userName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
+            email: user.email,
+            role: user.role,
+            totalOrders: orders.length,
+            totalSpent: totalSpent,
+            averageOrderValue: orders.length > 0 ? totalSpent / orders.length : 0,
+            orders: orders.map(order => ({
+              orderNumber: order.orderNumber || order.id,
+              date: order.orderDate || order.createdAt,
+              status: order.status,
+              items: order.items?.length || 0,
+              total: order.total || 0
+            }))
+          });
+        }
+      }
+      
+      if (format === 'csv') {
+        const csvContent = this.createOrdersReportCSV(report);
+        this.downloadFile(csvContent, `orders-report-${dateStr}.csv`, 'text/csv');
+      } else {
+        const jsonContent = this.convertToJSON(report);
+        this.downloadFile(jsonContent, `orders-report-${dateStr}.json`, 'application/json');
+      }
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error exporting orders report:', error);
+      throw error;
+    }
+  }
+
+  // Create orders report CSV
+  createOrdersReportCSV(report) {
+    const summaryHeaders = ['User Name', 'Email', 'Role', 'Total Orders', 'Total Spent', 'Average Order Value'];
+    const summaryRows = report.userOrders.map(user => [
+      user.userName,
+      user.email,
+      user.role,
+      user.totalOrders,
+      user.totalSpent.toFixed(2),
+      user.averageOrderValue.toFixed(2)
+    ]);
+    
+    // Detailed orders
+    const detailHeaders = ['User Name', 'Order Number', 'Date', 'Status', 'Items', 'Total'];
+    const detailRows = [];
+    
+    report.userOrders.forEach(user => {
+      user.orders.forEach(order => {
+        detailRows.push([
+          user.userName,
+          order.orderNumber,
+          order.date,
+          order.status,
+          order.items,
+          order.total
+        ]);
+      });
+    });
+    
+    const csvContent = [
+      'Orders Report',
+      `Project Name: ${report.projectName}`,
+      `Project ID: ${report.projectId}`,
+      `Export Date: ${report.exportDate}`,
+      `Total Users with Orders: ${report.userOrders.length}`,
+      '',
+      'SUMMARY',
+      ...summaryRows.length > 0 ? [summaryHeaders.join(','), ...summaryRows.map(row => row.join(','))] : [],
+      '',
+      'DETAILED ORDERS',
+      ...detailRows.length > 0 ? [detailHeaders.join(','), ...detailRows.map(row => row.join(','))] : []
+    ].join('\n');
+    
+    return csvContent;
+  }
+
+  // Export detailed bookings report
+  async exportBookingsReport(format = 'csv') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(projectId);
+      const users = await this.fetchProjectUsers(projectId);
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const report = {
+        projectName: project.name,
+        projectId: project.id,
+        exportDate: new Date().toISOString(),
+        userBookings: []
+      };
+      
+      for (const user of users) {
+        const bookings = await this.fetchUserBookings(projectId, user.id);
+        
+        if (bookings.length > 0) {
+          const totalSpent = bookings.reduce((sum, booking) => sum + (booking.totalPrice || booking.totalCost || 0), 0);
+          
+          report.userBookings.push({
+            userName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
+            email: user.email,
+            role: user.role,
+            totalBookings: bookings.length,
+            totalSpent: totalSpent,
+            averageBookingValue: bookings.length > 0 ? totalSpent / bookings.length : 0,
+            bookings: bookings.map(booking => ({
+              type: booking.type,
+              serviceName: booking.courtName || booking.academyName || 'Unknown',
+              date: booking.date || booking.bookingDate,
+              status: booking.status,
+              total: booking.totalPrice || booking.totalCost || 0
+            }))
+          });
+        }
+      }
+      
+      if (format === 'csv') {
+        const csvContent = this.createBookingsReportCSV(report);
+        this.downloadFile(csvContent, `bookings-report-${dateStr}.csv`, 'text/csv');
+      } else {
+        const jsonContent = this.convertToJSON(report);
+        this.downloadFile(jsonContent, `bookings-report-${dateStr}.json`, 'application/json');
+      }
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error exporting bookings report:', error);
+      throw error;
+    }
+  }
+
+  // Create bookings report CSV
+  createBookingsReportCSV(report) {
+    const summaryHeaders = ['User Name', 'Email', 'Role', 'Total Bookings', 'Total Spent', 'Average Booking Value'];
+    const summaryRows = report.userBookings.map(user => [
+      user.userName,
+      user.email,
+      user.role,
+      user.totalBookings,
+      user.totalSpent.toFixed(2),
+      user.averageBookingValue.toFixed(2)
+    ]);
+    
+    // Detailed bookings
+    const detailHeaders = ['User Name', 'Service Type', 'Service Name', 'Date', 'Status', 'Total'];
+    const detailRows = [];
+    
+    report.userBookings.forEach(user => {
+      user.bookings.forEach(booking => {
+        detailRows.push([
+          user.userName,
+          booking.type,
+          booking.serviceName,
+          booking.date,
+          booking.status,
+          booking.total
+        ]);
+      });
+    });
+    
+    const csvContent = [
+      'Bookings Report',
+      `Project Name: ${report.projectName}`,
+      `Project ID: ${report.projectId}`,
+      `Export Date: ${report.exportDate}`,
+      `Total Users with Bookings: ${report.userBookings.length}`,
+      '',
+      'SUMMARY',
+      ...summaryRows.length > 0 ? [summaryHeaders.join(','), ...summaryRows.map(row => row.join(','))] : [],
+      '',
+      'DETAILED BOOKINGS',
+      ...detailRows.length > 0 ? [detailHeaders.join(','), ...detailRows.map(row => row.join(','))] : []
+    ].join('\n');
+    
+    return csvContent;
+  }
+
+  // Export detailed gate passes report
+  async exportGatePassesReport(format = 'csv') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(projectId);
+      const users = await this.fetchProjectUsers(projectId);
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const report = {
+        projectName: project.name,
+        projectId: project.id,
+        exportDate: new Date().toISOString(),
+        userGatePasses: []
+      };
+      
+      for (const user of users) {
+        const gatePasses = await this.fetchUserGatePasses(projectId, user.id);
+        
+        if (gatePasses.length > 0) {
+          report.userGatePasses.push({
+            userName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
+            email: user.email,
+            role: user.role,
+            totalGatePasses: gatePasses.length,
+            gatePasses: gatePasses.map(pass => ({
+              passNumber: pass.passNumber || pass.id,
+              type: pass.type,
+              status: pass.status,
+              validFrom: pass.validFrom,
+              validUntil: pass.validUntil,
+              purpose: pass.purpose || 'N/A'
+            }))
+          });
+        }
+      }
+      
+      if (format === 'csv') {
+        const csvContent = this.createGatePassesReportCSV(report);
+        this.downloadFile(csvContent, `gate-passes-report-${dateStr}.csv`, 'text/csv');
+      } else {
+        const jsonContent = this.convertToJSON(report);
+        this.downloadFile(jsonContent, `gate-passes-report-${dateStr}.json`, 'application/json');
+      }
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error exporting gate passes report:', error);
+      throw error;
+    }
+  }
+
+  // Create gate passes report CSV
+  createGatePassesReportCSV(report) {
+    const summaryHeaders = ['User Name', 'Email', 'Role', 'Total Gate Passes'];
+    const summaryRows = report.userGatePasses.map(user => [
+      user.userName,
+      user.email,
+      user.role,
+      user.totalGatePasses
+    ]);
+    
+    // Detailed gate passes
+    const detailHeaders = ['User Name', 'Pass Number', 'Type', 'Status', 'Valid From', 'Valid Until', 'Purpose'];
+    const detailRows = [];
+    
+    report.userGatePasses.forEach(user => {
+      user.gatePasses.forEach(pass => {
+        detailRows.push([
+          user.userName,
+          pass.passNumber,
+          pass.type,
+          pass.status,
+          pass.validFrom,
+          pass.validUntil,
+          pass.purpose
+        ]);
+      });
+    });
+    
+    const csvContent = [
+      'Gate Passes Report',
+      `Project Name: ${report.projectName}`,
+      `Project ID: ${report.projectId}`,
+      `Export Date: ${report.exportDate}`,
+      `Total Users with Gate Passes: ${report.userGatePasses.length}`,
+      '',
+      'SUMMARY',
+      ...summaryRows.length > 0 ? [summaryHeaders.join(','), ...summaryRows.map(row => row.join(','))] : [],
+      '',
+      'DETAILED GATE PASSES',
+      ...detailRows.length > 0 ? [detailHeaders.join(','), ...detailRows.map(row => row.join(','))] : []
+    ].join('\n');
+    
+    return csvContent;
+  }
+
+  // Export detailed guest passes report
+  async exportGuestPassesReport(format = 'csv') {
+    try {
+      const projectId = this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(projectId);
+      const users = await this.fetchProjectUsers(projectId);
+      const dateStr = new Date().toISOString().split('T')[0];
+      
+      const report = {
+        projectName: project.name,
+        projectId: project.id,
+        exportDate: new Date().toISOString(),
+        userGuestPasses: []
+      };
+      
+      for (const user of users) {
+        const guestPasses = await this.fetchUserGuestPasses(projectId, user.id);
+        
+        if (guestPasses.length > 0) {
+          report.userGuestPasses.push({
+            userName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
+            email: user.email,
+            role: user.role,
+            totalGuestPasses: guestPasses.length,
+            guestPasses: guestPasses.map(pass => ({
+              passId: pass.id,
+              status: pass.sentStatus ? 'Sent' : 'Pending',
+              createdAt: pass.createdAt,
+              validFrom: pass.validFrom,
+              validUntil: pass.validUntil
+            }))
+          });
+        }
+      }
+      
+      if (format === 'csv') {
+        const csvContent = this.createGuestPassesReportCSV(report);
+        this.downloadFile(csvContent, `guest-passes-report-${dateStr}.csv`, 'text/csv');
+      } else {
+        const jsonContent = this.convertToJSON(report);
+        this.downloadFile(jsonContent, `guest-passes-report-${dateStr}.json`, 'application/json');
+      }
+      
+      return { success: true, report };
+    } catch (error) {
+      console.error('Error exporting guest passes report:', error);
+      throw error;
+    }
+  }
+
+  // Create guest passes report CSV
+  createGuestPassesReportCSV(report) {
+    const summaryHeaders = ['User Name', 'Email', 'Role', 'Total Guest Passes'];
+    const summaryRows = report.userGuestPasses.map(user => [
+      user.userName,
+      user.email,
+      user.role,
+      user.totalGuestPasses
+    ]);
+    
+    // Detailed guest passes
+    const detailHeaders = ['User Name', 'Pass ID', 'Status', 'Created Date', 'Valid From', 'Valid Until'];
+    const detailRows = [];
+    
+    report.userGuestPasses.forEach(user => {
+      user.guestPasses.forEach(pass => {
+        detailRows.push([
+          user.userName,
+          pass.passId,
+          pass.status,
+          pass.createdAt,
+          pass.validFrom,
+          pass.validUntil
+        ]);
+      });
+    });
+    
+    const csvContent = [
+      'Guest Passes Report',
+      `Project Name: ${report.projectName}`,
+      `Project ID: ${report.projectId}`,
+      `Export Date: ${report.exportDate}`,
+      `Total Users with Guest Passes: ${report.userGuestPasses.length}`,
+      '',
+      'SUMMARY',
+      ...summaryRows.length > 0 ? [summaryHeaders.join(','), ...summaryRows.map(row => row.join(','))] : [],
+      '',
+      'DETAILED GUEST PASSES',
+      ...detailRows.length > 0 ? [detailHeaders.join(','), ...detailRows.map(row => row.join(','))] : []
+    ].join('\n');
+    
+    return csvContent;
+  }
+
   // Create a clean summary CSV
   createSummaryCSV(summary) {
     const headers = ['Data Type', 'Records Found', 'Status', 'File Name'];
