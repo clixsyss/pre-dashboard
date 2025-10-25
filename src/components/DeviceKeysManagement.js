@@ -32,15 +32,20 @@ const DeviceKeysManagement = ({ projectId }) => {
         const userData = userDoc.data();
         
         // Check if user belongs to this project
-        if (userData.projects && userData.projects[activeProjectId]) {
+        // Projects is an array of objects, not an object with project IDs as keys
+        const userProject = userData.projects?.find(p => p.projectId === activeProjectId);
+        
+        if (userProject) {
           keysData.push({
             id: userDoc.id,
             userId: userDoc.id,
             userName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown',
             email: userData.email || 'No email',
             deviceKey: userData.deviceKey || 'Not set',
-            unit: userData.projects[activeProjectId].unit || 'N/A',
-            lastLogin: userData.lastLogin || null,
+            unit: userProject.unit || 'N/A',
+            role: userProject.role || 'N/A',
+            lastLogin: userData.lastLoginAt || userData.lastLogin || null,
+            deviceKeyUpdatedAt: userData.deviceKeyUpdatedAt || null,
             createdAt: userData.createdAt || null
           });
         }
@@ -60,14 +65,15 @@ const DeviceKeysManagement = ({ projectId }) => {
       setLoading(true);
       setErrorMessage('');
 
-      const requestsRef = collection(db, 'deviceKeyResetRequests');
-      let q;
-
-      if (activeProjectId) {
-        q = query(requestsRef, where('projectId', '==', activeProjectId));
-      } else {
-        q = query(requestsRef);
+      if (!activeProjectId) {
+        setRequests([]);
+        setLoading(false);
+        return;
       }
+
+      // Read from project subcollection: projects/{projectId}/deviceKeyResetRequests
+      const requestsRef = collection(db, 'projects', activeProjectId, 'deviceKeyResetRequests');
+      const q = query(requestsRef);
 
       const snapshot = await getDocs(q);
       let fetchedRequests = snapshot.docs.map(doc => ({
@@ -78,11 +84,16 @@ const DeviceKeysManagement = ({ projectId }) => {
       // Fetch user names for each request
       for (let request of fetchedRequests) {
         try {
-          const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
-          if (!userDoc.empty) {
-            const userData = userDoc.docs[0].data();
+          const userSnap = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
+          if (!userSnap.empty) {
+            const userData = userSnap.docs[0].data();
             request.userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
             request.userEmail = userData.email || '';
+            
+            // Get user's unit in the project
+            const userProject = userData.projects?.find(p => p.projectId === request.projectId);
+            request.userUnit = userProject?.unit || 'N/A';
+            request.userRole = userProject?.role || 'N/A';
           }
         } catch (err) {
           console.error('Error fetching user data:', err);
@@ -124,14 +135,14 @@ const DeviceKeysManagement = ({ projectId }) => {
     loadDeviceKeys(activeProjectId);
 
     // Set up real-time listener for reset requests
-    const requestsRef = collection(db, 'deviceKeyResetRequests');
-    let q;
-
-    if (activeProjectId) {
-      q = query(requestsRef, where('projectId', '==', activeProjectId));
-    } else {
-      q = query(requestsRef);
+    if (!activeProjectId) {
+      console.log('⚠️ No project ID, skipping real-time listener setup');
+      return;
     }
+
+    // Read from project subcollection: projects/{projectId}/deviceKeyResetRequests
+    const requestsRef = collection(db, 'projects', activeProjectId, 'deviceKeyResetRequests');
+    const q = query(requestsRef);
 
     console.log('🔄 Setting up real-time listener for device key reset requests...');
     
@@ -147,11 +158,16 @@ const DeviceKeysManagement = ({ projectId }) => {
         // Fetch user names for each request
         for (let request of fetchedRequests) {
           try {
-            const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
-            if (!userDoc.empty) {
-              const userData = userDoc.docs[0].data();
+            const userSnap = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
+            if (!userSnap.empty) {
+              const userData = userSnap.docs[0].data();
               request.userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
               request.userEmail = userData.email || '';
+              
+              // Get user's unit in the project
+              const userProject = userData.projects?.find(p => p.projectId === request.projectId);
+              request.userUnit = userProject?.unit || 'N/A';
+              request.userRole = userProject?.role || 'N/A';
             }
           } catch (err) {
             console.error('Error fetching user data:', err);
@@ -209,7 +225,13 @@ const DeviceKeysManagement = ({ projectId }) => {
       setProcessingId(requestId);
       setErrorMessage('');
 
-      const requestRef = doc(db, 'deviceKeyResetRequests', requestId);
+      const activeProjectId = selectedProject?.id || projectId;
+      if (!activeProjectId) {
+        throw new Error('No project selected');
+      }
+
+      // Update in project subcollection
+      const requestRef = doc(db, 'projects', activeProjectId, 'deviceKeyResetRequests', requestId);
       await updateDoc(requestRef, {
         status: 'approved',
         resolvedAt: Timestamp.now(),
@@ -219,10 +241,7 @@ const DeviceKeysManagement = ({ projectId }) => {
       setSuccessMessage('Device key reset request approved successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      const activeProjectId = selectedProject?.id || projectId;
-      if (activeProjectId) {
-        await loadResetRequests(activeProjectId);
-      }
+      await loadResetRequests(activeProjectId);
     } catch (error) {
       console.error('Error approving request:', error);
       setErrorMessage('Failed to approve request. Please try again.');
@@ -242,7 +261,13 @@ const DeviceKeysManagement = ({ projectId }) => {
       setProcessingId(requestId);
       setErrorMessage('');
 
-      const requestRef = doc(db, 'deviceKeyResetRequests', requestId);
+      const activeProjectId = selectedProject?.id || projectId;
+      if (!activeProjectId) {
+        throw new Error('No project selected');
+      }
+
+      // Update in project subcollection
+      const requestRef = doc(db, 'projects', activeProjectId, 'deviceKeyResetRequests', requestId);
       await updateDoc(requestRef, {
         status: 'rejected',
         resolvedAt: Timestamp.now(),
@@ -253,10 +278,7 @@ const DeviceKeysManagement = ({ projectId }) => {
       setSuccessMessage('Device key reset request rejected.');
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      const activeProjectId = selectedProject?.id || projectId;
-      if (activeProjectId) {
-        await loadResetRequests(activeProjectId);
-      }
+      await loadResetRequests(activeProjectId);
     } catch (error) {
       console.error('Error rejecting request:', error);
       setErrorMessage('Failed to reject request. Please try again.');
@@ -462,7 +484,9 @@ const DeviceKeysManagement = ({ projectId }) => {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device Key</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key Updated</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
                     </tr>
                   </thead>
@@ -481,9 +505,21 @@ const DeviceKeysManagement = ({ projectId }) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <code className="px-2 py-1 text-xs bg-gray-100 rounded font-mono text-gray-700">
+                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            key.role === 'owner' ? 'bg-purple-100 text-purple-800' :
+                            key.role === 'family' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {key.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <code className="px-2 py-1 text-xs bg-gray-100 rounded font-mono text-gray-700 break-all max-w-xs inline-block">
                             {key.deviceKey}
                           </code>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(key.deviceKeyUpdatedAt)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(key.lastLogin)}
@@ -544,9 +580,22 @@ const DeviceKeysManagement = ({ projectId }) => {
                           {getStatusBadge(request.status)}
                         </div>
                         <p className="text-sm text-gray-600 mb-2">{request.userEmail}</p>
-                        {request.projectId && (
-                          <p className="text-xs text-gray-500">Project: {request.projectId}</p>
-                        )}
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          {request.userUnit && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
+                              Unit: {request.userUnit}
+                            </span>
+                          )}
+                          {request.userRole && (
+                            <span className={`px-2 py-1 rounded-full font-medium ${
+                              request.userRole === 'owner' ? 'bg-purple-100 text-purple-800' :
+                              request.userRole === 'family' ? 'bg-green-100 text-green-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {request.userRole}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 

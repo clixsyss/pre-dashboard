@@ -43,7 +43,7 @@ import {
   Smartphone,
   Download,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
@@ -587,6 +587,12 @@ const ProjectDashboard = () => {
     ).length || 0, [gatePasses]
   );
 
+  const pendingDeviceKeyResetRequestsCount = useMemo(() => 
+    deviceResetRequests?.filter(request => 
+      request.status === 'pending'
+    ).length || 0, [deviceResetRequests]
+  );
+
   // Update all notification counts - now just logs analytics (counts are memoized)
   const updateAllNotificationCounts = useCallback(() => {
 
@@ -660,7 +666,7 @@ const ProjectDashboard = () => {
         return isSuperAdmin() ? pendingAdminsCount : 0;
       case 'device_keys':
         // Show pending device reset requests
-        return deviceResetRequests?.filter(r => r.status === 'pending').length || 0;
+        return pendingDeviceKeyResetRequestsCount;
       case 'dashboard':
         // Dashboard shows total pending items requiring action
         return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
@@ -668,7 +674,7 @@ const ProjectDashboard = () => {
                (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
                openSupportTicketsCount +
                (isSuperAdmin() ? pendingAdminsCount : 0) +
-               (deviceResetRequests?.filter(r => r.status === 'pending').length || 0);
+               pendingDeviceKeyResetRequestsCount;
       default:
         return 0;
     }
@@ -681,6 +687,7 @@ const ProjectDashboard = () => {
     openSupportTicketsCount, 
     pendingFinesCount, 
     pendingGatePassCount,
+    pendingDeviceKeyResetRequestsCount,
     projectBookings,
     requestSubmissions,
     stores,
@@ -688,7 +695,6 @@ const ProjectDashboard = () => {
     adsItems,
     guards,
     pendingAdminsCount,
-    deviceResetRequests,
     isSuperAdmin
   ]);
 
@@ -984,10 +990,15 @@ const ProjectDashboard = () => {
   // Fetch device reset requests
   const fetchDeviceResetRequests = useCallback(async (projectId) => {
     try {
+      if (!projectId) {
+        setDeviceResetRequests([]);
+        return;
+      }
+      
+      // Read from project subcollection: projects/{projectId}/deviceKeyResetRequests
       const requestsSnapshot = await getDocs(
         query(
-          collection(db, 'deviceKeyResetRequests'),
-          where('projectId', '==', projectId),
+          collection(db, 'projects', projectId, 'deviceKeyResetRequests'),
           orderBy('requestedAt', 'desc')
         )
       );
@@ -1039,6 +1050,37 @@ const ProjectDashboard = () => {
       loadAllData();
     }
   }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests]);
+
+  // Set up real-time listener for device reset requests (same as other tabs)
+  useEffect(() => {
+    if (!projectId) return;
+
+    console.log('🔄 Setting up real-time listener for device reset requests...');
+    
+    const requestsRef = collection(db, 'projects', projectId, 'deviceKeyResetRequests');
+    const q = query(requestsRef, orderBy('requestedAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const requestsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setDeviceResetRequests(requestsData);
+        console.log('📡 Device reset requests updated:', requestsData.length);
+      },
+      (error) => {
+        console.error('❌ Error in device reset requests listener:', error);
+      }
+    );
+
+    // Cleanup listener on unmount
+    return () => {
+      console.log('🧹 Cleaning up device reset requests listener');
+      unsubscribe();
+    };
+  }, [projectId]);
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
