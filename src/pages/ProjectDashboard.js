@@ -580,11 +580,23 @@ const ProjectDashboard = () => {
     ).length || 0, [gatePasses]
   );
 
-  const pendingDeviceKeyResetRequestsCount = useMemo(() => 
-    deviceResetRequests?.filter(request => 
-      request.status === 'pending'
-    ).length || 0, [deviceResetRequests]
-  );
+  const pendingDeviceKeyResetRequestsCount = useMemo(() => {
+    const count = deviceResetRequests?.filter(request => {
+      const isPending = request.status === 'pending';
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`   Checking request ${request.id}:`, { status: request.status, isPending });
+      }
+      return isPending;
+    }).length || 0;
+    
+    console.log('🔢 Calculating pendingDeviceKeyResetRequestsCount:', {
+      total: deviceResetRequests?.length || 0,
+      pending: count,
+      statuses: deviceResetRequests?.map(r => r.status).join(', ') || 'none'
+    });
+    
+    return count;
+  }, [deviceResetRequests]);
 
   // Update all notification counts - now just logs analytics (counts are memoized)
   const updateAllNotificationCounts = useCallback(() => {
@@ -607,70 +619,84 @@ const ProjectDashboard = () => {
 
   // Get notification count for a specific service
   const getNotificationCount = useCallback((serviceId) => {
-    switch (serviceId) {
-      case 'users':
-        return pendingUsersCount; // Users awaiting approval
-      case 'services':
-        return pendingServiceRequestsCount; // Pending service bookings
-      case 'bookings':
-        // Show only pending bookings (new bookings awaiting action)
-        return projectBookings?.filter(b => b.status === 'pending').length || 0;
-      case 'orders':
-        return pendingOrdersCount; // Orders needing processing
-      case 'events': // notifications
-        return unreadNotificationsCount; // Unread notifications
-      case 'complaints':
-        return openComplaintsCount; // Open complaints
-      case 'support':
-        return openSupportTicketsCount; // Open support tickets
-      case 'fines':
-        return pendingFinesCount; // Unpaid/disputed fines
-      case 'gatepass':
-        return pendingGatePassCount; // Active gate passes
-      case 'academies':
-        // Show upcoming academy bookings
-        return projectBookings?.filter(b => 
-          (b.type === 'academy' || b.academyId || b.academyName) && 
-          (b.status === 'pending' || b.status === 'confirmed')
-        ).length || 0;
-      case 'courts':
-        // No indicator for courts tab
-        return 0;
-      case 'requests':
-        // Show pending request submissions
-        return requestSubmissions?.filter(r => r.status === 'pending').length || 0;
-      case 'store':
-        // Show active stores
-        return stores?.filter(s => s.status === 'active' || s.isActive).length || 0;
-      case 'news':
-        // Show active/published news items
-        return newsItems?.filter(n => n.status === 'active' || n.published).length || 0;
-      case 'ads':
-        // Show active ads
-        return adsItems?.filter(a => a.status === 'active' || a.isActive).length || 0;
-      case 'guards':
-        // Show active guards
-        return guards?.filter(g => g.status === 'active' || g.isActive).length || 0;
-      case 'guidelines':
-        // No indicator needed for static content
-        return 0;
-      case 'admins':
-        // Show pending admin requests (super admins only)
-        return isSuperAdmin() ? pendingAdminsCount : 0;
-      case 'device_keys':
-        // Show pending device reset requests
-        return pendingDeviceKeyResetRequestsCount;
-      case 'dashboard':
-        // Dashboard shows total pending items requiring action
-        return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
-               openComplaintsCount + pendingFinesCount + 
-               (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
-               openSupportTicketsCount +
-               (isSuperAdmin() ? pendingAdminsCount : 0) +
-               pendingDeviceKeyResetRequestsCount;
-      default:
-        return 0;
+    const count = (() => {
+      switch (serviceId) {
+        case 'users':
+          return pendingUsersCount; // Users awaiting approval
+        case 'services':
+          return pendingServiceRequestsCount; // Pending service bookings
+        case 'bookings':
+          // Show only pending bookings (new bookings awaiting action)
+          return projectBookings?.filter(b => b.status === 'pending').length || 0;
+        case 'orders':
+          return pendingOrdersCount; // Orders needing processing
+        case 'events': // notifications
+          return unreadNotificationsCount; // Unread notifications
+        case 'complaints':
+          return openComplaintsCount; // Open complaints
+        case 'support':
+          return openSupportTicketsCount; // Open support tickets
+        case 'fines':
+          return pendingFinesCount; // Unpaid/disputed fines
+        case 'gatepass':
+          return pendingGatePassCount; // Active gate passes
+        case 'academies':
+          // Show upcoming academy bookings
+          return projectBookings?.filter(b => 
+            (b.type === 'academy' || b.academyId || b.academyName) && 
+            (b.status === 'pending' || b.status === 'confirmed')
+          ).length || 0;
+        case 'courts':
+          // No indicator for courts tab
+          return 0;
+        case 'requests':
+          // Show pending request submissions
+          return requestSubmissions?.filter(r => r.status === 'pending').length || 0;
+        case 'store':
+          // Show active stores
+          return stores?.filter(s => s.status === 'active' || s.isActive).length || 0;
+        case 'news':
+          // Show active/published news items
+          return newsItems?.filter(n => n.status === 'active' || n.published).length || 0;
+        case 'ads':
+          // Show active ads
+          return adsItems?.filter(a => a.status === 'active' || a.isActive).length || 0;
+        case 'guards':
+          // Show active guards
+          return guards?.filter(g => g.status === 'active' || g.isActive).length || 0;
+        case 'guidelines':
+          // No indicator needed for static content
+          return 0;
+        case 'admins':
+          // Show pending admin requests (super admins only)
+          return isSuperAdmin() ? pendingAdminsCount : 0;
+        case 'device_keys':
+          // Show pending device reset requests
+          console.log('🔔 Device Keys Count Check:', {
+            total: deviceResetRequests?.length || 0,
+            pending: pendingDeviceKeyResetRequestsCount,
+            requests: deviceResetRequests
+          });
+          return pendingDeviceKeyResetRequestsCount;
+        case 'dashboard':
+          // Dashboard shows total pending items requiring action
+          return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
+                 openComplaintsCount + pendingFinesCount + 
+                 (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
+                 openSupportTicketsCount +
+                 (isSuperAdmin() ? pendingAdminsCount : 0) +
+                 pendingDeviceKeyResetRequestsCount;
+        default:
+          return 0;
+      }
+    })();
+    
+    // Log for debugging device_keys specifically
+    if (serviceId === 'device_keys' && count > 0) {
+      console.log('✅ Device Keys indicator should show:', count);
     }
+    
+    return count;
   }, [
     pendingUsersCount, 
     pendingServiceRequestsCount, 
@@ -681,6 +707,7 @@ const ProjectDashboard = () => {
     pendingFinesCount, 
     pendingGatePassCount,
     pendingDeviceKeyResetRequestsCount,
+    deviceResetRequests,
     projectBookings,
     requestSubmissions,
     stores,
@@ -1051,20 +1078,37 @@ const ProjectDashboard = () => {
     console.log('🔄 Setting up real-time listener for device reset requests...');
     
     const requestsRef = collection(db, 'projects', projectId, 'deviceKeyResetRequests');
-    const q = query(requestsRef, orderBy('requestedAt', 'desc'));
+    // Try without orderBy first to avoid index issues
+    const q = query(requestsRef);
     
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const requestsData = snapshot.docs.map(doc => ({
+        let requestsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        // Sort manually by requestedAt (newest first)
+        requestsData.sort((a, b) => {
+          const aTime = a.requestedAt?.toMillis?.() || a.requestedAt?.seconds * 1000 || 0;
+          const bTime = b.requestedAt?.toMillis?.() || b.requestedAt?.seconds * 1000 || 0;
+          return bTime - aTime;
+        });
+        
         setDeviceResetRequests(requestsData);
         console.log('📡 Device reset requests updated:', requestsData.length);
+        console.log('📊 Device reset requests data:', requestsData);
+        console.log('📊 Pending count:', requestsData.filter(r => r.status === 'pending').length);
+        
+        // Log each request status for debugging
+        requestsData.forEach(r => {
+          console.log(`   Request ${r.id}: status="${r.status}", user=${r.userId}`);
+        });
       },
       (error) => {
         console.error('❌ Error in device reset requests listener:', error);
+        console.error('❌ Error details:', error.message, error.code);
       }
     );
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Key, Clock, Check, X, AlertCircle, Smartphone, RefreshCw, Building2, Search } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc, Timestamp, onSnapshot } from 'firebase/firestore';
+import { Key, Clock, Check, X, AlertCircle, Smartphone, RefreshCw, Building2, Search, Eye, User, FileText, History } from 'lucide-react';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const DeviceKeysManagement = ({ projectId }) => {
-  const { currentUser } = useAdminAuth();
+  const { currentAdmin } = useAdminAuth();
   const [activeTab, setActiveTab] = useState('keys');
   const [requests, setRequests] = useState([]);
   const [deviceKeys, setDeviceKeys] = useState([]);
@@ -17,6 +17,13 @@ const DeviceKeysManagement = ({ projectId }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Modal states
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [userDetails, setUserDetails] = useState(null);
+  const [userRequestHistory, setUserRequestHistory] = useState([]);
+  const [loadingModal, setLoadingModal] = useState(false);
 
   const loadDeviceKeys = useCallback(async (activeProjectId) => {
     try {
@@ -129,25 +136,60 @@ const DeviceKeysManagement = ({ projectId }) => {
     setSelectedProject(project);
     
     const activeProjectId = project?.id || projectId;
-    if (!activeProjectId) return;
-
-    // Initial load
-    loadDeviceKeys(activeProjectId);
-
-    // Set up real-time listener for reset requests
     if (!activeProjectId) {
       console.log('⚠️ No project ID, skipping real-time listener setup');
       return;
     }
 
-    // Read from project subcollection: projects/{projectId}/deviceKeyResetRequests
-    const requestsRef = collection(db, 'projects', activeProjectId, 'deviceKeyResetRequests');
-    const q = query(requestsRef);
+    console.log('🔄 Setting up real-time listeners for device keys and reset requests...');
 
-    console.log('🔄 Setting up real-time listener for device key reset requests...');
-    
-    const unsubscribe = onSnapshot(
-      q,
+    // Set up real-time listener for ALL USERS (to get device keys)
+    const usersRef = collection(db, 'users');
+    const usersQuery = query(usersRef);
+
+    const unsubscribeUsers = onSnapshot(
+      usersQuery,
+      (snapshot) => {
+        console.log('📡 Real-time update received for users - processing device keys...');
+        const keysData = [];
+        
+        snapshot.docs.forEach(userDoc => {
+          const userData = userDoc.data();
+          
+          // Check if user belongs to this project
+          const userProject = userData.projects?.find(p => p.projectId === activeProjectId);
+          
+          if (userProject) {
+            keysData.push({
+              id: userDoc.id,
+              userId: userDoc.id,
+              userName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown',
+              email: userData.email || 'No email',
+              deviceKey: userData.deviceKey || 'Not set',
+              unit: userProject.unit || 'N/A',
+              role: userProject.role || 'N/A',
+              lastLogin: userData.lastLoginAt || userData.lastLogin || null,
+              deviceKeyUpdatedAt: userData.deviceKeyUpdatedAt || null,
+              createdAt: userData.createdAt || null
+            });
+          }
+        });
+
+        setDeviceKeys(keysData);
+        console.log('✅ Real-time device keys updated:', keysData.length, 'users');
+      },
+      (error) => {
+        console.error('❌ Real-time listener error for users:', error);
+        setErrorMessage('Error loading real-time device keys. Please refresh the page.');
+      }
+    );
+
+    // Set up real-time listener for reset requests
+    const requestsRef = collection(db, 'projects', activeProjectId, 'deviceKeyResetRequests');
+    const requestsQuery = query(requestsRef);
+
+    const unsubscribeRequests = onSnapshot(
+      requestsQuery,
       async (snapshot) => {
         console.log('📡 Real-time update received - processing requests...');
         let fetchedRequests = snapshot.docs.map(doc => ({
@@ -188,21 +230,22 @@ const DeviceKeysManagement = ({ projectId }) => {
 
         setRequests(fetchedRequests);
         setLoading(false);
-        console.log('✅ Real-time data updated:', fetchedRequests.length, 'requests');
+        console.log('✅ Real-time requests updated:', fetchedRequests.length, 'requests');
       },
       (error) => {
-        console.error('❌ Real-time listener error:', error);
+        console.error('❌ Real-time listener error for requests:', error);
         setErrorMessage('Error loading real-time updates. Please refresh the page.');
         setLoading(false);
       }
     );
 
-    // Cleanup listener on unmount
+    // Cleanup both listeners on unmount
     return () => {
-      console.log('🔌 Cleaning up real-time listener...');
-      unsubscribe();
+      console.log('🔌 Cleaning up real-time listeners...');
+      unsubscribeUsers();
+      unsubscribeRequests();
     };
-  }, [projectId, filter, loadDeviceKeys]);
+  }, [projectId, filter]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -217,7 +260,7 @@ const DeviceKeysManagement = ({ projectId }) => {
   };
 
   const handleApprove = async (requestId, userId) => {
-    if (!window.confirm('Are you sure you want to approve this device key reset request?')) {
+    if (!window.confirm('Are you sure you want to approve this device key reset request? This will clear the user\'s current device key and allow them to register a new device on login.')) {
       return;
     }
 
@@ -230,18 +273,32 @@ const DeviceKeysManagement = ({ projectId }) => {
         throw new Error('No project selected');
       }
 
-      // Update in project subcollection
+      // Step 1: Clear the user's device key
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        deviceKey: '',
+        deviceKeyUpdatedAt: Timestamp.now()
+      });
+      
+      console.log('✅ Device key cleared for user:', userId);
+
+      // Step 2: Update request status in project subcollection
       const requestRef = doc(db, 'projects', activeProjectId, 'deviceKeyResetRequests', requestId);
       await updateDoc(requestRef, {
         status: 'approved',
         resolvedAt: Timestamp.now(),
-        resolvedBy: currentUser.uid
+        resolvedBy: currentAdmin?.uid || 'admin',
+        adminNotes: 'Device key reset approved - user can now register a new device'
       });
 
-      setSuccessMessage('Device key reset request approved successfully!');
+      setSuccessMessage('Device key reset approved! User can now login on a new device.');
       setTimeout(() => setSuccessMessage(''), 3000);
       
-      await loadResetRequests(activeProjectId);
+      // Reload both device keys and requests to show updated data
+      await Promise.all([
+        loadDeviceKeys(activeProjectId),
+        loadResetRequests(activeProjectId)
+      ]);
     } catch (error) {
       console.error('Error approving request:', error);
       setErrorMessage('Failed to approve request. Please try again.');
@@ -271,7 +328,7 @@ const DeviceKeysManagement = ({ projectId }) => {
       await updateDoc(requestRef, {
         status: 'rejected',
         resolvedAt: Timestamp.now(),
-        resolvedBy: currentUser.uid,
+        resolvedBy: currentAdmin?.uid || 'admin',
         adminNotes: adminNotes || 'Request rejected by admin'
       });
 
@@ -317,6 +374,60 @@ const DeviceKeysManagement = ({ projectId }) => {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  // Load user details and their request history
+  const loadUserDetailsAndHistory = async (userId) => {
+    try {
+      setLoadingModal(true);
+      
+      // Load user details
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        setUserDetails({
+          id: userDoc.id,
+          ...userDoc.data()
+        });
+      }
+      
+      // Load all requests from all projects for this user
+      const allProjects = await getDocs(collection(db, 'projects'));
+      const allRequests = [];
+      
+      for (const projectDoc of allProjects.docs) {
+        const requestsRef = collection(db, 'projects', projectDoc.id, 'deviceKeyResetRequests');
+        const q = query(requestsRef, where('userId', '==', userId));
+        const requestsSnapshot = await getDocs(q);
+        
+        requestsSnapshot.docs.forEach(doc => {
+          allRequests.push({
+            id: doc.id,
+            projectId: projectDoc.id,
+            projectName: projectDoc.data().name || 'Unknown Project',
+            ...doc.data()
+          });
+        });
+      }
+      
+      // Sort by requestedAt descending
+      allRequests.sort((a, b) => {
+        const aTime = a.requestedAt?.toMillis() || 0;
+        const bTime = b.requestedAt?.toMillis() || 0;
+        return bTime - aTime;
+      });
+      
+      setUserRequestHistory(allRequests);
+    } catch (error) {
+      console.error('Error loading user details and history:', error);
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const handleViewRequest = async (request) => {
+    setSelectedRequest(request);
+    setShowRequestModal(true);
+    await loadUserDetailsAndHistory(request.userId);
   };
 
   const formatDate = (timestamp) => {
@@ -669,26 +780,36 @@ const DeviceKeysManagement = ({ projectId }) => {
                       )}
                     </div>
 
-                    {request.status === 'pending' && (
-                      <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
-                        <button
-                          onClick={() => handleApprove(request.id, request.userId)}
-                          disabled={processingId === request.id}
-                          className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-                        >
-                          <Check className="h-4 w-4 mr-2" />
-                          {processingId === request.id ? 'Processing...' : 'Approve'}
-                        </button>
-                        <button
-                          onClick={() => handleReject(request.id)}
-                          disabled={processingId === request.id}
-                          className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          {processingId === request.id ? 'Processing...' : 'Reject'}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => handleViewRequest(request)}
+                        className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Details
+                      </button>
+                      
+                      {request.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => handleApprove(request.id, request.userId)}
+                            disabled={processingId === request.id}
+                            className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            {processingId === request.id ? 'Processing...' : 'Approve'}
+                          </button>
+                          <button
+                            onClick={() => handleReject(request.id)}
+                            disabled={processingId === request.id}
+                            className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            {processingId === request.id ? 'Processing...' : 'Reject'}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -696,6 +817,340 @@ const DeviceKeysManagement = ({ projectId }) => {
           </div>
         )}
       </div>
+
+      {/* Request Details Modal */}
+      {showRequestModal && selectedRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-white bg-opacity-20 rounded-xl">
+                    <Smartphone className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Device Key Reset Request</h2>
+                    <p className="text-red-100 mt-1">Complete user details and request history</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRequestModal(false);
+                    setSelectedRequest(null);
+                    setUserDetails(null);
+                    setUserRequestHistory([]);
+                  }}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {loadingModal ? (
+              <div className="p-12 text-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading user details...</p>
+              </div>
+            ) : (
+              <div className="p-6 space-y-6">
+                {/* Current Request Details */}
+                <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-6 border-2 border-yellow-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                      <FileText className="h-5 w-5 mr-2 text-yellow-600" />
+                      Current Request
+                    </h3>
+                    {getStatusBadge(selectedRequest.status)}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Requested On</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{formatDate(selectedRequest.requestedAt)}</p>
+                    </div>
+                    
+                    {selectedRequest.resolvedAt && (
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resolved On</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{formatDate(selectedRequest.resolvedAt)}</p>
+                      </div>
+                    )}
+                    
+                    <div className="bg-white rounded-lg p-4 md:col-span-2">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Reason for Request</label>
+                      <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedRequest.reason}</p>
+                    </div>
+                    
+                    {selectedRequest.adminNotes && (
+                      <div className="bg-red-50 rounded-lg p-4 md:col-span-2 border border-red-200">
+                        <label className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2 block">Admin Notes</label>
+                        <p className="text-sm text-red-900 font-medium">{selectedRequest.adminNotes}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons in Modal */}
+                  {selectedRequest.status === 'pending' && (
+                    <div className="flex items-center gap-3 mt-6 pt-4 border-t border-yellow-200">
+                      <button
+                        onClick={async () => {
+                          await handleApprove(selectedRequest.id, selectedRequest.userId);
+                          setShowRequestModal(false);
+                        }}
+                        disabled={processingId === selectedRequest.id}
+                        className="flex-1 inline-flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-semibold"
+                      >
+                        <Check className="h-5 w-5 mr-2" />
+                        {processingId === selectedRequest.id ? 'Processing...' : 'Approve Request'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await handleReject(selectedRequest.id);
+                          setShowRequestModal(false);
+                        }}
+                        disabled={processingId === selectedRequest.id}
+                        className="flex-1 inline-flex items-center justify-center px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-semibold"
+                      >
+                        <X className="h-5 w-5 mr-2" />
+                        {processingId === selectedRequest.id ? 'Processing...' : 'Reject Request'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* User Information */}
+                {userDetails && (
+                  <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-6 border-2 border-red-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                      <User className="h-5 w-5 mr-2 text-red-600" />
+                      User Information
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Full Name</label>
+                        <p className="text-sm text-gray-900 font-semibold mt-1">
+                          {userDetails.firstName} {userDetails.lastName}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{userDetails.email}</p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mobile</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{userDetails.mobile || 'N/A'}</p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Unit</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {userDetails.projects?.find(p => p.projectId === selectedRequest.projectId)?.unit || 'N/A'}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1 capitalize">
+                          {userDetails.projects?.find(p => p.projectId === selectedRequest.projectId)?.role || 'N/A'}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">National ID</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{userDetails.nationalId || 'N/A'}</p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Current Device Key</label>
+                        <code className="text-xs text-gray-900 font-mono bg-gray-100 px-2 py-1 rounded mt-1 block break-all">
+                          {userDetails.deviceKey || 'Not set'}
+                        </code>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Login</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {formatDate(userDetails.lastLoginAt)}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-white rounded-lg p-4">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Account Status</label>
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold mt-1 ${
+                          userDetails.approvalStatus === 'approved'
+                            ? 'bg-green-100 text-green-800'
+                            : userDetails.approvalStatus === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {userDetails.approvalStatus || 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Request History */}
+                {userRequestHistory.length > 0 && (
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border-2 border-purple-200">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                      <History className="h-5 w-5 mr-2 text-purple-600" />
+                      Request History
+                      <span className="ml-3 px-3 py-1 bg-purple-600 text-white text-sm font-bold rounded-full">
+                        {userRequestHistory.length}
+                      </span>
+                    </h3>
+                    
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {userRequestHistory.map((historyRequest, index) => {
+                        const isCurrentRequest = historyRequest.id === selectedRequest.id;
+                        return (
+                          <div
+                            key={historyRequest.id}
+                            className={`rounded-lg p-4 border-2 transition-all ${
+                              isCurrentRequest
+                                ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
+                                : 'bg-white border-gray-200 hover:border-purple-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  {isCurrentRequest && (
+                                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full">
+                                      Current
+                                    </span>
+                                  )}
+                                  <span className="px-2 py-1 bg-gray-600 text-white text-xs font-semibold rounded-full">
+                                    #{index + 1}
+                                  </span>
+                                  <span className="text-xs text-gray-500 font-medium">
+                                    {historyRequest.projectName}
+                                  </span>
+                                </div>
+                                {getStatusBadge(historyRequest.status)}
+                              </div>
+                              <div className="text-right text-xs text-gray-500">
+                                {formatDate(historyRequest.requestedAt)}
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white bg-opacity-70 rounded-lg p-3 mb-2">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1">
+                                Reason
+                              </label>
+                              <p className="text-sm text-gray-900">{historyRequest.reason}</p>
+                            </div>
+                            
+                            {historyRequest.resolvedAt && (
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="bg-white bg-opacity-70 rounded p-2">
+                                  <span className="text-gray-500 font-medium">Resolved:</span>
+                                  <p className="text-gray-900 font-semibold">{formatDate(historyRequest.resolvedAt)}</p>
+                                </div>
+                                {historyRequest.resolvedBy && (
+                                  <div className="bg-white bg-opacity-70 rounded p-2">
+                                    <span className="text-gray-500 font-medium">By Admin:</span>
+                                    <p className="text-gray-900 font-semibold">{historyRequest.resolvedBy}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {historyRequest.adminNotes && (
+                              <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2">
+                                <label className="text-xs font-semibold text-red-700 uppercase tracking-wide block mb-1">
+                                  Admin Notes
+                                </label>
+                                <p className="text-xs text-red-900">{historyRequest.adminNotes}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Statistics */}
+                    <div className="mt-4 pt-4 border-t border-purple-200">
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-purple-900">{userRequestHistory.length}</p>
+                          <p className="text-xs text-gray-600">Total</p>
+                        </div>
+                        <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-yellow-900">
+                            {userRequestHistory.filter(r => r.status === 'pending').length}
+                          </p>
+                          <p className="text-xs text-gray-600">Pending</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-green-900">
+                            {userRequestHistory.filter(r => r.status === 'approved').length}
+                          </p>
+                          <p className="text-xs text-gray-600">Approved</p>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-red-900">
+                            {userRequestHistory.filter(r => r.status === 'rejected').length}
+                          </p>
+                          <p className="text-xs text-gray-600">Rejected</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Actions Footer */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowRequestModal(false);
+                      setSelectedRequest(null);
+                      setUserDetails(null);
+                      setUserRequestHistory([]);
+                    }}
+                    className="px-6 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                  
+                  {selectedRequest.status === 'pending' && (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={async () => {
+                          await handleApprove(selectedRequest.id, selectedRequest.userId);
+                          setShowRequestModal(false);
+                        }}
+                        disabled={processingId === selectedRequest.id}
+                        className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-semibold flex items-center"
+                      >
+                        <Check className="h-5 w-5 mr-2" />
+                        {processingId === selectedRequest.id ? 'Processing...' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await handleReject(selectedRequest.id);
+                          setShowRequestModal(false);
+                        }}
+                        disabled={processingId === selectedRequest.id}
+                        className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg font-semibold flex items-center"
+                      >
+                        <X className="h-5 w-5 mr-2" />
+                        {processingId === selectedRequest.id ? 'Processing...' : 'Reject'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
