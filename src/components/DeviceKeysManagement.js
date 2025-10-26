@@ -287,6 +287,38 @@ const DeviceKeysManagement = ({ projectId }) => {
     }
   };
 
+  const handleResetDeviceKey = async (deviceKeyData) => {
+    if (!window.confirm(`Are you sure you want to reset the device key for ${deviceKeyData.userName}? This will force them to request a new device key on their next login.`)) {
+      return;
+    }
+
+    try {
+      setProcessingId(deviceKeyData.id);
+      setErrorMessage('');
+
+      // Clear the device key from the user's document
+      const userRef = doc(db, 'users', deviceKeyData.userId);
+      await updateDoc(userRef, {
+        deviceKey: '',
+        deviceKeyUpdatedAt: Timestamp.now()
+      });
+
+      setSuccessMessage(`Device key reset successfully for ${deviceKeyData.userName}.`);
+      setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // Reload device keys
+      const activeProjectId = selectedProject?.id || projectId;
+      if (activeProjectId) {
+        await loadDeviceKeys(activeProjectId);
+      }
+    } catch (error) {
+      console.error('Error resetting device key:', error);
+      setErrorMessage('Failed to reset device key. Please try again.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     try {
@@ -488,6 +520,7 @@ const DeviceKeysManagement = ({ projectId }) => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device Key</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key Updated</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -523,6 +556,16 @@ const DeviceKeysManagement = ({ projectId }) => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(key.lastLogin)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleResetDeviceKey(key)}
+                            disabled={processingId === key.id}
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <RefreshCw className={`h-3 w-3 mr-1 ${processingId === key.id ? 'animate-spin' : ''}`} />
+                            {processingId === key.id ? 'Resetting...' : 'Reset'}
+                          </button>
                         </td>
                       </tr>
                     ))}

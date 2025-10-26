@@ -897,6 +897,33 @@ service cloud.firestore {
     match /deviceKeyResetRequests {
       allow list: if request.auth != null;
     }
+    
+    // PROJECT-SPECIFIC DEVICE KEY RESET REQUESTS
+    // Same rules as global but under project subcollections
+    match /projects/{projectId}/deviceKeyResetRequests/{requestId} {
+      // Users can create their own reset requests
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Users can read their own requests
+      // Admins can read all requests
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      
+      // Only admins can update requests (for approval/rejection)
+      allow update: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Only admins can delete requests
+      allow delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project device key reset requests
+    match /projects/{projectId}/deviceKeyResetRequests {
+      allow list: if request.auth != null;
+    }
   }
 }
 
