@@ -109,6 +109,18 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
+    // Project Units - allow authenticated users to read units within project
+    match /projects/{projectId}/units/{unitId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing project units
+    match /projects/{projectId}/units {
+      allow list, get: if request.auth != null;
+    }
+    
     // Project Service Categories - allow authenticated users to read/write within project
     match /projects/{projectId}/serviceCategories/{categoryId} {
       allow read, write: if request.auth != null;

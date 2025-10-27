@@ -41,6 +41,10 @@ import {
   Unlink,
   Tag,
   Smartphone,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -114,6 +118,25 @@ const ProjectDashboard = () => {
   const [projectAdmins, setProjectAdmins] = useState([]);
   const [pendingAdminsCount, setPendingAdminsCount] = useState(0);
   const [deviceResetRequests, setDeviceResetRequests] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  
+  // Units filters
+  const [unitSearchTerm, setUnitSearchTerm] = useState('');
+  const [unitBuildingFilter, setUnitBuildingFilter] = useState('all');
+  const [unitOccupancyFilter, setUnitOccupancyFilter] = useState('all');
+  const [unitFloorFilter, setUnitFloorFilter] = useState('all');
+  const [unitDeveloperFilter, setUnitDeveloperFilter] = useState('all');
+  
+  // Units pagination
+  const [unitsCurrentPage, setUnitsCurrentPage] = useState(1);
+  const [unitsPerPage, setUnitsPerPage] = useState(100);
+  
+  // Building details modal
+  const [showBuildingModal, setShowBuildingModal] = useState(false);
+  
+  // Track which unit's tooltip is open (unitId-owners or unitId-family)
+  const [openTooltip, setOpenTooltip] = useState(null);
   
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
@@ -260,7 +283,8 @@ const ProjectDashboard = () => {
     {
       category: 'User Management',
       items: [
-        { id: 'users', name: 'Users', icon: Users, description: 'Manage user accounts', permission: 'users' }
+        { id: 'users', name: 'Users', icon: Users, description: 'Manage user accounts', permission: 'users' },
+        { id: 'units', name: 'Units', icon: Building, description: 'View project units & occupancy', permission: 'users' }
       ]
     },
     {
@@ -723,6 +747,50 @@ const ProjectDashboard = () => {
     setCurrentPage(1);
   }, [filteredUsers]);
 
+  useEffect(() => {
+    // Reset to page 1 when units filters change
+    setUnitsCurrentPage(1);
+  }, [unitSearchTerm, unitBuildingFilter, unitOccupancyFilter, unitFloorFilter, unitDeveloperFilter]);
+
+  // Memoize unit-to-users lookup map for performance
+  const unitUsersMap = useMemo(() => {
+    const map = {};
+    
+    projectUsers.forEach(user => {
+      user.projects?.forEach(p => {
+        if (p.projectId === projectId && p.unit) {
+          if (!map[p.unit]) {
+            map[p.unit] = { owners: [], family: [] };
+          }
+          if (p.role === 'owner') {
+            map[p.unit].owners.push(user);
+          } else if (p.role === 'family') {
+            map[p.unit].family.push(user);
+          }
+        }
+      });
+    });
+    
+    return map;
+  }, [projectUsers, projectId]);
+
+  // Memoize enriched units data with owner/family counts
+  const enrichedUnits = useMemo(() => {
+    return units.map(unit => {
+      const unitIdentifier = `${unit.buildingNum}-${unit.unitNum}`;
+      const unitUsers = unitUsersMap[unitIdentifier] || { owners: [], family: [] };
+      
+      return {
+        ...unit,
+        ownersCount: unitUsers.owners.length,
+        familyCount: unitUsers.family.length,
+        owners: unitUsers.owners,
+        family: unitUsers.family,
+        isOccupied: unitUsers.owners.length > 0
+      };
+    });
+  }, [units, unitUsersMap]);
+
   // Update all notification counts when data changes
   useEffect(() => {
     updateAllNotificationCounts();
@@ -1033,6 +1101,31 @@ const ProjectDashboard = () => {
     }
   }, []);
 
+  // Fetch all units at once - simple and fast
+  const fetchUnits = useCallback(async (projectId) => {
+    try {
+      setUnitsLoading(true);
+      console.log('📦 Fetching all units...');
+      
+      const unitsSnapshot = await getDocs(
+        collection(db, `projects/${projectId}/units`)
+      );
+      
+      const unitsData = unitsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`✅ Loaded ${unitsData.length} units`);
+      setUnits(unitsData);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+      setUnits([]);
+    } finally {
+      setUnitsLoading(false);
+    }
+  }, []);
+
   // Load all data on mount for best user experience
   useEffect(() => {
     if (projectId && dataLoaded) {
@@ -1059,7 +1152,8 @@ const ProjectDashboard = () => {
             fetchServiceCategories(projectId),
             fetchProjectAdmins(projectId),
             fetchPendingAdmins(),
-            fetchDeviceResetRequests(projectId)
+            fetchDeviceResetRequests(projectId),
+            fetchUnits(projectId)
           ]);
           console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
@@ -1069,7 +1163,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-  }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests]);
+      }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests, fetchUnits]);
 
   // Set up real-time listener for device reset requests (same as other tabs)
   useEffect(() => {
@@ -4835,6 +4929,572 @@ const ProjectDashboard = () => {
             </div>
           </div>
               </PermissionGate>
+        )}
+
+        {activeTab === 'units' && (
+          <PermissionGate entity="users" action="read" showMessage={true}>
+            <div className="space-y-6">
+              {/* Units Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Units & Occupancy</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    View all project units and their current occupancy status
+                  </p>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="text-right mr-4">
+                    <p className="text-sm text-gray-600">Total Units</p>
+                    <p className="text-3xl font-bold text-gray-900">{units.length}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowBuildingModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg font-medium"
+                    title="View building breakdown"
+                  >
+                    <Building className="h-4 w-4 mr-2" />
+                    View Buildings
+                  </button>
+                  <ExportButton dataType="units" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
+                  <button
+                    onClick={() => fetchUnits(projectId)}
+                    className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 border border-red-200 transition-colors flex items-center font-medium"
+                    title="Refresh units data"
+                  >
+                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Search and Filters */}
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  {/* Search Input */}
+                  <div className="relative md:col-span-2">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by unit number or building..."
+                      value={unitSearchTerm}
+                      onChange={(e) => setUnitSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Building Filter */}
+                  <select
+                    value={unitBuildingFilter}
+                    onChange={(e) => setUnitBuildingFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Buildings</option>
+                    {[...new Set(enrichedUnits.map(u => u.buildingNum))].sort((a, b) => a - b).map(building => (
+                      <option key={building} value={building}>Building {building}</option>
+                    ))}
+                  </select>
+
+                  {/* Occupancy Filter */}
+                  <select
+                    value={unitOccupancyFilter}
+                    onChange={(e) => setUnitOccupancyFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="occupied">Occupied Only</option>
+                    <option value="vacant">Vacant Only</option>
+                  </select>
+
+                  {/* Floor Filter */}
+                  <select
+                    value={unitFloorFilter}
+                    onChange={(e) => setUnitFloorFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Floors</option>
+                    {[...new Set(enrichedUnits.map(u => u.floor).filter(Boolean))].sort().map(floor => (
+                      <option key={floor} value={floor}>{floor}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Second Row - Developer Filter and Clear Filters */}
+                <div className="mt-4 flex items-center space-x-4">
+                  <select
+                    value={unitDeveloperFilter}
+                    onChange={(e) => setUnitDeveloperFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Developers</option>
+                    {[...new Set(enrichedUnits.map(u => u.developer).filter(Boolean))].sort().map(developer => (
+                      <option key={developer} value={developer}>{developer}</option>
+                    ))}
+                  </select>
+
+                  {/* Clear Filters Button */}
+                  {(unitSearchTerm || unitBuildingFilter !== 'all' || unitOccupancyFilter !== 'all' || 
+                    unitFloorFilter !== 'all' || unitDeveloperFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setUnitSearchTerm('');
+                        setUnitBuildingFilter('all');
+                        setUnitOccupancyFilter('all');
+                        setUnitFloorFilter('all');
+                        setUnitDeveloperFilter('all');
+                      }}
+                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center font-semibold border border-red-200 shadow-sm hover:shadow-md"
+                      title="Reset all filters to show all units"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Clear All Filters
+                    </button>
+                  )}
+
+                  {/* Items Per Page Selector */}
+                  <div className="flex-1 flex items-center justify-end space-x-4">
+                    <div className="flex items-center space-x-2 bg-red-50 px-4 py-2 rounded-lg border border-red-200">
+                      <span className="text-sm text-red-700 font-semibold">Show:</span>
+                      <select
+                        value={unitsPerPage}
+                        onChange={(e) => {
+                          setUnitsPerPage(Number(e.target.value));
+                          setUnitsCurrentPage(1);
+                        }}
+                        className="px-3 py-1.5 border-2 border-red-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 font-bold text-red-900 bg-white"
+                      >
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={200}>200</option>
+                      </select>
+                      <span className="text-sm text-red-700 font-semibold">units per page</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compact Stats Row */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-red-200 p-6">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="text-center p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border-2 border-red-200">
+                    <Building className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-red-900">{enrichedUnits.length}</p>
+                    <p className="text-xs font-semibold text-red-700 uppercase mt-1">Total Units</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                    <UserCheck className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-green-900">
+                      {enrichedUnits.filter(unit => unit.isOccupied).length}
+                    </p>
+                    <p className="text-xs font-semibold text-green-700 uppercase mt-1">Occupied</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg border-2 border-gray-200">
+                    <Building className="h-8 w-8 text-gray-500 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-gray-900">
+                      {enrichedUnits.filter(unit => !unit.isOccupied).length}
+                    </p>
+                    <p className="text-xs font-semibold text-gray-600 uppercase mt-1">Vacant</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+                    <Users className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-blue-900">
+                      {[...new Set(enrichedUnits.map(u => u.buildingNum))].length}
+                    </p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase mt-1">Buildings</p>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border-2 border-purple-200">
+                    <BarChart3 className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <p className="text-3xl font-bold text-purple-900">
+                      {Math.round((enrichedUnits.filter(u => u.isOccupied).length / (enrichedUnits.length || 1)) * 100)}%
+                    </p>
+                    <p className="text-xs font-semibold text-purple-700 uppercase mt-1">Occupancy</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loading State */}
+              {unitsLoading && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-red-200 p-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-red-600 mx-auto mb-4"></div>
+                    <p className="text-xl font-bold text-gray-900">Loading units...</p>
+                    <p className="text-sm text-gray-500 mt-2">Please wait</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Units Table */}
+              {!unitsLoading && (
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Building
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Unit
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Floor
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Developer
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Owners
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Family Members
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {enrichedUnits.length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="px-6 py-12 text-center">
+                              <Building className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                              <h3 className="text-lg font-medium text-gray-900 mb-2">No units found</h3>
+                              <p className="text-gray-600">No units have been added to this project yet.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          (() => {
+                            // Apply filters
+                            let filtered = enrichedUnits;
+                            
+                            if (unitSearchTerm) {
+                              const term = unitSearchTerm.toLowerCase();
+                              filtered = filtered.filter(unit =>
+                                String(unit.unitNum).toLowerCase().includes(term) ||
+                                String(unit.buildingNum).toLowerCase().includes(term)
+                              );
+                            }
+                            
+                            if (unitBuildingFilter !== 'all') {
+                              filtered = filtered.filter(unit => String(unit.buildingNum) === unitBuildingFilter);
+                            }
+                            
+                            if (unitFloorFilter !== 'all') {
+                              filtered = filtered.filter(unit => unit.floor === unitFloorFilter);
+                            }
+                            
+                            if (unitDeveloperFilter !== 'all') {
+                              filtered = filtered.filter(unit => unit.developer === unitDeveloperFilter);
+                            }
+                            
+                            if (unitOccupancyFilter !== 'all') {
+                              filtered = filtered.filter(unit => {
+                                return unitOccupancyFilter === 'occupied' ? unit.isOccupied : !unit.isOccupied;
+                              });
+                            }
+                            
+                            const sorted = filtered.sort((a, b) => {
+                              // Sort by building number, then by unit number
+                              const buildingCompare = (a.buildingNum || 0) - (b.buildingNum || 0);
+                              if (buildingCompare !== 0) return buildingCompare;
+                              return String(a.unitNum).localeCompare(String(b.unitNum));
+                            });
+                            
+                            // Check if filtered results are empty
+                            if (sorted.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan="7" className="px-6 py-12 text-center">
+                                    <Search className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">No units match your filters</h3>
+                                    <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
+                                    <button
+                                      onClick={() => {
+                                        setUnitSearchTerm('');
+                                        setUnitBuildingFilter('all');
+                                        setUnitOccupancyFilter('all');
+                                        setUnitFloorFilter('all');
+                                        setUnitDeveloperFilter('all');
+                                      }}
+                                      className="mt-4 px-6 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-md hover:shadow-lg font-semibold"
+                                    >
+                                      Clear All Filters
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            
+                            // Pagination
+                            const startIndex = (unitsCurrentPage - 1) * unitsPerPage;
+                            const endIndex = startIndex + unitsPerPage;
+                            const paginatedUnits = sorted.slice(startIndex, endIndex);
+                            
+                            return paginatedUnits.map((unit) => {
+                              // Use pre-calculated data from enrichedUnits
+                              const ownersCount = unit.ownersCount;
+                              const familyCount = unit.familyCount;
+                              const unitOwners = unit.owners;
+                              const unitFamily = unit.family;
+                              const isOccupied = unit.isOccupied;
+
+                              return (
+                                <tr key={unit.id} className="hover:bg-red-50 transition-colors border-l-2 hover:border-l-red-500">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className="flex-shrink-0 h-10 w-10">
+                                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center shadow-sm">
+                                          <Building className="h-5 w-5 text-red-700" />
+                                        </div>
+                                      </div>
+                                      <div className="ml-4">
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          Building {unit.buildingNum}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-base font-bold text-red-900">{unit.unitNum}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-900">{unit.floor || 'N/A'}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-900">{unit.developer || 'N/A'}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center space-x-2">
+                                      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold shadow-sm ${
+                                        ownersCount > 0 
+                                          ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-300' 
+                                          : 'bg-gray-50 text-gray-400 border border-gray-200'
+                                      }`}>
+                                        <Users className="h-4 w-4 mr-1.5" />
+                                        {ownersCount}
+                                      </span>
+                                      {ownersCount > 0 && (
+                                        <div className="relative">
+                                          <Eye 
+                                            className="h-4 w-4 text-red-400 hover:text-red-600 cursor-pointer transition-colors" 
+                                            onClick={() => setOpenTooltip(openTooltip === `${unit.id}-owners` ? null : `${unit.id}-owners`)}
+                                          />
+                                          {openTooltip === `${unit.id}-owners` && (
+                                            <div className="absolute z-20 w-64 p-4 bg-gradient-to-br from-gray-900 to-gray-800 text-white text-xs rounded-xl shadow-2xl -top-2 left-6 border border-gray-700">
+                                              <div className="flex justify-between items-center mb-2">
+                                                <p className="font-bold text-green-400 flex items-center">
+                                                  <UserCheck className="h-3 w-3 mr-1.5" />
+                                                  Owners:
+                                                </p>
+                                                <button onClick={() => setOpenTooltip(null)} className="text-gray-400 hover:text-white">
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                              {unitOwners.map(owner => (
+                                                <button
+                                                  key={owner.id}
+                                                  onClick={() => {
+                                                    setSelectedUser(owner);
+                                                    setShowUserModal(true);
+                                                    setOpenTooltip(null);
+                                                  }}
+                                                  className="w-full text-left py-1.5 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors"
+                                                >
+                                                  • {owner.firstName} {owner.lastName}
+                                                  <br />
+                                                  <span className="text-gray-400 text-xs">{owner.email}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center space-x-2">
+                                      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold shadow-sm ${
+                                        familyCount > 0 
+                                          ? 'bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-300' 
+                                          : 'bg-gray-50 text-gray-400 border border-gray-200'
+                                      }`}>
+                                        <Users className="h-4 w-4 mr-1.5" />
+                                        {familyCount}
+                                      </span>
+                                      {familyCount > 0 && (
+                                        <div className="relative">
+                                          <Eye 
+                                            className="h-4 w-4 text-red-400 hover:text-red-600 cursor-pointer transition-colors" 
+                                            onClick={() => setOpenTooltip(openTooltip === `${unit.id}-family` ? null : `${unit.id}-family`)}
+                                          />
+                                          {openTooltip === `${unit.id}-family` && (
+                                            <div className="absolute z-20 w-64 p-4 bg-gradient-to-br from-gray-900 to-gray-800 text-white text-xs rounded-xl shadow-2xl -top-2 left-6 border border-gray-700">
+                                              <div className="flex justify-between items-center mb-2">
+                                                <p className="font-bold text-purple-400 flex items-center">
+                                                  <Users className="h-3 w-3 mr-1.5" />
+                                                  Family Members:
+                                                </p>
+                                                <button onClick={() => setOpenTooltip(null)} className="text-gray-400 hover:text-white">
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                              {unitFamily.map(member => (
+                                                <button
+                                                  key={member.id}
+                                                  onClick={() => {
+                                                    setSelectedUser(member);
+                                                    setShowUserModal(true);
+                                                    setOpenTooltip(null);
+                                                  }}
+                                                  className="w-full text-left py-1.5 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors"
+                                                >
+                                                  • {member.firstName} {member.lastName}
+                                                  <br />
+                                                  <span className="text-gray-400 text-xs">{member.email}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${
+                                      isOccupied
+                                        ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-300'
+                                        : 'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-600 border border-gray-300'
+                                    }`}>
+                                      {isOccupied ? (
+                                        <>
+                                          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                                          Occupied
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                                          Vacant
+                                        </>
+                                      )}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Pagination Controls */}
+                  {(() => {
+                    // Calculate filtered units for pagination (use enrichedUnits)
+                    let filtered = enrichedUnits;
+                    
+                    if (unitSearchTerm) {
+                      const term = unitSearchTerm.toLowerCase();
+                      filtered = filtered.filter(unit =>
+                        String(unit.unitNum).toLowerCase().includes(term) ||
+                        String(unit.buildingNum).toLowerCase().includes(term)
+                      );
+                    }
+                    
+                    if (unitBuildingFilter !== 'all') {
+                      filtered = filtered.filter(unit => String(unit.buildingNum) === unitBuildingFilter);
+                    }
+                    
+                    if (unitFloorFilter !== 'all') {
+                      filtered = filtered.filter(unit => unit.floor === unitFloorFilter);
+                    }
+                    
+                    if (unitDeveloperFilter !== 'all') {
+                      filtered = filtered.filter(unit => unit.developer === unitDeveloperFilter);
+                    }
+                    
+                    if (unitOccupancyFilter !== 'all') {
+                      filtered = filtered.filter(unit => {
+                        return unitOccupancyFilter === 'occupied' ? unit.isOccupied : !unit.isOccupied;
+                      });
+                    }
+                    
+                    const totalFiltered = filtered.length;
+                    const totalPages = Math.ceil(totalFiltered / unitsPerPage);
+                    const startIndex = (unitsCurrentPage - 1) * unitsPerPage;
+                    const endIndex = Math.min(startIndex + unitsPerPage, totalFiltered);
+                    
+                    if (totalPages <= 1) return null;
+                    
+                    return (
+                      <div className="bg-gradient-to-r from-red-50 to-pink-50 px-6 py-4 flex items-center justify-center border-t-2 border-red-200">
+                        <div className="flex items-center space-x-4">
+                          {/* First Page */}
+                          <button
+                            onClick={() => setUnitsCurrentPage(1)}
+                            disabled={unitsCurrentPage === 1}
+                            className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                            title="Go to first page"
+                          >
+                            <ChevronsLeft className="h-5 w-5" />
+                          </button>
+                          
+                          {/* Previous Page */}
+                          <button
+                            onClick={() => setUnitsCurrentPage(unitsCurrentPage - 1)}
+                            disabled={unitsCurrentPage === 1}
+                            className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                            title="Previous page"
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          
+                          {/* Page Indicator */}
+                          <div className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-lg border-2 border-red-500">
+                            <span className="text-lg font-bold">
+                              {unitsCurrentPage} / {totalPages}
+                            </span>
+                          </div>
+                          
+                          {/* Next Page */}
+                          <button
+                            onClick={() => setUnitsCurrentPage(unitsCurrentPage + 1)}
+                            disabled={unitsCurrentPage === totalPages}
+                            className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                            title="Next page"
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                          
+                          {/* Last Page */}
+                          <button
+                            onClick={() => setUnitsCurrentPage(totalPages)}
+                            disabled={unitsCurrentPage === totalPages}
+                            className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                            title="Go to last page"
+                          >
+                            <ChevronsRight className="h-5 w-5" />
+                          </button>
+                          
+                          {/* Results Info */}
+                          <div className="ml-6 text-sm text-gray-700 font-medium bg-white px-4 py-2 rounded-lg border border-red-200 shadow-sm">
+                            Showing <span className="font-bold text-red-700">{startIndex + 1}-{endIndex}</span> of{' '}
+                            <span className="font-bold text-red-700">{totalFiltered}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+            </div>
+          </PermissionGate>
         )}
 
         {activeTab === 'academies' && (
@@ -9729,6 +10389,125 @@ const ProjectDashboard = () => {
                 onClick={() => setShowFamilyMemberModal(false)}
                 className="px-6 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors flex items-center"
                 title="Close family member selection modal"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Building Details Modal */}
+      {showBuildingModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 p-6 text-white rounded-t-2xl border-b-4 border-red-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-white bg-opacity-20 rounded-xl">
+                    <Building className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold">Building Analytics</h2>
+                    <p className="text-red-100 mt-1 text-sm">
+                      {[...new Set(enrichedUnits.map(u => u.buildingNum))].length} Buildings • {enrichedUnits.length} Total Units
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBuildingModal(false)}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {(() => {
+                  // Group enriched units by building
+                  const buildingGroups = enrichedUnits.reduce((acc, unit) => {
+                    const buildingNum = unit.buildingNum || 'Unknown';
+                    if (!acc[buildingNum]) {
+                      acc[buildingNum] = [];
+                    }
+                    acc[buildingNum].push(unit);
+                    return acc;
+                  }, {});
+
+                  // Sort building numbers
+                  const sortedBuildings = Object.keys(buildingGroups).sort((a, b) => {
+                    if (a === 'Unknown') return 1;
+                    if (b === 'Unknown') return -1;
+                    return Number(a) - Number(b);
+                  });
+
+                  return sortedBuildings.map(buildingNum => {
+                    const buildingUnits = buildingGroups[buildingNum];
+                    const occupiedCount = buildingUnits.filter(unit => unit.isOccupied).length;
+
+                    const occupancyRate = buildingUnits.length > 0 
+                      ? Math.round((occupiedCount / buildingUnits.length) * 100) 
+                      : 0;
+
+                    return (
+                      <div 
+                        key={buildingNum}
+                        onClick={() => {
+                          setUnitBuildingFilter(String(buildingNum));
+                          setShowBuildingModal(false);
+                        }}
+                        className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-5 border-2 border-red-200 hover:border-red-400 hover:shadow-xl transition-all hover:scale-105 cursor-pointer"
+                      >
+                        <div className="text-center">
+                          <div className="flex items-center justify-center mb-3">
+                            <div className="p-3 bg-red-200 rounded-full">
+                              <Building className="h-6 w-6 text-red-700" />
+                            </div>
+                          </div>
+                          <p className="text-sm font-bold text-red-700 uppercase mb-2">Building {buildingNum}</p>
+                          <p className="text-4xl font-bold text-red-900 mb-1">{buildingUnits.length}</p>
+                          <p className="text-xs text-gray-600 mb-4">units</p>
+                          
+                          <div className="flex items-center justify-center space-x-3 text-xs mb-3">
+                            <div className="flex items-center bg-green-100 px-2 py-1 rounded-full">
+                              <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                              <span className="font-bold text-green-700">{occupiedCount}</span>
+                            </div>
+                            <div className="flex items-center bg-gray-100 px-2 py-1 rounded-full">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full mr-1"></div>
+                              <span className="font-bold text-gray-700">{buildingUnits.length - occupiedCount}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                            <div 
+                              className="bg-gradient-to-r from-red-500 to-red-600 h-2.5 rounded-full transition-all"
+                              style={{ width: `${occupancyRate}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs font-bold text-red-700">{occupancyRate}% occupied</p>
+                          
+                          <div className="mt-3 pt-3 border-t border-red-200">
+                            <p className="text-xs text-blue-600 font-semibold">Click to filter</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 p-4 flex justify-end border-t border-gray-200 rounded-b-2xl">
+              <button
+                onClick={() => setShowBuildingModal(false)}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center font-medium"
               >
                 <X className="h-4 w-4 mr-2" />
                 Close

@@ -555,6 +555,9 @@ class DataExportService {
               data = await this.fetchUserBookings(projectId, targetUserId);
               filename = `user-${targetUserId}-bookings-${dateStr}`;
               break;
+            default:
+              console.warn(`Unknown data type: ${dataType}`);
+              continue;
           }
           
           if (data && (Array.isArray(data) ? data.length > 0 : data)) {
@@ -657,6 +660,9 @@ class DataExportService {
               data = await this.fetchUserBookings(projectId, userId);
               filename = `bookings-${dateStr}`;
               break;
+            default:
+              console.warn(`Unknown data type: ${dataType}`);
+              continue;
           }
           
           if (data && (Array.isArray(data) ? data.length > 0 : data)) {
