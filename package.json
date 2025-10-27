@@ -31,6 +31,7 @@
     "eject": "react-scripts eject",
     "import-users": "node importUsers.mjs",
     "import-units": "node importUnits.mjs",
+    "import-jebal-units": "node importJebalUnits.mjs",
     "test-transform": "node testTransformation.mjs"
   },
   "eslintConfig": {
