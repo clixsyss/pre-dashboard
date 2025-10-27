@@ -5296,21 +5296,26 @@ const ProjectDashboard = () => {
                                                   <X className="h-3 w-3" />
                                                 </button>
                                               </div>
-                                              {unitOwners.map(owner => (
-                                                <button
-                                                  key={owner.id}
-                                                  onClick={() => {
-                                                    setSelectedUser(owner);
-                                                    setShowUserModal(true);
-                                                    setOpenTooltip(null);
-                                                  }}
-                                                  className="w-full text-left py-1.5 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors"
-                                                >
-                                                  • {owner.firstName} {owner.lastName}
-                                                  <br />
-                                                  <span className="text-gray-400 text-xs">{owner.email}</span>
-                                                </button>
-                                              ))}
+                                              <div className="flex flex-col space-y-1">
+                                                {unitOwners.map(owner => (
+                                                  <button
+                                                    key={owner.id}
+                                                    onClick={() => {
+                                                      setSelectedUser(owner);
+                                                      setShowUserModal(true);
+                                                      setOpenTooltip(null);
+                                                    }}
+                                                    className="w-full text-left py-2 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors block"
+                                                  >
+                                                    <div className="block">
+                                                      • {owner.firstName} {owner.lastName}
+                                                    </div>
+                                                    <div className="text-gray-400 text-xs mt-1">
+                                                      {owner.email}
+                                                    </div>
+                                                  </button>
+                                                ))}
+                                              </div>
                                             </div>
                                           )}
                                         </div>
@@ -5344,21 +5349,26 @@ const ProjectDashboard = () => {
                                                   <X className="h-3 w-3" />
                                                 </button>
                                               </div>
-                                              {unitFamily.map(member => (
-                                                <button
-                                                  key={member.id}
-                                                  onClick={() => {
-                                                    setSelectedUser(member);
-                                                    setShowUserModal(true);
-                                                    setOpenTooltip(null);
-                                                  }}
-                                                  className="w-full text-left py-1.5 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors"
-                                                >
-                                                  • {member.firstName} {member.lastName}
-                                                  <br />
-                                                  <span className="text-gray-400 text-xs">{member.email}</span>
-                                                </button>
-                                              ))}
+                                              <div className="flex flex-col space-y-1">
+                                                {unitFamily.map(member => (
+                                                  <button
+                                                    key={member.id}
+                                                    onClick={() => {
+                                                      setSelectedUser(member);
+                                                      setShowUserModal(true);
+                                                      setOpenTooltip(null);
+                                                    }}
+                                                    className="w-full text-left py-2 border-b border-gray-700 last:border-0 hover:bg-gray-700 hover:bg-opacity-50 rounded px-2 transition-colors block"
+                                                  >
+                                                    <div className="block">
+                                                      • {member.firstName} {member.lastName}
+                                                    </div>
+                                                    <div className="text-gray-400 text-xs mt-1">
+                                                      {member.email}
+                                                    </div>
+                                                  </button>
+                                                ))}
+                                              </div>
                                             </div>
                                           )}
                                         </div>
