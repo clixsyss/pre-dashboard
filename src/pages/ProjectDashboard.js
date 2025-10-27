@@ -5143,6 +5143,9 @@ const ProjectDashboard = () => {
                             Unit
                           </th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Building-Unit
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
                             Floor
                           </th>
                           <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
@@ -5162,7 +5165,7 @@ const ProjectDashboard = () => {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {enrichedUnits.length === 0 ? (
                           <tr>
-                            <td colSpan="7" className="px-6 py-12 text-center">
+                            <td colSpan="8" className="px-6 py-12 text-center">
                               <Building className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                               <h3 className="text-lg font-medium text-gray-900 mb-2">No units found</h3>
                               <p className="text-gray-600">No units have been added to this project yet.</p>
@@ -5175,10 +5178,12 @@ const ProjectDashboard = () => {
                             
                             if (unitSearchTerm) {
                               const term = unitSearchTerm.toLowerCase();
-                              filtered = filtered.filter(unit =>
-                                String(unit.unitNum).toLowerCase().includes(term) ||
-                                String(unit.buildingNum).toLowerCase().includes(term)
-                              );
+                              filtered = filtered.filter(unit => {
+                                const unitIdentifier = `${unit.buildingNum}-${unit.unitNum}`.toLowerCase();
+                                return String(unit.unitNum).toLowerCase().includes(term) ||
+                                       String(unit.buildingNum).toLowerCase().includes(term) ||
+                                       unitIdentifier.includes(term);
+                              });
                             }
                             
                             if (unitBuildingFilter !== 'all') {
@@ -5210,7 +5215,7 @@ const ProjectDashboard = () => {
                             if (sorted.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan="7" className="px-6 py-12 text-center">
+                                  <td colSpan="8" className="px-6 py-12 text-center">
                                     <Search className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                                     <h3 className="text-lg font-medium text-gray-900 mb-2">No units match your filters</h3>
                                     <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
@@ -5262,6 +5267,11 @@ const ProjectDashboard = () => {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="text-base font-bold text-red-900">{unit.unitNum}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-300 shadow-sm">
+                                      {unit.buildingNum}-{unit.unitNum}
+                                    </div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="text-sm text-gray-900">{unit.floor || 'N/A'}</div>
@@ -5410,10 +5420,12 @@ const ProjectDashboard = () => {
                     
                     if (unitSearchTerm) {
                       const term = unitSearchTerm.toLowerCase();
-                      filtered = filtered.filter(unit =>
-                        String(unit.unitNum).toLowerCase().includes(term) ||
-                        String(unit.buildingNum).toLowerCase().includes(term)
-                      );
+                      filtered = filtered.filter(unit => {
+                        const unitIdentifier = `${unit.buildingNum}-${unit.unitNum}`.toLowerCase();
+                        return String(unit.unitNum).toLowerCase().includes(term) ||
+                               String(unit.buildingNum).toLowerCase().includes(term) ||
+                               unitIdentifier.includes(term);
+                      });
                     }
                     
                     if (unitBuildingFilter !== 'all') {
