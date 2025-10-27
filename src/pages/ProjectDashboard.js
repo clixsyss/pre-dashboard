@@ -78,6 +78,7 @@ import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import PermissionGate from '../components/PermissionGate';
+import customUserNotificationService from '../services/customUserNotificationService';
 import '../styles/servicesManagement.css';
 import '../styles/projectSidebar.css';
 
@@ -137,6 +138,17 @@ const ProjectDashboard = () => {
   
   // Track which unit's tooltip is open (unitId-owners or unitId-family)
   const [openTooltip, setOpenTooltip] = useState(null);
+  
+  // Unit/Building notification and suspension modals
+  const [showUnitNotificationModal, setShowUnitNotificationModal] = useState(false);
+  const [showUnitSuspensionModal, setShowUnitSuspensionModal] = useState(false);
+  const [selectedUnitForAction, setSelectedUnitForAction] = useState(null);
+  const [actionTargetType, setActionTargetType] = useState('unit'); // 'unit' or 'building'
+  const [unitNotificationTitle, setUnitNotificationTitle] = useState('');
+  const [unitNotificationMessage, setUnitNotificationMessage] = useState('');
+  const [unitSuspensionReason, setUnitSuspensionReason] = useState('');
+  const [unitSuspensionDuration, setUnitSuspensionDuration] = useState('7');
+  const [unitSuspensionType, setUnitSuspensionType] = useState('temporary');
   
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
@@ -1903,6 +1915,221 @@ const ProjectDashboard = () => {
     } catch (error) {
       console.error('Error unsuspending user:', error);
       alert('Failed to unsuspend user. Please try again.');
+    }
+  };
+
+  // Unit/Building notification and suspension functions
+  const handleOpenUnitNotificationModal = (unit, targetType) => {
+    setSelectedUnitForAction(unit);
+    setActionTargetType(targetType);
+    setUnitNotificationTitle('');
+    setUnitNotificationMessage('');
+    setShowUnitNotificationModal(true);
+  };
+
+  const handleOpenUnitSuspensionModal = (unit, targetType) => {
+    setSelectedUnitForAction(unit);
+    setActionTargetType(targetType);
+    setUnitSuspensionReason('');
+    setUnitSuspensionDuration('7');
+    setUnitSuspensionType('temporary');
+    setShowUnitSuspensionModal(true);
+  };
+
+  const handleSendUnitNotification = async () => {
+    if (!selectedUnitForAction || !unitNotificationMessage.trim()) {
+      alert('Please provide a notification message');
+      return;
+    }
+
+    try {
+      // Get all users to notify based on target type
+      let usersToNotify = [];
+      
+      if (actionTargetType === 'unit') {
+        // Get all users in this specific unit
+        const unitIdentifier = `${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`;
+        usersToNotify = projectUsers.filter(user => 
+          user.projects?.some(p => 
+            p.projectId === projectId && 
+            p.unit === unitIdentifier
+          )
+        );
+      } else {
+        // Get all users in this building
+        usersToNotify = projectUsers.filter(user => 
+          user.projects?.some(p => {
+            if (p.projectId === projectId && p.unit) {
+              const [building] = p.unit.split('-');
+              return building === String(selectedUnitForAction.buildingNum);
+            }
+            return false;
+          })
+        );
+      }
+
+      if (usersToNotify.length === 0) {
+        alert(`No users found in this ${actionTargetType}`);
+        return;
+      }
+
+      // Send notifications to all users
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const user of usersToNotify) {
+        try {
+          await customUserNotificationService.sendCustomUserNotification({
+            userId: user.id,
+            projectId: projectId,
+            actionType: 'announcement',
+            message: unitNotificationMessage.trim(),
+            options: {
+              title: unitNotificationTitle.trim() || `${actionTargetType === 'unit' ? 'Unit' : 'Building'} Notification`,
+              type: 'info',
+              category: 'general',
+              priority: 'normal'
+            }
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Error sending notification to user ${user.id}:`, error);
+          errorCount++;
+        }
+      }
+
+      alert(`Notification sent to ${successCount} user(s)${errorCount > 0 ? `. Failed to send to ${errorCount} user(s).` : ''}`);
+      
+      setShowUnitNotificationModal(false);
+      setSelectedUnitForAction(null);
+      setUnitNotificationTitle('');
+      setUnitNotificationMessage('');
+      
+    } catch (error) {
+      console.error('Error sending unit notification:', error);
+      alert('Failed to send notification. Please try again.');
+    }
+  };
+
+  const handleSuspendUnitUsers = async () => {
+    if (!selectedUnitForAction || !unitSuspensionReason.trim()) {
+      alert('Please provide a reason for suspension');
+      return;
+    }
+
+    try {
+      // Get all users to suspend based on target type
+      let usersToSuspend = [];
+      
+      if (actionTargetType === 'unit') {
+        // Get all users in this specific unit
+        const unitIdentifier = `${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`;
+        usersToSuspend = projectUsers.filter(user => 
+          user.projects?.some(p => 
+            p.projectId === projectId && 
+            p.unit === unitIdentifier
+          )
+        );
+      } else {
+        // Get all users in this building
+        usersToSuspend = projectUsers.filter(user => 
+          user.projects?.some(p => {
+            if (p.projectId === projectId && p.unit) {
+              const [building] = p.unit.split('-');
+              return building === String(selectedUnitForAction.buildingNum);
+            }
+            return false;
+          })
+        );
+      }
+
+      if (usersToSuspend.length === 0) {
+        alert(`No users found in this ${actionTargetType}`);
+        return;
+      }
+
+      if (!window.confirm(`Are you sure you want to suspend ${usersToSuspend.length} user(s) in this ${actionTargetType}?`)) {
+        return;
+      }
+
+      const suspensionData = {
+        suspensionReason: unitSuspensionReason.trim(),
+        suspensionType: unitSuspensionType,
+        suspendedAt: new Date(),
+        suspendedBy: currentAdmin?.uid || 'admin'
+      };
+
+      if (unitSuspensionType === 'temporary') {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + parseInt(unitSuspensionDuration));
+        suspensionData.suspensionEndDate = endDate;
+      }
+
+      // Suspend all users
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const user of usersToSuspend) {
+        try {
+          const userRef = doc(db, 'users', user.id);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.data();
+          
+          // Update the projects array to mark this specific project as suspended
+          const updatedProjects = (userData.projects || []).map(proj => {
+            if (proj.projectId === projectId) {
+              return {
+                ...proj,
+                isSuspended: true,
+                ...suspensionData
+              };
+            }
+            return proj;
+          });
+
+          await updateDoc(userRef, {
+            projects: updatedProjects,
+            updatedAt: new Date()
+          });
+          
+          successCount++;
+        } catch (error) {
+          console.error(`Error suspending user ${user.id}:`, error);
+          errorCount++;
+        }
+      }
+
+      alert(`Suspended ${successCount} user(s)${errorCount > 0 ? `. Failed to suspend ${errorCount} user(s).` : ''}`);
+      
+      // Update local state
+      setProjectUsers(prevUsers => 
+        prevUsers.map(user => {
+          const shouldSuspend = usersToSuspend.some(u => u.id === user.id);
+          if (shouldSuspend) {
+            const userProjects = (user.projects || []).map(proj => {
+              if (proj.projectId === projectId) {
+                return { ...proj, isSuspended: true, ...suspensionData };
+              }
+              return proj;
+            });
+            return { ...user, projects: userProjects };
+          }
+          return user;
+        })
+      );
+
+      setShowUnitSuspensionModal(false);
+      setSelectedUnitForAction(null);
+      setUnitSuspensionReason('');
+      setUnitSuspensionDuration('7');
+      setUnitSuspensionType('temporary');
+      
+      // Refresh data
+      filterUsers();
+      
+    } catch (error) {
+      console.error('Error suspending unit users:', error);
+      alert('Failed to suspend users. Please try again.');
     }
   };
 
@@ -5160,12 +5387,15 @@ const ProjectDashboard = () => {
                           <th className="px-6 py-4 text-left text-xs font-bold text-red-700 uppercase tracking-wider">
                             Status
                           </th>
+                          <th className="px-6 py-4 text-center text-xs font-bold text-red-700 uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {enrichedUnits.length === 0 ? (
                           <tr>
-                            <td colSpan="8" className="px-6 py-12 text-center">
+                            <td colSpan="9" className="px-6 py-12 text-center">
                               <Building className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                               <h3 className="text-lg font-medium text-gray-900 mb-2">No units found</h3>
                               <p className="text-gray-600">No units have been added to this project yet.</p>
@@ -5215,7 +5445,7 @@ const ProjectDashboard = () => {
                             if (sorted.length === 0) {
                               return (
                                 <tr>
-                                  <td colSpan="8" className="px-6 py-12 text-center">
+                                  <td colSpan="9" className="px-6 py-12 text-center">
                                     <Search className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                                     <h3 className="text-lg font-medium text-gray-900 mb-2">No units match your filters</h3>
                                     <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
@@ -5260,7 +5490,7 @@ const ProjectDashboard = () => {
                                       </div>
                                       <div className="ml-4">
                                         <div className="text-sm font-semibold text-gray-900">
-                                          Building {unit.buildingNum}
+                                           {unit.buildingNum}
                                         </div>
                                       </div>
                                     </div>
@@ -5403,6 +5633,59 @@ const ProjectDashboard = () => {
                                         </>
                                       )}
                                     </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center justify-center space-x-2">
+                                      {/* Notify Unit Users */}
+                                      <button
+                                        onClick={() => handleOpenUnitNotificationModal(unit, 'unit')}
+                                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors group relative"
+                                        title="Notify all users in this unit"
+                                      >
+                                        <Bell className="h-4 w-4" />
+                                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                          Notify Unit
+                                        </span>
+                                      </button>
+                                      
+                                      {/* Notify Building Users */}
+                                      <button
+                                        onClick={() => handleOpenUnitNotificationModal(unit, 'building')}
+                                        className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors group relative"
+                                        title="Notify all users in this building"
+                                      >
+                                        <Building className="h-4 w-4" />
+                                        <Bell className="h-3 w-3 absolute -top-0.5 -right-0.5" />
+                                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                          Notify Building
+                                        </span>
+                                      </button>
+                                      
+                                      {/* Suspend Unit Users */}
+                                      <button
+                                        onClick={() => handleOpenUnitSuspensionModal(unit, 'unit')}
+                                        className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors group relative"
+                                        title="Suspend all users in this unit"
+                                      >
+                                        <UserX className="h-4 w-4" />
+                                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                          Suspend Unit
+                                        </span>
+                                      </button>
+                                      
+                                      {/* Suspend Building Users */}
+                                      <button
+                                        onClick={() => handleOpenUnitSuspensionModal(unit, 'building')}
+                                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors group relative"
+                                        title="Suspend all users in this building"
+                                      >
+                                        <Building className="h-4 w-4" />
+                                        <UserX className="h-3 w-3 absolute -top-0.5 -right-0.5" />
+                                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                          Suspend Building
+                                        </span>
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -10533,6 +10816,296 @@ const ProjectDashboard = () => {
               >
                 <X className="h-4 w-4 mr-2" />
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unit/Building Notification Modal */}
+      {showUnitNotificationModal && selectedUnitForAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white rounded-t-2xl border-b-4 border-blue-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-white bg-opacity-20 rounded-xl">
+                    <Bell className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold">Send Notification</h2>
+                    <p className="text-blue-100 mt-1 text-sm">
+                      {actionTargetType === 'unit' 
+                        ? `Unit ${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`
+                        : `All users in Building ${selectedUnitForAction.buildingNum}`
+                      }
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUnitNotificationModal(false);
+                    setSelectedUnitForAction(null);
+                  }}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6">
+              {/* User Count Info */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-blue-600 rounded-lg">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Recipients</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {(() => {
+                        if (actionTargetType === 'unit') {
+                          const unitIdentifier = `${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`;
+                          return projectUsers.filter(user => 
+                            user.projects?.some(p => p.projectId === projectId && p.unit === unitIdentifier)
+                          ).length;
+                        } else {
+                          return projectUsers.filter(user => 
+                            user.projects?.some(p => {
+                              if (p.projectId === projectId && p.unit) {
+                                const [building] = p.unit.split('-');
+                                return building === String(selectedUnitForAction.buildingNum);
+                              }
+                              return false;
+                            })
+                          ).length;
+                        }
+                      })()} users
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notification Title */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Notification Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={unitNotificationTitle}
+                  onChange={(e) => setUnitNotificationTitle(e.target.value)}
+                  placeholder={`${actionTargetType === 'unit' ? 'Unit' : 'Building'} Notification`}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              {/* Notification Message */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Message *
+                </label>
+                <textarea
+                  value={unitNotificationMessage}
+                  onChange={(e) => setUnitNotificationMessage(e.target.value)}
+                  placeholder="Enter your message here..."
+                  rows="6"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  This message will be sent to all {actionTargetType === 'unit' ? 'users in this unit' : 'users in this building'}
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 p-6 flex justify-end space-x-3 border-t border-gray-200 rounded-b-2xl">
+              <button
+                onClick={() => {
+                  setShowUnitNotificationModal(false);
+                  setSelectedUnitForAction(null);
+                }}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendUnitNotification}
+                disabled={!unitNotificationMessage.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg"
+              >
+                <Bell className="h-4 w-4 mr-2" />
+                Send Notification
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unit/Building Suspension Modal */}
+      {showUnitSuspensionModal && selectedUnitForAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 p-6 text-white rounded-t-2xl border-b-4 border-red-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-white bg-opacity-20 rounded-xl">
+                    <UserX className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold">Suspend Users</h2>
+                    <p className="text-red-100 mt-1 text-sm">
+                      {actionTargetType === 'unit' 
+                        ? `Unit ${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`
+                        : `All users in Building ${selectedUnitForAction.buildingNum}`
+                      }
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUnitSuspensionModal(false);
+                    setSelectedUnitForAction(null);
+                  }}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6">
+              {/* User Count Warning */}
+              <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="h-6 w-6 text-red-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 mb-1">Warning: Mass Suspension</p>
+                    <p className="text-sm text-gray-700">
+                      You are about to suspend <span className="font-bold text-red-700">
+                      {(() => {
+                        if (actionTargetType === 'unit') {
+                          const unitIdentifier = `${selectedUnitForAction.buildingNum}-${selectedUnitForAction.unitNum}`;
+                          return projectUsers.filter(user => 
+                            user.projects?.some(p => p.projectId === projectId && p.unit === unitIdentifier)
+                          ).length;
+                        } else {
+                          return projectUsers.filter(user => 
+                            user.projects?.some(p => {
+                              if (p.projectId === projectId && p.unit) {
+                                const [building] = p.unit.split('-');
+                                return building === String(selectedUnitForAction.buildingNum);
+                              }
+                              return false;
+                            })
+                          ).length;
+                        }
+                      })()} user(s)</span> in this {actionTargetType}. This action will prevent them from accessing the app.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suspension Type */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-3">
+                  Suspension Type *
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setUnitSuspensionType('temporary')}
+                    className={`p-4 border-2 rounded-xl transition-all ${
+                      unitSuspensionType === 'temporary'
+                        ? 'border-orange-500 bg-orange-50 text-orange-900'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-orange-300'
+                    }`}
+                  >
+                    <Clock className="h-5 w-5 mx-auto mb-2" />
+                    <p className="font-semibold">Temporary</p>
+                    <p className="text-xs mt-1 text-gray-600">Set a duration</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnitSuspensionType('permanent')}
+                    className={`p-4 border-2 rounded-xl transition-all ${
+                      unitSuspensionType === 'permanent'
+                        ? 'border-red-500 bg-red-50 text-red-900'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'
+                    }`}
+                  >
+                    <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
+                    <p className="font-semibold">Permanent</p>
+                    <p className="text-xs mt-1 text-gray-600">Until manually lifted</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Duration (if temporary) */}
+              {unitSuspensionType === 'temporary' && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Suspension Duration
+                  </label>
+                  <select
+                    value={unitSuspensionDuration}
+                    onChange={(e) => setUnitSuspensionDuration(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+                  >
+                    <option value="1">1 day</option>
+                    <option value="3">3 days</option>
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30">30 days</option>
+                    <option value="60">60 days</option>
+                    <option value="90">90 days</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Suspension Reason */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Reason for Suspension *
+                </label>
+                <textarea
+                  value={unitSuspensionReason}
+                  onChange={(e) => setUnitSuspensionReason(e.target.value)}
+                  placeholder="Enter the reason for suspension..."
+                  rows="4"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  This reason will be visible to the suspended users
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-50 p-6 flex justify-end space-x-3 border-t border-gray-200 rounded-b-2xl">
+              <button
+                onClick={() => {
+                  setShowUnitSuspensionModal(false);
+                  setSelectedUnitForAction(null);
+                }}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSuspendUnitUsers}
+                disabled={!unitSuspensionReason.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-lg"
+              >
+                <UserX className="h-4 w-4 mr-2" />
+                Suspend Users
               </button>
             </div>
           </div>

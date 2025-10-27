@@ -32,7 +32,11 @@ import {
   Plus,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Building,
+  Home,
+  Search,
+  User
 } from 'lucide-react';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -74,6 +78,13 @@ const NotificationManagement = ({ projectId }) => {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [usersPerPage, setUsersPerPage] = useState(10);
+  
+  // Unit/Building selection state
+  const [selectedUnits, setSelectedUnits] = useState([]);
+  const [selectedBuildings, setSelectedBuildings] = useState([]);
+  const [projectUnits, setProjectUnits] = useState([]);
+  const [unitSearchTerm, setUnitSearchTerm] = useState('');
+  const [buildingSearchTerm, setBuildingSearchTerm] = useState('');
 
   // Load recent notifications
   const loadRecentNotifications = useCallback(async () => {
@@ -117,6 +128,16 @@ const NotificationManagement = ({ projectId }) => {
 
       // Store project users for selection
       setProjectUsers(users);
+
+      // Fetch units for this project
+      try {
+        const unitsSnapshot = await getDocs(collection(db, `projects/${projectId}/units`));
+        const units = unitsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setProjectUnits(units);
+      } catch (err) {
+        console.warn('Units not available:', err);
+        setProjectUnits([]);
+      }
 
       // Count tokens (optional - may not have permission)
       let tokenCount = 0;
@@ -287,6 +308,46 @@ const NotificationManagement = ({ projectId }) => {
         if (recipientCount === 0) {
           throw new Error('Please select at least one user');
         }
+      } else if (formData.audienceType === 'unit') {
+        if (selectedUnits.length === 0) {
+          throw new Error('Please select at least one unit');
+        }
+        
+        // Calculate unique users across selected units
+        const uniqueUsers = new Set();
+        selectedUnits.forEach(unitId => {
+          projectUsers.forEach(user => {
+            if (user.projects?.some(p => p.projectId === projectId && p.unit === unitId)) {
+              uniqueUsers.add(user.id);
+            }
+          });
+        });
+        
+        recipientCount = uniqueUsers.size;
+        recipientNames = selectedUnits.map(u => `Unit ${u}`);
+      } else if (formData.audienceType === 'building') {
+        if (selectedBuildings.length === 0) {
+          throw new Error('Please select at least one building');
+        }
+        
+        // Calculate unique users across selected buildings
+        const uniqueUsers = new Set();
+        selectedBuildings.forEach(buildingNum => {
+          projectUsers.forEach(user => {
+            if (user.projects?.some(p => {
+              if (p.projectId === projectId && p.unit) {
+                const [building] = p.unit.split('-');
+                return building === String(buildingNum);
+              }
+              return false;
+            })) {
+              uniqueUsers.add(user.id);
+            }
+          });
+        });
+        
+        recipientCount = uniqueUsers.size;
+        recipientNames = selectedBuildings.map(b => `Building ${b}`);
       } else if (formData.audienceType === 'topic') {
         if (!formData.topic) {
           throw new Error('Please enter a topic name');
@@ -334,6 +395,8 @@ const NotificationManagement = ({ projectId }) => {
         audience: {
           all: formData.audienceType === 'all',
           uids: formData.audienceType === 'specific' ? selectedUserIds : [],
+          units: formData.audienceType === 'unit' ? selectedUnits : [],
+          buildings: formData.audienceType === 'building' ? selectedBuildings : [],
           topic: formData.audienceType === 'topic' ? formData.topic : null
         },
         createdBy: currentAdmin?.uid || 'unknown',
@@ -374,7 +437,11 @@ const NotificationManagement = ({ projectId }) => {
         deepLink: ''
       });
       setSelectedUserIds([]);
+      setSelectedUnits([]);
+      setSelectedBuildings([]);
       setUserSearchTerm('');
+      setUnitSearchTerm('');
+      setBuildingSearchTerm('');
       setCurrentPage(1);
       setShowPreview(false);
 
@@ -663,10 +730,423 @@ const NotificationManagement = ({ projectId }) => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="all">All Project Users ({stats.totalUsers})</option>
+                    <option value="specific">Specific User(s)</option>
+                    <option value="unit">Specific Unit(s)</option>
+                    <option value="building">Entire Building(s)</option>
                     <option value="topic">Topic Subscribers</option>
-                    <option value="specific">Specific Users</option>
                       </select>
                   </div>
+
+                {/* Unit Selection */}
+                {formData.audienceType === 'unit' && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        <Home className="h-4 w-4 inline mr-2 text-blue-600" />
+                        Select Unit(s) ({selectedUnits.length} selected)
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnits(projectUnits.map(u => `${u.buildingNum}-${u.unitNum}`))}
+                          className="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors font-medium"
+                        >
+                          Select All Units
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnits([])}
+                          className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors font-medium"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Selected Units Display */}
+                    {selectedUnits.length > 0 && (
+                      <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+                        <p className="text-xs font-bold text-blue-900 mb-2">Selected Units:</p>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                          {selectedUnits.map((unitId) => {
+                            const userCount = projectUsers.filter(user => 
+                              user.projects?.some(p => p.projectId === projectId && p.unit === unitId)
+                            ).length;
+                            
+                            return (
+                              <div
+                                key={unitId}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-blue-300 rounded-full text-xs shadow-sm"
+                              >
+                                <Home className="h-3 w-3 text-blue-600" />
+                                <span className="font-bold text-gray-900">{unitId}</span>
+                                <span className="text-blue-600">({userCount} users)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedUnits(prev => prev.filter(id => id !== unitId))}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                  title="Remove unit"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Unit Search Bar */}
+                    <div className="mb-3">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={unitSearchTerm}
+                          onChange={(e) => setUnitSearchTerm(e.target.value)}
+                          placeholder="Search units (e.g., D1A-1, D2A)..."
+                          className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
+                        />
+                        <Search className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        {unitSearchTerm && (
+                          <button
+                            onClick={() => setUnitSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Units Grid */}
+                    <div className="border-2 border-gray-300 rounded-xl bg-white overflow-hidden">
+                      <div className="max-h-80 overflow-y-auto p-3">
+                        {projectUnits.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <Home className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                            <p className="text-sm">No units available in this project</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                            {(() => {
+                              // Filter units based on search
+                              let filteredUnits = projectUnits;
+                              if (unitSearchTerm) {
+                                const term = unitSearchTerm.toLowerCase();
+                                filteredUnits = projectUnits.filter(unit => {
+                                  const unitId = `${unit.buildingNum}-${unit.unitNum}`.toLowerCase();
+                                  return unitId.includes(term) || 
+                                         String(unit.buildingNum).toLowerCase().includes(term) || 
+                                         String(unit.unitNum).toLowerCase().includes(term);
+                                });
+                              }
+
+                              if (filteredUnits.length === 0) {
+                                return (
+                                  <div className="col-span-full text-center py-8 text-gray-500">
+                                    <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                                    <p className="text-sm">No units match "{unitSearchTerm}"</p>
+                                  </div>
+                                );
+                              }
+
+                              // Group units by building for better organization
+                              const unitsByBuilding = {};
+                              filteredUnits.forEach(unit => {
+                                const buildingNum = unit.buildingNum;
+                                if (!unitsByBuilding[buildingNum]) {
+                                  unitsByBuilding[buildingNum] = [];
+                                }
+                                unitsByBuilding[buildingNum].push(unit);
+                              });
+
+                              return Object.keys(unitsByBuilding)
+                                .sort((a, b) => String(a).localeCompare(String(b)))
+                                .flatMap(buildingNum => 
+                                  unitsByBuilding[buildingNum]
+                                    .sort((a, b) => String(a.unitNum).localeCompare(String(b.unitNum)))
+                                    .map(unit => {
+                                      const unitId = `${unit.buildingNum}-${unit.unitNum}`;
+                                      const isSelected = selectedUnits.includes(unitId);
+                                      const userCount = projectUsers.filter(user => 
+                                        user.projects?.some(p => p.projectId === projectId && p.unit === unitId)
+                                      ).length;
+
+                                      return (
+                                        <button
+                                          key={unitId}
+                                          type="button"
+                                          onClick={() => {
+                                            if (isSelected) {
+                                              setSelectedUnits(prev => prev.filter(id => id !== unitId));
+                                            } else {
+                                              setSelectedUnits(prev => [...prev, unitId]);
+                                            }
+                                          }}
+                                          className={`relative p-3 border-2 rounded-lg transition-all ${
+                                            isSelected
+                                              ? 'border-blue-500 bg-gradient-to-br from-blue-100 to-indigo-100 shadow-md'
+                                              : 'border-gray-300 bg-white hover:border-blue-300 hover:shadow-sm'
+                                          }`}
+                                        >
+                                          <Home className={`h-5 w-5 mx-auto mb-1 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                                          <p className={`text-xs font-bold ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                            {unitId}
+                                          </p>
+                                          {userCount > 0 && (
+                                            <p className="text-xs text-blue-600 mt-0.5">
+                                              {userCount} {userCount === 1 ? 'user' : 'users'}
+                                            </p>
+                                          )}
+                                          {isSelected && (
+                                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                                              <CheckCircle className="h-3 w-3 text-white" />
+                                            </div>
+                                          )}
+                                        </button>
+                                      );
+                                    })
+                                );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Recipients Count */}
+                    {selectedUnits.length > 0 && (
+                      <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg">
+                        <p className="text-sm font-bold text-green-900 flex items-center">
+                          <Users className="h-4 w-4 mr-2" />
+                          Total Recipients: {(() => {
+                            const uniqueUsers = new Set();
+                            selectedUnits.forEach(unitId => {
+                              projectUsers.forEach(user => {
+                                if (user.projects?.some(p => p.projectId === projectId && p.unit === unitId)) {
+                                  uniqueUsers.add(user.id);
+                                }
+                              });
+                            });
+                            return uniqueUsers.size;
+                          })()} users
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Building Selection */}
+                {formData.audienceType === 'building' && (
+                  <div className="md:col-span-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        <Building className="h-4 w-4 inline mr-2 text-purple-600" />
+                        Select Building(s) ({selectedBuildings.length} selected)
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allBuildings = [...new Set(projectUnits.map(u => u.buildingNum))];
+                            setSelectedBuildings(allBuildings);
+                          }}
+                          className="text-xs px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors font-medium"
+                        >
+                          Select All Buildings
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBuildings([])}
+                          className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors font-medium"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Selected Buildings Display */}
+                    {selectedBuildings.length > 0 && (
+                      <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
+                        <p className="text-xs font-bold text-purple-900 mb-2">Selected Buildings:</p>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                          {selectedBuildings.map((buildingNum) => {
+                            const userCount = projectUsers.filter(user => 
+                              user.projects?.some(p => {
+                                if (p.projectId === projectId && p.unit) {
+                                  const [building] = p.unit.split('-');
+                                  return building === String(buildingNum);
+                                }
+                                return false;
+                              })
+                            ).length;
+                            
+                            return (
+                              <div
+                                key={buildingNum}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-purple-300 rounded-full text-xs shadow-sm"
+                              >
+                                <Building className="h-3 w-3 text-purple-600" />
+                                <span className="font-bold text-gray-900">Building {buildingNum}</span>
+                                <span className="text-purple-600">({userCount} users)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedBuildings(prev => prev.filter(id => id !== buildingNum))}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                  title="Remove building"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Building Search Bar */}
+                    <div className="mb-3">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={buildingSearchTerm}
+                          onChange={(e) => setBuildingSearchTerm(e.target.value)}
+                          placeholder="Search buildings (e.g., D1A, S2)..."
+                          className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-sm"
+                        />
+                        <Search className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        {buildingSearchTerm && (
+                          <button
+                            onClick={() => setBuildingSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Buildings Grid */}
+                    <div className="border-2 border-gray-300 rounded-xl bg-white overflow-hidden">
+                      <div className="max-h-80 overflow-y-auto p-3">
+                        {projectUnits.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <Building className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                            <p className="text-sm">No units available in this project</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {(() => {
+                              // Get unique buildings
+                              let buildings = [...new Set(projectUnits.map(u => u.buildingNum))].sort((a, b) => 
+                                String(a).localeCompare(String(b))
+                              );
+
+                              // Filter buildings based on search
+                              if (buildingSearchTerm) {
+                                const term = buildingSearchTerm.toLowerCase();
+                                buildings = buildings.filter(buildingNum => 
+                                  String(buildingNum).toLowerCase().includes(term)
+                                );
+                              }
+
+                              if (buildings.length === 0) {
+                                return (
+                                  <div className="col-span-full text-center py-8 text-gray-500">
+                                    <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                                    <p className="text-sm">No buildings match "{buildingSearchTerm}"</p>
+                                  </div>
+                                );
+                              }
+
+                              return buildings.map(buildingNum => {
+                                const isSelected = selectedBuildings.includes(buildingNum);
+                                const buildingUnits = projectUnits.filter(u => u.buildingNum === buildingNum);
+                                const userCount = projectUsers.filter(user => 
+                                  user.projects?.some(p => {
+                                    if (p.projectId === projectId && p.unit) {
+                                      const [building] = p.unit.split('-');
+                                      return building === String(buildingNum);
+                                    }
+                                    return false;
+                                  })
+                                ).length;
+                                const occupiedCount = buildingUnits.filter(u => {
+                                  const unitId = `${u.buildingNum}-${u.unitNum}`;
+                                  return projectUsers.some(user => 
+                                    user.projects?.some(p => p.projectId === projectId && p.unit === unitId)
+                                  );
+                                }).length;
+
+                                return (
+                                  <button
+                                    key={buildingNum}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setSelectedBuildings(prev => prev.filter(id => id !== buildingNum));
+                                      } else {
+                                        setSelectedBuildings(prev => [...prev, buildingNum]);
+                                      }
+                                    }}
+                                    className={`relative p-4 border-2 rounded-xl transition-all ${
+                                      isSelected
+                                        ? 'border-purple-500 bg-gradient-to-br from-purple-100 to-pink-100 shadow-lg scale-105'
+                                        : 'border-gray-300 bg-white hover:border-purple-300 hover:shadow-md'
+                                    }`}
+                                  >
+                                    <Building className={`h-8 w-8 mx-auto mb-2 ${isSelected ? 'text-purple-600' : 'text-gray-400'}`} />
+                                    <p className={`text-sm font-bold mb-1 ${isSelected ? 'text-purple-900' : 'text-gray-700'}`}>
+                                      Building {buildingNum}
+                                    </p>
+                                    <div className="flex flex-col gap-1 text-xs">
+                                      <p className={`font-semibold ${isSelected ? 'text-purple-700' : 'text-blue-600'}`}>
+                                        {userCount} {userCount === 1 ? 'user' : 'users'}
+                                      </p>
+                                      <p className="text-gray-500">
+                                        {buildingUnits.length} units • {occupiedCount} occupied
+                                      </p>
+                                    </div>
+                                    {isSelected && (
+                                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                                        <CheckCircle className="h-4 w-4 text-white" />
+                                      </div>
+                                    )}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Recipients Count */}
+                    {selectedBuildings.length > 0 && (
+                      <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg">
+                        <p className="text-sm font-bold text-green-900 flex items-center">
+                          <Users className="h-4 w-4 mr-2" />
+                          Total Recipients: {(() => {
+                            const uniqueUsers = new Set();
+                            selectedBuildings.forEach(buildingNum => {
+                              projectUsers.forEach(user => {
+                                if (user.projects?.some(p => {
+                                  if (p.projectId === projectId && p.unit) {
+                                    const [building] = p.unit.split('-');
+                                    return building === String(buildingNum);
+                                  }
+                                  return false;
+                                })) {
+                                  uniqueUsers.add(user.id);
+                                }
+                              });
+                            });
+                            return uniqueUsers.size;
+                          })()} users
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Topic Input */}
                 {formData.audienceType === 'topic' && (
@@ -690,158 +1170,213 @@ const NotificationManagement = ({ projectId }) => {
                   <div className="md:col-span-2">
                     <div className="flex items-center justify-between mb-3">
                       <label className="block text-sm font-medium text-gray-700">
-                        Select Users ({selectedUserIds.length} selected)
+                        <User className="h-4 w-4 inline mr-2 text-green-600" />
+                        Select User(s) ({selectedUserIds.length} selected)
                       </label>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={selectAllUsers}
-                          className="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                          className="text-xs px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors font-medium"
                         >
                           Select All {userSearchTerm ? 'Filtered' : ''}
                         </button>
                         <button
                           type="button"
                           onClick={deselectAllUsers}
-                          className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                          className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors font-medium"
                         >
                           Clear All
                         </button>
                       </div>
-                  </div>
+                    </div>
 
                     {/* Selected Users Display */}
                     {selectedUserIds.length > 0 && (
-                      <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-xs font-medium text-blue-900 mb-2">Selected Users:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {getSelectedUsers().map((user) => (
-                            <div
-                              key={user.id}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-blue-300 rounded-full text-xs"
-                            >
-                              <span className="font-medium text-gray-900">
-                                {user.firstName} {user.lastName}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeSelectedUser(user.id)}
-                                className="text-red-500 hover:text-red-700 transition-colors"
-                                title="Remove user"
+                      <div className="mb-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg">
+                        <p className="text-xs font-bold text-green-900 mb-2">Selected Users:</p>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                          {getSelectedUsers().map((user) => {
+                            const userProject = user.projects?.find(p => p.projectId === projectId);
+                            return (
+                              <div
+                                key={user.id}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-green-300 rounded-full text-xs shadow-sm"
                               >
-                                <X className="h-3 w-3" />
-                              </button>
-                      </div>
-                          ))}
+                                <User className="h-3 w-3 text-green-600" />
+                                <span className="font-bold text-gray-900">
+                                  {user.firstName} {user.lastName}
+                                </span>
+                                {userProject?.unit && (
+                                  <span className="text-blue-600">({userProject.unit})</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => removeSelectedUser(user.id)}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                  title="Remove user"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
                       
-                    {/* Search Bar */}
+                    {/* User Search Bar */}
                     <div className="mb-3">
-                          <input
-                            type="text"
-                        value={userSearchTerm}
-                        onChange={(e) => setUserSearchTerm(e.target.value)}
-                        placeholder="Search by name, email, or unit..."
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                      />
-                        </div>
-
-                    {/* User List */}
-                    <div className="border border-gray-300 rounded-lg bg-white">
-                      {getFilteredUsers().length === 0 ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">
-                          {userSearchTerm ? 'No users found matching your search' : 'No users available'}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                            {getPaginatedUsers().map((user) => {
-                              const userProject = user.projects?.find(p => p.projectId === projectId);
-                              const isSelected = selectedUserIds.includes(user.id);
-                              
-                              return (
-                                <label
-                                  key={user.id}
-                                  className={`flex items-center p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                                    isSelected ? 'bg-blue-50' : ''
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleUserSelection(user.id)}
-                                    className="w-4 h-4 text-red-600 rounded focus:ring-2 focus:ring-red-500 mr-3"
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                      {user.firstName} {user.lastName}
-                                    </p>
-                                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                                    {userProject?.unit && (
-                                      <p className="text-xs text-blue-600 mt-0.5">Unit: {userProject.unit}</p>
-                      )}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={userSearchTerm}
+                          onChange={(e) => setUserSearchTerm(e.target.value)}
+                          placeholder="Search by name, email, or unit..."
+                          className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all text-sm"
+                        />
+                        <Search className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        {userSearchTerm && (
+                          <button
+                            onClick={() => setUserSearchTerm('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                                </label>
-                              );
-                            })}
-                  </div>
 
-                          {/* Pagination Controls */}
-                          <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-600">Show:</span>
-                              <select
-                                value={usersPerPage}
-                                onChange={(e) => {
-                                  setUsersPerPage(Number(e.target.value));
-                                  setCurrentPage(1);
-                                }}
-                                className="text-xs border border-gray-300 rounded px-2 py-1"
-                              >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                              </select>
-                              <span className="text-xs text-gray-600">
-                                Showing {(currentPage - 1) * usersPerPage + 1}-
-                                {Math.min(currentPage * usersPerPage, getFilteredUsers().length)} of{' '}
-                                {getFilteredUsers().length}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                disabled={currentPage === 1}
-                                className="p-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
-                              >
-                                <ChevronLeft className="h-4 w-4" />
-                              </button>
-                              <span className="text-xs text-gray-600">
-                                Page {currentPage} of {getTotalPages()}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setCurrentPage(prev => Math.min(getTotalPages(), prev + 1))}
-                                disabled={currentPage >= getTotalPages()}
-                                className="p-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </button>
-                            </div>
+                    {/* Users Grid */}
+                    <div className="border-2 border-gray-300 rounded-xl bg-white overflow-hidden">
+                      <div className="max-h-80 overflow-y-auto p-3">
+                        {getFilteredUsers().length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            {userSearchTerm ? (
+                              <>
+                                <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                                <p className="text-sm">No users match "{userSearchTerm}"</p>
+                              </>
+                            ) : (
+                              <>
+                                <Users className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                                <p className="text-sm">No users available</p>
+                              </>
+                            )}
                           </div>
-                        </>
-                      )}
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+                              {getPaginatedUsers().map((user) => {
+                                const userProject = user.projects?.find(p => p.projectId === projectId);
+                                const isSelected = selectedUserIds.includes(user.id);
+                                
+                                return (
+                                  <button
+                                    key={user.id}
+                                    type="button"
+                                    onClick={() => toggleUserSelection(user.id)}
+                                    className={`relative p-3 border-2 rounded-xl transition-all text-left ${
+                                      isSelected
+                                        ? 'border-green-500 bg-gradient-to-br from-green-100 to-emerald-100 shadow-md'
+                                        : 'border-gray-300 bg-white hover:border-green-300 hover:shadow-sm'
+                                    }`}
+                                  >
+                                    <div className="flex items-start space-x-3">
+                                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                                        isSelected ? 'bg-green-200' : 'bg-gray-200'
+                                      }`}>
+                                        <User className={`h-5 w-5 ${isSelected ? 'text-green-700' : 'text-gray-500'}`} />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-bold truncate ${isSelected ? 'text-green-900' : 'text-gray-900'}`}>
+                                          {user.firstName} {user.lastName}
+                                        </p>
+                                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                        {userProject?.unit && (
+                                          <p className="text-xs text-blue-600 mt-1 flex items-center">
+                                            <Home className="h-3 w-3 mr-1" />
+                                            {userProject.unit}
+                                          </p>
+                                        )}
+                                        {userProject?.role && (
+                                          <p className={`text-xs mt-1 font-semibold ${
+                                            userProject.role === 'owner' ? 'text-purple-600' : 'text-indigo-600'
+                                          }`}>
+                                            {userProject.role === 'owner' ? 'Owner' : 'Family'}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isSelected && (
+                                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 rounded-full flex items-center justify-center">
+                                        <CheckCircle className="h-3 w-3 text-white" />
+                                      </div>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Pagination Controls */}
+                            <div className="border-t-2 border-gray-200 pt-3 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-600 font-medium">Show:</span>
+                                <select
+                                  value={usersPerPage}
+                                  onChange={(e) => {
+                                    setUsersPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                  }}
+                                  className="text-xs px-2 py-1.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-medium"
+                                >
+                                  <option value="6">6</option>
+                                  <option value="12">12</option>
+                                  <option value="24">24</option>
+                                  <option value="50">50</option>
+                                </select>
+                                <span className="text-xs text-gray-600 font-medium">
+                                  {(currentPage - 1) * usersPerPage + 1}-
+                                  {Math.min(currentPage * usersPerPage, getFilteredUsers().length)} of{' '}
+                                  {getFilteredUsers().length}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                  disabled={currentPage === 1}
+                                  className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs text-gray-700 font-bold px-2">
+                                  {currentPage} / {getTotalPages()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrentPage(prev => Math.min(getTotalPages(), prev + 1))}
+                                  disabled={currentPage >= getTotalPages()}
+                                  className="p-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
+                    {/* Total Recipients Info */}
                     {selectedUserIds.length > 0 && (
-                      <p className="mt-2 text-xs text-gray-500">
-                        📢 Notification will be sent to {selectedUserIds.length} user{selectedUserIds.length !== 1 ? 's' : ''}
-                      </p>
+                      <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg">
+                        <p className="text-sm font-bold text-green-900 flex items-center">
+                          <Users className="h-4 w-4 mr-2" />
+                          Total Recipients: {selectedUserIds.length} {selectedUserIds.length === 1 ? 'user' : 'users'}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1018,7 +1553,11 @@ const NotificationManagement = ({ projectId }) => {
                     deepLink: ''
                   });
                   setSelectedUserIds([]);
+                  setSelectedUnits([]);
+                  setSelectedBuildings([]);
                   setUserSearchTerm('');
+                  setUnitSearchTerm('');
+                  setBuildingSearchTerm('');
                   setCurrentPage(1);
                   setShowPreview(false);
                 }}
