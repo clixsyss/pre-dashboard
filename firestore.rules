@@ -911,13 +911,16 @@ service cloud.firestore {
     }
     
     // PROJECT-SPECIFIC DEVICE KEY RESET REQUESTS
-    // Same rules as global but under project subcollections
+    // Allow unauthenticated and anonymous users to create requests (they can't log in)
+    // Allow authenticated users to read their own requests
+    // Admins can read/update all requests
     match /projects/{projectId}/deviceKeyResetRequests/{requestId} {
-      // Users can create their own reset requests
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+      // ANYONE can create a reset request (unauthenticated, anonymous, or authenticated)
+      // This is necessary because users locked out of their account need to submit requests
+      // Validation is done by checking user details (email, nationalId, mobile) match Firestore
+      allow create: if true; // Allows unauthenticated, anonymous, and authenticated users
       
-      // Users can read their own requests
+      // Authenticated users (including anonymous) can read their own requests
       // Admins can read all requests
       allow read: if request.auth != null && 
         (resource.data.userId == request.auth.uid || 
@@ -933,6 +936,8 @@ service cloud.firestore {
     }
     
     // Allow listing project device key reset requests
+    // Authenticated users can list (will be filtered by userId in query)
+    // Admins can list all
     match /projects/{projectId}/deviceKeyResetRequests {
       allow list: if request.auth != null;
     }

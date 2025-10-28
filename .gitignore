@@ -34,3 +34,13 @@ users03.json
 users04.json
 users05.json
 users_jdar.json
+
+# Firebase Functions
+functions/node_modules/
+functions/lib/
+functions/.runtimeconfig.json
+functions/pglite-debug.log
+
+# Environment variables and secrets
+.env
+.runtimeconfig.json
