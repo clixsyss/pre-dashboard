@@ -79,6 +79,7 @@ import { useNotificationStore } from '../stores/notificationStore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import PermissionGate from '../components/PermissionGate';
 import customUserNotificationService from '../services/customUserNotificationService';
+import { sendStatusNotification } from '../services/statusNotificationService';
 import '../styles/servicesManagement.css';
 import '../styles/projectSidebar.css';
 
@@ -1223,7 +1224,7 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-      }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests, fetchUnits]);
+      }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests, fetchUnits, fetchUnitRequests]);
 
   // Set up real-time listener for device reset requests (same as other tabs)
   useEffect(() => {
@@ -1441,28 +1442,16 @@ const ProjectDashboard = () => {
 
       // Send notification to user about approval
       try {
-        await customUserNotificationService.sendCustomUserNotification({
-          userId: request.userId,
-          projectId: request.projectId,
-          actionType: 'unit_request_approved',
-          message: `Great news! Your request to access Unit ${request.unit} in ${request.projectName} has been approved. You can now access this unit and all its features.`,
-          options: {
-            title: 'Unit Access Approved',
-            type: 'success',
-            category: 'unit_access',
-            priority: 'high',
-            requiresAction: false,
-            metadata: {
-              sentFrom: 'dashboard',
-              adminId: currentAdmin?.id || 'unknown',
-              adminName: currentAdmin?.name || 'Admin',
-              adminEmail: currentAdmin?.email || 'unknown@example.com',
-              unit: request.unit,
-              projectName: request.projectName,
-              timestamp: new Date().toISOString()
-            }
-          }
-        });
+        const unitInfo = `Unit ${request.unit} in ${request.projectName}`;
+        await sendStatusNotification(
+          request.projectId,
+          request.userId,
+          'Unit Access Approved',
+          `Great news! Your request to access ${unitInfo} has been approved. You can now access this unit and all its features.`,
+          'تمت الموافقة على طلب الوحدة',
+          `أخبار رائعة! تمت الموافقة على طلبك للوصول إلى ${unitInfo}. يمكنك الآن الوصول إلى هذه الوحدة وجميع ميزاتها.`,
+          'success'
+        );
         console.log('Unit approval notification sent to user');
       } catch (notifError) {
         console.warn('Failed to send approval notification:', notifError);
@@ -1511,29 +1500,16 @@ const ProjectDashboard = () => {
 
       // Send notification to user about rejection
       try {
-        await customUserNotificationService.sendCustomUserNotification({
-          userId: request.userId,
-          projectId: request.projectId,
-          actionType: 'unit_request_rejected',
-          message: `We regret to inform you that your request to access Unit ${request.unit} in ${request.projectName} has been declined.\n\nReason: ${reason}\n\nIf you believe this is an error or have questions, please contact the management team.`,
-          options: {
-            title: 'Unit Access Request Declined',
-            type: 'warning',
-            category: 'unit_access',
-            priority: 'high',
-            requiresAction: false,
-            metadata: {
-              sentFrom: 'dashboard',
-              adminId: currentAdmin?.id || 'unknown',
-              adminName: currentAdmin?.name || 'Admin',
-              adminEmail: currentAdmin?.email || 'unknown@example.com',
-              unit: request.unit,
-              projectName: request.projectName,
-              rejectionReason: reason,
-              timestamp: new Date().toISOString()
-            }
-          }
-        });
+        const unitInfo = `Unit ${request.unit} in ${request.projectName}`;
+        await sendStatusNotification(
+          request.projectId,
+          request.userId,
+          'Unit Access Request Declined',
+          `We regret to inform you that your request to access ${unitInfo} has been declined.\n\nReason: ${reason}\n\nIf you believe this is an error or have questions, please contact the management team.`,
+          'تم رفض طلب الوصول للوحدة',
+          `يؤسفنا إبلاغك بأنه تم رفض طلبك للوصول إلى ${unitInfo}.\n\nالسبب: ${reason}\n\nإذا كنت تعتقد أن هذا خطأ أو لديك أسئلة، يرجى الاتصال بفريق الإدارة.`,
+          'alert'
+        );
         console.log('Unit rejection notification sent to user');
       } catch (notifError) {
         console.warn('Failed to send rejection notification:', notifError);
