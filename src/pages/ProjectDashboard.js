@@ -654,6 +654,20 @@ const ProjectDashboard = () => {
     return count;
   }, [deviceResetRequests]);
 
+  const pendingUnitRequestsCount = useMemo(() => {
+    const count = unitRequests?.filter(request => request.status === 'pending').length || 0;
+    
+    if (process.env.NODE_ENV === 'development' && count > 0) {
+      console.log('🏢 Calculating pendingUnitRequestsCount:', {
+        total: unitRequests?.length || 0,
+        pending: count,
+        statuses: unitRequests?.map(r => r.status).join(', ') || 'none'
+      });
+    }
+    
+    return count;
+  }, [unitRequests]);
+
   // Update all notification counts - now just logs analytics (counts are memoized)
   const updateAllNotificationCounts = useCallback(() => {
 
@@ -734,6 +748,9 @@ const ProjectDashboard = () => {
             requests: deviceResetRequests
           });
           return pendingDeviceKeyResetRequestsCount;
+        case 'units':
+          // Show pending unit requests
+          return pendingUnitRequestsCount;
         case 'dashboard':
           // Dashboard shows total pending items requiring action
           return pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + 
@@ -741,7 +758,8 @@ const ProjectDashboard = () => {
                  (requestSubmissions?.filter(r => r.status === 'pending').length || 0) +
                  openSupportTicketsCount +
                  (isSuperAdmin() ? pendingAdminsCount : 0) +
-                 pendingDeviceKeyResetRequestsCount;
+                 pendingDeviceKeyResetRequestsCount +
+                 pendingUnitRequestsCount;
         default:
           return 0;
       }
@@ -763,6 +781,7 @@ const ProjectDashboard = () => {
     pendingFinesCount, 
     pendingGatePassCount,
     pendingDeviceKeyResetRequestsCount,
+    pendingUnitRequestsCount,
     deviceResetRequests,
     projectBookings,
     requestSubmissions,
