@@ -64,6 +64,28 @@ service cloud.firestore {
          request.auth != null);
     }
     
+    // Unit Requests collection - for pending unit access approvals
+    match /unitRequests/{requestId} {
+      // Users can create their own unit requests
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Users can read their own unit requests
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      
+      // Only admins can update or delete unit requests
+      allow update, delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow admins to list all unit requests
+    match /unitRequests {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
     // PROJECT-SPECIFIC COLLECTIONS - New Architecture
     // These rules allow authenticated users to access data within specific projects
     

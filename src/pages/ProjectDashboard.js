@@ -98,6 +98,7 @@ const ProjectDashboard = () => {
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
   const [complaintsSubTab, setComplaintsSubTab] = useState('complaints');
   const [newsSubTab, setNewsSubTab] = useState('news');
+  const [unitsSubTab, setUnitsSubTab] = useState('units');
   // Notification counts are now memoized for better performance
   
   // Data state for notification counts and comprehensive analytics
@@ -121,6 +122,8 @@ const ProjectDashboard = () => {
   const [deviceResetRequests, setDeviceResetRequests] = useState([]);
   const [units, setUnits] = useState([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitRequests, setUnitRequests] = useState([]);
+  const [unitRequestsLoading, setUnitRequestsLoading] = useState(false);
   
   // Units filters
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
@@ -129,9 +132,18 @@ const ProjectDashboard = () => {
   const [unitFloorFilter, setUnitFloorFilter] = useState('all');
   const [unitDeveloperFilter, setUnitDeveloperFilter] = useState('all');
   
+  // Unit requests filters
+  const [requestSearchTerm, setRequestSearchTerm] = useState('');
+  const [requestStatusFilter, setRequestStatusFilter] = useState('all');
+  const [requestRoleFilter, setRequestRoleFilter] = useState('all');
+  
   // Units pagination
   const [unitsCurrentPage, setUnitsCurrentPage] = useState(1);
   const [unitsPerPage, setUnitsPerPage] = useState(100);
+  
+  // Unit requests pagination
+  const [requestsCurrentPage, setRequestsCurrentPage] = useState(1);
+  const [requestsPerPage] = useState(20);
   
   // Building details modal
   const [showBuildingModal, setShowBuildingModal] = useState(false);
@@ -149,6 +161,13 @@ const ProjectDashboard = () => {
   const [unitSuspensionReason, setUnitSuspensionReason] = useState('');
   const [unitSuspensionDuration, setUnitSuspensionDuration] = useState('7');
   const [unitSuspensionType, setUnitSuspensionType] = useState('temporary');
+  
+  // Unit request modals
+  const [showUserDetailsModal, setShowUserDetailsModal] = useState(false);
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
+  const [selectedUserFullData, setSelectedUserFullData] = useState(null);
+  const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState(false);
   
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
@@ -1138,6 +1157,34 @@ const ProjectDashboard = () => {
     }
   }, []);
 
+  const fetchUnitRequests = useCallback(async (projectId) => {
+    try {
+      setUnitRequestsLoading(true);
+      console.log('📋 Fetching unit requests...');
+      
+      const requestsQuery = query(
+        collection(db, 'unitRequests'),
+        where('projectId', '==', projectId),
+        orderBy('requestedAt', 'desc')
+      );
+      
+      const requestsSnapshot = await getDocs(requestsQuery);
+      
+      const requestsData = requestsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`✅ Loaded ${requestsData.length} unit requests`);
+      setUnitRequests(requestsData);
+    } catch (error) {
+      console.error('Error fetching unit requests:', error);
+      setUnitRequests([]);
+    } finally {
+      setUnitRequestsLoading(false);
+    }
+  }, []);
+
   // Load all data on mount for best user experience
   useEffect(() => {
     if (projectId && dataLoaded) {
@@ -1165,7 +1212,8 @@ const ProjectDashboard = () => {
             fetchProjectAdmins(projectId),
             fetchPendingAdmins(),
             fetchDeviceResetRequests(projectId),
-            fetchUnits(projectId)
+            fetchUnits(projectId),
+            fetchUnitRequests(projectId)
           ]);
           console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
@@ -1250,13 +1298,14 @@ const ProjectDashboard = () => {
         fetchServiceCategories(projectId),
         fetchProjectAdmins(projectId),
         fetchPendingAdmins(),
-        fetchDeviceResetRequests(projectId)
+        fetchDeviceResetRequests(projectId),
+        fetchUnitRequests(projectId)
       ]);
       console.log('✅ All data refreshed successfully - Dashboard updated!');
     } catch (error) {
       console.error('Error refreshing data:', error);
     }
-  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests]);
+  }, [projectId, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests, fetchUnitRequests]);
 
   // Reset filters when switching tabs (no data fetching needed)
   useEffect(() => {
@@ -1351,6 +1400,175 @@ const ProjectDashboard = () => {
       await fetchOrders(projectId);
     } catch (error) {
       console.error('Error changing order status:', error);
+    }
+  };
+
+  // Unit request approval handlers
+  const handleApproveRequest = async (request) => {
+    if (!window.confirm(`Approve unit request for ${request.userName} - Unit ${request.unit}?`)) {
+      return;
+    }
+
+    try {
+      setApprovalLoading(true);
+
+      // Update the unit request status
+      await updateDoc(doc(db, 'unitRequests', request.id), {
+        status: 'approved',
+        approvedAt: serverTimestamp(),
+        approvedBy: currentAdmin?.email || 'admin'
+      });
+
+      // Update the user's project array to mark as approved
+      const userDoc = await getDoc(doc(db, 'users', request.userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const updatedProjects = (userData.projects || []).map(p => {
+          if (p.projectId === request.projectId && p.unit === request.unit) {
+            return {
+              ...p,
+              approvalStatus: 'approved',
+              approvedAt: new Date()
+            };
+          }
+          return p;
+        });
+
+        await updateDoc(doc(db, 'users', request.userId), {
+          projects: updatedProjects
+        });
+      }
+
+      // Send notification to user about approval
+      try {
+        await customUserNotificationService.sendCustomUserNotification({
+          userId: request.userId,
+          projectId: request.projectId,
+          actionType: 'unit_request_approved',
+          message: `Great news! Your request to access Unit ${request.unit} in ${request.projectName} has been approved. You can now access this unit and all its features.`,
+          options: {
+            title: 'Unit Access Approved',
+            type: 'success',
+            category: 'unit_access',
+            priority: 'high',
+            requiresAction: false,
+            metadata: {
+              sentFrom: 'dashboard',
+              adminId: currentAdmin?.id || 'unknown',
+              adminName: currentAdmin?.name || 'Admin',
+              adminEmail: currentAdmin?.email || 'unknown@example.com',
+              unit: request.unit,
+              projectName: request.projectName,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+        console.log('Unit approval notification sent to user');
+      } catch (notifError) {
+        console.warn('Failed to send approval notification:', notifError);
+      }
+
+      // Refresh the unit requests
+      await fetchUnitRequests(projectId);
+      alert(`Unit request approved successfully for ${request.userName}. A notification has been sent to the user.`);
+    } catch (error) {
+      console.error('Error approving request:', error);
+      alert('Failed to approve request. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleRejectRequest = async (request) => {
+    const reason = window.prompt(`Reject unit request for ${request.userName} - Unit ${request.unit}?\n\nPlease provide a reason:`);
+    if (!reason) {
+      return;
+    }
+
+    try {
+      setApprovalLoading(true);
+
+      // Update the unit request status
+      await updateDoc(doc(db, 'unitRequests', request.id), {
+        status: 'rejected',
+        rejectedAt: serverTimestamp(),
+        rejectedBy: currentAdmin?.email || 'admin',
+        rejectionReason: reason
+      });
+
+      // Remove the project from the user's projects array
+      const userDoc = await getDoc(doc(db, 'users', request.userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const updatedProjects = (userData.projects || []).filter(p => {
+          return !(p.projectId === request.projectId && p.unit === request.unit);
+        });
+
+        await updateDoc(doc(db, 'users', request.userId), {
+          projects: updatedProjects
+        });
+      }
+
+      // Send notification to user about rejection
+      try {
+        await customUserNotificationService.sendCustomUserNotification({
+          userId: request.userId,
+          projectId: request.projectId,
+          actionType: 'unit_request_rejected',
+          message: `We regret to inform you that your request to access Unit ${request.unit} in ${request.projectName} has been declined.\n\nReason: ${reason}\n\nIf you believe this is an error or have questions, please contact the management team.`,
+          options: {
+            title: 'Unit Access Request Declined',
+            type: 'warning',
+            category: 'unit_access',
+            priority: 'high',
+            requiresAction: false,
+            metadata: {
+              sentFrom: 'dashboard',
+              adminId: currentAdmin?.id || 'unknown',
+              adminName: currentAdmin?.name || 'Admin',
+              adminEmail: currentAdmin?.email || 'unknown@example.com',
+              unit: request.unit,
+              projectName: request.projectName,
+              rejectionReason: reason,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+        console.log('Unit rejection notification sent to user');
+      } catch (notifError) {
+        console.warn('Failed to send rejection notification:', notifError);
+      }
+
+      // Refresh the unit requests
+      await fetchUnitRequests(projectId);
+      alert(`Unit request rejected for ${request.userName}. A notification has been sent to the user.`);
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      alert('Failed to reject request. Please try again.');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  // Fetch full user details for the modal
+  const fetchUserDetailsForRequest = async (request) => {
+    try {
+      setLoadingUserDetails(true);
+      const userDoc = await getDoc(doc(db, 'users', request.userId));
+      if (userDoc.exists()) {
+        const userData = {
+          id: userDoc.id,
+          ...userDoc.data()
+        };
+        setSelectedUserFullData(userData);
+      } else {
+        setSelectedUserFullData(null);
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      setSelectedUserFullData(null);
+    } finally {
+      setLoadingUserDetails(false);
     }
   };
 
@@ -5160,20 +5378,70 @@ const ProjectDashboard = () => {
 
         {activeTab === 'units' && (
           <PermissionGate entity="users" action="read" showMessage={true}>
-            <div className="space-y-6">
+            <div className="services-management">
               {/* Units Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Units & Occupancy</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    View all project units and their current occupancy status
-                  </p>
+              <div className="page-header bg-gradient-to-r from-red-600 to-red-700 text-white">
+                <div className="header-content">
+                  <div className="header-left">
+                    <div className="header-icon">
+                      <Building className="h-6 w-6" />
                 </div>
+                    <div className="header-text">
+                      <h1>Units Management</h1>
+                      <p>View all project units, occupancy status, and manage unit access requests</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Units Navigation Cards */}
+              <div className="services-nav-grid">
+                <div 
+                  className={`nav-card ${unitsSubTab === 'units' ? 'active' : ''}`}
+                  onClick={() => setUnitsSubTab('units')}
+                >
+                  <div className="nav-card-icon">
+                    <Building className="h-6 w-6" />
+                  </div>
+                  <div className="nav-card-content">
+                    <h3>Units & Occupancy</h3>
+                    <p>View all project units and their current occupancy status</p>
+                    <div className="nav-card-badge">{units.length} Units</div>
+                  </div>
+                </div>
+                
+                <div 
+                  className={`nav-card ${unitsSubTab === 'requests' ? 'active' : ''}`}
+                  onClick={() => setUnitsSubTab('requests')}
+                >
+                  <div className="nav-card-icon">
+                    <UserPlus className="h-6 w-6" />
+                  </div>
+                  <div className="nav-card-content">
+                    <h3>Unit Requests</h3>
+                    <p>Review and approve user requests to add new units</p>
+                    {unitRequests.filter(r => r.status === 'pending').length > 0 && (
+                      <div className="nav-card-badge badge-warning">
+                        {unitRequests.filter(r => r.status === 'pending').length} Pending
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Units Content */}
+              <div className="services-content">
+
+              {unitsSubTab === 'units' && (
+                <>
+                <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="text-right mr-4">
                     <p className="text-sm text-gray-600">Total Units</p>
                     <p className="text-3xl font-bold text-gray-900">{units.length}</p>
                   </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
                   <button
                     onClick={() => setShowBuildingModal(true)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg font-medium"
@@ -5797,7 +6065,337 @@ const ProjectDashboard = () => {
                   })()}
                 </div>
               )}
+                </>
+              )}
 
+              {unitsSubTab === 'requests' && (
+                <div className="space-y-6">
+                  {/* Unit Requests Header Actions */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Unit Access Requests</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Review and approve user requests to add new units
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => fetchUnitRequests(projectId)}
+                      className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 border border-red-200 transition-colors flex items-center font-medium"
+                      title="Refresh unit requests"
+                    >
+                      <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Refresh
+                    </button>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {/* Search Input */}
+                      <div className="relative md:col-span-2">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search by user name, email, or unit..."
+                          value={requestSearchTerm}
+                          onChange={(e) => setRequestSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      {/* Status Filter */}
+                      <select
+                        value={requestStatusFilter}
+                        onChange={(e) => setRequestStatusFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+
+                      {/* Role Filter */}
+                      <select
+                        value={requestRoleFilter}
+                        onChange={(e) => setRequestRoleFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Roles</option>
+                        <option value="owner">Owner</option>
+                        <option value="tenant">Tenant</option>
+                        <option value="family">Family</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Unit Requests List */}
+                  {unitRequestsLoading ? (
+                    <div className="flex justify-center items-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (() => {
+                    const filteredRequests = unitRequests.filter(request => {
+                      const matchesSearch = !requestSearchTerm || 
+                        request.userName?.toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
+                        request.userEmail?.toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
+                        request.unit?.toLowerCase().includes(requestSearchTerm.toLowerCase());
+                      
+                      const matchesStatus = requestStatusFilter === 'all' || request.status === requestStatusFilter;
+                      const matchesRole = requestRoleFilter === 'all' || request.role === requestRoleFilter;
+                      
+                      return matchesSearch && matchesStatus && matchesRole;
+                    });
+
+                    const paginatedRequests = filteredRequests.slice(
+                      (requestsCurrentPage - 1) * requestsPerPage,
+                      requestsCurrentPage * requestsPerPage
+                    );
+
+                    const totalPages = Math.ceil(filteredRequests.length / requestsPerPage);
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div className="flex items-center">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <FileText className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-600">Total Requests</p>
+                                <p className="text-2xl font-bold text-gray-900">{filteredRequests.length}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div className="flex items-center">
+                              <div className="p-2 bg-yellow-100 rounded-lg">
+                                <Clock className="h-5 w-5 text-yellow-600" />
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-600">Pending</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                  {filteredRequests.filter(r => r.status === 'pending').length}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div className="flex items-center">
+                              <div className="p-2 bg-green-100 rounded-lg">
+                                <UserCheck className="h-5 w-5 text-green-600" />
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-600">Approved</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                  {filteredRequests.filter(r => r.status === 'approved').length}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                            <div className="flex items-center">
+                              <div className="p-2 bg-red-100 rounded-lg">
+                                <UserX className="h-5 w-5 text-red-600" />
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-600">Rejected</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                  {filteredRequests.filter(r => r.status === 'rejected').length}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Requests Table */}
+                        {paginatedRequests.length === 0 ? (
+                          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">No unit requests found</h3>
+                            <p className="text-gray-500">
+                              {requestSearchTerm || requestStatusFilter !== 'all' || requestRoleFilter !== 'all'
+                                ? 'Try adjusting your filters'
+                                : 'No users have submitted unit access requests yet'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      User
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Unit
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Role
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Requested
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Status
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      Actions
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {paginatedRequests.map((request) => (
+                                    <tr key={request.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                          <div>
+                                            <div className="text-sm font-medium text-gray-900">{request.userName}</div>
+                                            <div className="text-sm text-gray-500">{request.userEmail}</div>
+                                            {request.userPhone && (
+                                              <div className="text-sm text-gray-500">{request.userPhone}</div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-gray-900">{request.unit}</div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 capitalize">
+                                          {request.role}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {request.requestedAt?.toDate ? 
+                                          new Date(request.requestedAt.toDate()).toLocaleDateString() : 
+                                          'N/A'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                          request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                          request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                          'bg-red-100 text-red-800'
+                                        }`}>
+                                          {request.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                        <button
+                                          onClick={async () => {
+                                            setSelectedUserForDetails(request);
+                                            await fetchUserDetailsForRequest(request);
+                                            setShowUserDetailsModal(true);
+                                          }}
+                                          className="text-blue-600 hover:text-blue-900"
+                                          title="View user details"
+                                        >
+                                          <Eye className="h-4 w-4 inline" />
+                                        </button>
+                                        {request.status === 'pending' && (
+                                          <>
+                                            <button
+                                              onClick={() => handleApproveRequest(request)}
+                                              disabled={approvalLoading}
+                                              className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                                              title="Approve request"
+                                            >
+                                              <UserCheck className="h-4 w-4 inline" />
+                                            </button>
+                                            <button
+                                              onClick={() => handleRejectRequest(request)}
+                                              disabled={approvalLoading}
+                                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                              title="Reject request"
+                                            >
+                                              <UserX className="h-4 w-4 inline" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                                <div className="flex-1 flex justify-between sm:hidden">
+                                  <button
+                                    onClick={() => setRequestsCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={requestsCurrentPage === 1}
+                                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    Previous
+                                  </button>
+                                  <button
+                                    onClick={() => setRequestsCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={requestsCurrentPage === totalPages}
+                                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    Next
+                                  </button>
+                                </div>
+                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                                  <div>
+                                    <p className="text-sm text-gray-700">
+                                      Showing <span className="font-medium">{(requestsCurrentPage - 1) * requestsPerPage + 1}</span> to{' '}
+                                      <span className="font-medium">
+                                        {Math.min(requestsCurrentPage * requestsPerPage, filteredRequests.length)}
+                                      </span>{' '}
+                                      of <span className="font-medium">{filteredRequests.length}</span> results
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                      <button
+                                        onClick={() => setRequestsCurrentPage(prev => Math.max(1, prev - 1))}
+                                        disabled={requestsCurrentPage === 1}
+                                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                      >
+                                        <ChevronLeft className="h-5 w-5" />
+                                      </button>
+                                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map(page => (
+                                        <button
+                                          key={page}
+                                          onClick={() => setRequestsCurrentPage(page)}
+                                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                            requestsCurrentPage === page
+                                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          {page}
+                                        </button>
+                                      ))}
+                                      <button
+                                        onClick={() => setRequestsCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                        disabled={requestsCurrentPage === totalPages}
+                                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                      >
+                                        <ChevronRight className="h-5 w-5" />
+                                      </button>
+                                    </nav>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              
+              </div>
             </div>
           </PermissionGate>
         )}
@@ -11107,6 +11705,499 @@ const ProjectDashboard = () => {
                 <UserX className="h-4 w-4 mr-2" />
                 Suspend Users
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Details Modal for Unit Requests */}
+      {showUserDetailsModal && selectedUserForDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 finesModal">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[75vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center space-x-4">
+                <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                  {selectedUserFullData ? 
+                    `${selectedUserFullData.firstName?.charAt(0) || ''}${selectedUserFullData.lastName?.charAt(0) || ''}` :
+                    `${selectedUserForDetails.userName?.split(' ')[0]?.charAt(0) || ''}${selectedUserForDetails.userName?.split(' ')[1]?.charAt(0) || ''}`
+                  }
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedUserFullData ? 
+                      `${selectedUserFullData.firstName} ${selectedUserFullData.lastName}` :
+                      selectedUserForDetails.userName
+                    }
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedUserFullData?.email || selectedUserForDetails.userEmail}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${
+                      selectedUserForDetails.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                      selectedUserForDetails.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {selectedUserForDetails.status === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                      {selectedUserForDetails.status === 'approved' && <UserCheck className="h-3 w-3 mr-1" />}
+                      {selectedUserForDetails.status === 'rejected' && <UserX className="h-3 w-3 mr-1" />}
+                      Request: {selectedUserForDetails.status?.toUpperCase()}
+                    </span>
+                    {selectedUserFullData?.migrated === true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-teal-100 text-teal-700">
+                        <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Migrated
+                      </span>
+                    )}
+                    {selectedUserFullData?.oldId && selectedUserFullData?.migrated !== true && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Needs Migration
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowUserDetailsModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-full transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {loadingUserDetails ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+              ) : selectedUserFullData ? (
+                <>
+                  {/* Personal Information Section */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                    <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                      <Users className="h-5 w-5 mr-2 text-blue-600" />
+                      Personal Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</label>
+                        <p className="text-sm text-gray-900 font-semibold mt-1">
+                          {selectedUserFullData.fullName || `${selectedUserFullData.firstName} ${selectedUserFullData.lastName}`}
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">First Name</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.firstName || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Name</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.lastName || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1 break-all">{selectedUserFullData.email || 'No email'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.mobile || selectedUserFullData.phone || 'No phone'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">National ID</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.nationalId || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date of Birth</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.dateOfBirth || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUserFullData.gender || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email Verified</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {selectedUserFullData.emailVerified ? (
+                            <span className="text-green-600 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Verified
+                            </span>
+                          ) : (
+                            <span className="text-red-600">Not Verified</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Account Status & Approvals Section */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                    <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+                      <Shield className="h-5 w-5 mr-2 text-purple-600" />
+                      Account Status & Approvals
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approval Status</label>
+                        <p className="text-sm text-gray-900 font-medium mt-2">
+                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            selectedUserFullData.approvalStatus === 'approved'
+                              ? 'bg-green-100 text-green-800'
+                              : selectedUserFullData.approvalStatus === 'pending'
+                                ? 'bg-amber-100 text-amber-800'
+                                : selectedUserFullData.approvalStatus === 'rejected'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {selectedUserFullData.approvalStatus || 'pending'}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Registration Status</label>
+                        <p className="text-sm text-gray-900 font-medium mt-2">
+                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            selectedUserFullData.registrationStatus === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : selectedUserFullData.registrationStatus === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {selectedUserFullData.registrationStatus || 'Unknown'}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Profile Complete</label>
+                        <p className="text-sm text-gray-900 font-medium mt-1">
+                          {selectedUserFullData.isProfileComplete ? (
+                            <span className="text-green-600 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Complete
+                            </span>
+                          ) : (
+                            <span className="text-orange-600">Incomplete</span>
+                          )}
+                        </p>
+                      </div>
+                      {selectedUserFullData.approvedBy && (
+                        <div className="bg-white rounded-lg p-3 shadow-sm">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved By</label>
+                          <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserFullData.approvedBy}</p>
+                        </div>
+                      )}
+                      {selectedUserFullData.approvedAt && (
+                        <div className="bg-white rounded-lg p-3 shadow-sm">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved At</label>
+                          <p className="text-sm text-gray-900 font-medium mt-1">
+                            {selectedUserFullData.approvedAt.toDate ? 
+                              selectedUserFullData.approvedAt.toDate().toLocaleDateString() :
+                              new Date(selectedUserFullData.approvedAt).toLocaleDateString()
+                            }
+                          </p>
+                        </div>
+                      )}
+                      {selectedUserFullData.role && (
+                        <div className="bg-white rounded-lg p-3 shadow-sm">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User Role</label>
+                          <p className="text-sm text-gray-900 font-medium mt-1 capitalize">{selectedUserFullData.role}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Documents & Profile Pictures Section */}
+                  <div className="bg-purple-50 rounded-xl p-4">
+                    <h3 className="text-lg font-semibold text-purple-900 mb-3 flex items-center">
+                      <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                      Documents & Profile Pictures
+                    </h3>
+                    
+                    <div className="space-y-6">
+                      {/* Profile Picture */}
+                      <div>
+                        <label className="text-sm font-medium text-purple-700">Profile Picture</label>
+                        <div className="mt-2">
+                          {selectedUserFullData.documents?.profilePictureUrl ? (
+                            <div className="flex items-center space-x-4">
+                              <img
+                                src={selectedUserFullData.documents.profilePictureUrl}
+                                alt="Profile"
+                                className="h-20 w-20 rounded-full object-cover border-4 border-purple-200 shadow-md"
+                              />
+                              <button
+                                onClick={() => window.open(selectedUserFullData.documents.profilePictureUrl, '_blank')}
+                                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Full Size
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-4">
+                              <div className="h-20 w-20 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300">
+                                <Users className="h-8 w-8 text-gray-400" />
+                              </div>
+                              <span className="text-gray-500 text-sm">No profile picture uploaded</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* National ID Documents */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Front ID */}
+                        <div>
+                          <label className="text-sm font-medium text-purple-700">Front National ID</label>
+                          <div className="mt-2">
+                            {selectedUserFullData.documents?.frontIdUrl ? (
+                              <div className="space-y-3">
+                                <div className="relative">
+                                  <img
+                                    src={selectedUserFullData.documents.frontIdUrl}
+                                    alt="Front National ID"
+                                    className="w-full h-32 object-cover rounded-lg border-2 border-purple-200 shadow-sm"
+                                  />
+                                  <div className="absolute top-2 right-2">
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      ✓ Uploaded
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => window.open(selectedUserFullData.documents.frontIdUrl, '_blank')}
+                                  className="w-full px-3 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Document
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                  <span className="text-gray-500 text-sm">Not uploaded</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Back ID */}
+                        <div>
+                          <label className="text-sm font-medium text-purple-700">Back National ID</label>
+                          <div className="mt-2">
+                            {selectedUserFullData.documents?.backIdUrl ? (
+                              <div className="space-y-3">
+                                <div className="relative">
+                                  <img
+                                    src={selectedUserFullData.documents.backIdUrl}
+                                    alt="Back National ID"
+                                    className="w-full h-32 object-cover rounded-lg border-2 border-purple-200 shadow-sm"
+                                  />
+                                  <div className="absolute top-2 right-2">
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      ✓ Uploaded
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => window.open(selectedUserFullData.documents.backIdUrl, '_blank')}
+                                  className="w-full px-3 py-2 bg-purple-100 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Document
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-full h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                                <div className="text-center">
+                                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                  <span className="text-gray-500 text-sm">Not uploaded</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                    <Users className="h-5 w-5 mr-2 text-blue-600" />
+                    User Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</label>
+                      <p className="text-sm text-gray-900 font-semibold mt-1">{selectedUserForDetails.userName || 'N/A'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1 break-all">{selectedUserForDetails.userEmail || 'No email'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserForDetails.userPhone || 'No phone'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                      <p className="text-xs text-gray-600 font-mono mt-1 break-all">{selectedUserForDetails.userId || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Unit Request Information Section */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-6 border border-green-200">
+                <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                  <Building className="h-5 w-5 mr-2 text-green-600" />
+                  Unit Request Information
+                </h3>
+                <div className="bg-white rounded-lg p-5 border-2 border-green-300 shadow-md">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Project Name</label>
+                      <p className="text-base text-green-900 font-bold mt-1">{selectedUserForDetails.projectName || 'N/A'}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Unit Number</label>
+                      <p className="text-base text-green-900 font-bold mt-1">{selectedUserForDetails.unit || 'N/A'}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Role</label>
+                      <p className="text-base text-green-900 font-bold mt-1 capitalize">{selectedUserForDetails.role || 'N/A'}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <label className="text-xs font-medium text-green-700 uppercase tracking-wide">Request Date</label>
+                      <p className="text-base text-green-900 font-bold mt-1">
+                        {selectedUserForDetails.requestedAt?.toDate ? 
+                          new Date(selectedUserForDetails.requestedAt.toDate()).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          }) : 
+                          'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Request Status & Action Details */}
+              <div className={`rounded-xl p-6 border ${
+                selectedUserForDetails.status === 'pending' ? 'bg-gradient-to-br from-amber-50 to-yellow-100 border-amber-200' :
+                selectedUserForDetails.status === 'approved' ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-200' :
+                'bg-gradient-to-br from-red-50 to-rose-100 border-red-200'
+              }`}>
+                <h3 className={`text-lg font-semibold mb-4 flex items-center ${
+                  selectedUserForDetails.status === 'pending' ? 'text-amber-900' :
+                  selectedUserForDetails.status === 'approved' ? 'text-green-900' :
+                  'text-red-900'
+                }`}>
+                  <FileText className={`h-5 w-5 mr-2 ${
+                    selectedUserForDetails.status === 'pending' ? 'text-amber-600' :
+                    selectedUserForDetails.status === 'approved' ? 'text-green-600' :
+                    'text-red-600'
+                  }`} />
+                  Request Status & Action Details
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Request Status</label>
+                    <p className="text-sm text-gray-900 font-semibold mt-1 capitalize">{selectedUserForDetails.status || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 shadow-sm">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Request Date</label>
+                    <p className="text-sm text-gray-900 font-medium mt-1">
+                      {selectedUserForDetails.requestedAt?.toDate ? 
+                        new Date(selectedUserForDetails.requestedAt.toDate()).toLocaleDateString() : 
+                        'N/A'}
+                    </p>
+                  </div>
+                  {selectedUserForDetails.approvedBy && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved By</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserForDetails.approvedBy}</p>
+                    </div>
+                  )}
+                  {selectedUserForDetails.approvedAt?.toDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Approved At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {new Date(selectedUserForDetails.approvedAt.toDate()).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  {selectedUserForDetails.rejectedBy && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rejected By</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">{selectedUserForDetails.rejectedBy}</p>
+                    </div>
+                  )}
+                  {selectedUserForDetails.rejectedAt?.toDate && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rejected At</label>
+                      <p className="text-sm text-gray-900 font-medium mt-1">
+                        {new Date(selectedUserForDetails.rejectedAt.toDate()).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  {selectedUserForDetails.rejectionReason && (
+                    <div className="bg-white rounded-lg p-3 shadow-sm md:col-span-3">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rejection Reason</label>
+                      <p className="text-sm text-red-700 font-medium mt-1">{selectedUserForDetails.rejectionReason}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer - Action Buttons */}
+            <div className="sticky bottom-0 bg-gray-50 p-6 flex justify-between items-center border-t border-gray-200 rounded-b-2xl">
+              <button
+                onClick={() => setShowUserDetailsModal(false)}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Close
+              </button>
+              {selectedUserForDetails.status === 'pending' && (
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowUserDetailsModal(false);
+                      handleRejectRequest(selectedUserForDetails);
+                    }}
+                    disabled={approvalLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all font-medium disabled:opacity-50 flex items-center shadow-md hover:shadow-lg"
+                  >
+                    <UserX className="h-4 w-4 mr-2" />
+                    Reject Request
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUserDetailsModal(false);
+                      handleApproveRequest(selectedUserForDetails);
+                    }}
+                    disabled={approvalLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium disabled:opacity-50 flex items-center shadow-md hover:shadow-lg"
+                  >
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Approve Request
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
