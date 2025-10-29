@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Key, Clock, Check, X, AlertCircle, Smartphone, RefreshCw, Building2, Search, Eye, User, FileText, History } from 'lucide-react';
+import { Key, Clock, Check, X, AlertCircle, Smartphone, RefreshCw, Building2, Search, Eye, User, FileText, History, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { collection, query, where, getDocs, doc, updateDoc, Timestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -24,6 +24,11 @@ const DeviceKeysManagement = ({ projectId }) => {
   const [userDetails, setUserDetails] = useState(null);
   const [userRequestHistory, setUserRequestHistory] = useState([]);
   const [loadingModal, setLoadingModal] = useState(false);
+  const [expandedDeviceKeyId, setExpandedDeviceKeyId] = useState(null);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const loadDeviceKeys = useCallback(async (activeProjectId) => {
     try {
@@ -246,6 +251,11 @@ const DeviceKeysManagement = ({ projectId }) => {
       unsubscribeRequests();
     };
   }, [projectId, filter]);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -582,19 +592,41 @@ const DeviceKeysManagement = ({ projectId }) => {
         </nav>
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar and Items Per Page */}
       <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-pre-red focus:border-transparent sm:text-sm transition-all duration-200"
+              placeholder={activeTab === 'keys' ? 'Search by name, email, or device key...' : 'Search by name, email, or reason...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-pre-red focus:border-transparent sm:text-sm transition-all duration-200"
-            placeholder={activeTab === 'keys' ? 'Search by name, email, or device key...' : 'Search by name, email, or reason...'}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          
+          {/* Items Per Page Selector */}
+          {activeTab === 'keys' && (
+            <div className="flex items-center space-x-2 bg-red-50 px-4 py-2 rounded-lg border border-red-200">
+              <span className="text-sm text-red-700 font-semibold whitespace-nowrap">Show:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-1.5 border-2 border-red-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 font-bold text-red-900 bg-white"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-red-700 font-semibold whitespace-nowrap">per page</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -621,8 +653,9 @@ const DeviceKeysManagement = ({ projectId }) => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
@@ -635,7 +668,13 @@ const DeviceKeysManagement = ({ projectId }) => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredDeviceKeys.map((key) => (
+                    {(() => {
+                      // Calculate pagination
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const paginatedKeys = filteredDeviceKeys.slice(startIndex, endIndex);
+                      
+                      return paginatedKeys.map((key) => (
                       <tr key={key.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -657,8 +696,16 @@ const DeviceKeysManagement = ({ projectId }) => {
                             {key.role}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <code className="px-2 py-1 text-xs bg-gray-100 rounded font-mono text-gray-700 break-all max-w-xs inline-block">
+                        <td className="px-6 py-4">
+                          <code 
+                            className={`px-2 py-1 text-xs bg-gray-100 rounded font-mono text-gray-700 inline-block cursor-pointer hover:bg-gray-200 transition-colors ${
+                              expandedDeviceKeyId === key.id 
+                                ? 'max-w-full break-all' 
+                                : 'max-w-[200px] truncate'
+                            }`}
+                            title={expandedDeviceKeyId === key.id ? '' : 'Click to see full key'}
+                            onClick={() => setExpandedDeviceKeyId(expandedDeviceKeyId === key.id ? null : key.id)}
+                          >
                             {key.deviceKey}
                           </code>
                         </td>
@@ -679,10 +726,81 @@ const DeviceKeysManagement = ({ projectId }) => {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      ));
+                    })()}
                   </tbody>
                 </table>
-              </div>
+                </div>
+
+                {/* Pagination Controls */}
+              {(() => {
+                const totalFiltered = filteredDeviceKeys.length;
+                const totalPages = Math.ceil(totalFiltered / itemsPerPage);
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = Math.min(startIndex + itemsPerPage, totalFiltered);
+                
+                if (totalPages <= 1) return null;
+                
+                return (
+                  <div className="bg-gradient-to-r from-red-50 to-pink-50 px-6 py-4 flex items-center justify-center border-t-2 border-red-200">
+                    <div className="flex items-center space-x-4">
+                      {/* First Page */}
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                        title="Go to first page"
+                      >
+                        <ChevronsLeft className="h-5 w-5" />
+                      </button>
+                      
+                      {/* Previous Page */}
+                      <button
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                        title="Previous page"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      
+                      {/* Page Indicator */}
+                      <div className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg shadow-lg border-2 border-red-500">
+                        <span className="text-lg font-bold">
+                          {currentPage} / {totalPages}
+                        </span>
+                      </div>
+                      
+                      {/* Next Page */}
+                      <button
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                        title="Next page"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                      
+                      {/* Last Page */}
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:shadow-md"
+                        title="Go to last page"
+                      >
+                        <ChevronsRight className="h-5 w-5" />
+                      </button>
+                      
+                      {/* Results Info */}
+                      <div className="ml-6 text-sm text-gray-700 font-medium bg-white px-4 py-2 rounded-lg border border-red-200 shadow-sm">
+                        Showing <span className="font-bold text-red-700">{startIndex + 1}-{endIndex}</span> of{' '}
+                        <span className="font-bold text-red-700">{totalFiltered}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              </>
             )}
           </div>
         )}
