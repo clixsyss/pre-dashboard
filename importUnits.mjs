@@ -11,11 +11,11 @@ const __dirname = dirname(__filename);
 
 // ==================== CONFIGURATION ====================
 
-// Project ID for Stone Residence
-const PROJECT_ID = 'BiHENuiMdDrivwbPccNE';
+// Project ID for Hadaba Project
+const PROJECT_ID = 'IzN8JxYC1wl21EuUwtC5';
 
 // Excel file name (place it in the same directory as this script)
-const EXCEL_FILE_NAME = 'stone_units.xlsx'; // Change this to your Excel file name
+const EXCEL_FILE_NAME = 'hadaba_units.xlsx';
 
 // ==================== INITIALIZE FIREBASE ====================
 
@@ -62,20 +62,53 @@ function readExcelFile(filePath) {
 
 /**
  * Transforms Excel row to Firestore document format
+ * For hadaba_units.xlsx: columns are "developer" and "unit"
+ * Unit formats supported:
+ *   - Numbers only: "123" → building: "", unit: "123"
+ *   - Numbers + letter: "123A" → building: "A", unit: "123"
  * @param {Object} row - Excel row object
  * @returns {Object} Transformed document
  */
 function transformUnit(row) {
+  // Get the unit value (column name is "unit" not "units")
+  const unitValue = String(row['unit'] || row['Unit'] || row['UNIT'] || '').trim();
+  
+  // Split the unit value to get buildingNum and unitNum
+  let buildingNum = '';
+  let unitNum = '';
+  
+  if (unitValue) {
+    // Check for numbers followed by letter(s) (e.g., "123A" → unit: "123", building: "A")
+    const numbersLettersMatch = unitValue.match(/^(\d+)([A-Za-z]+)$/);
+    if (numbersLettersMatch) {
+      unitNum = numbersLettersMatch[1];     // Numbers (unit)
+      buildingNum = numbersLettersMatch[2]; // Letters (building)
+    } else {
+      // Just numbers (e.g., "123" → unit: "123", building: "")
+      const numbersOnlyMatch = unitValue.match(/^\d+$/);
+      if (numbersOnlyMatch) {
+        unitNum = unitValue;
+        buildingNum = '';
+      } else {
+        // If pattern doesn't match, treat whole value as unitNum
+        unitNum = unitValue;
+      }
+    }
+  }
+  
+  // Get developer (try different column name variations)
+  const developer = row['developer'] || row['Developer'] || row['DEVELOPER'] || '';
+  
   return {
-    buildingNum: row['Building Num'] || row.buildingNum || '',
-    unitNum: String(row['Unit Num'] || row.unitNum || '').trim(),
-    floor: row['Floor'] || row.floor || '',
-    developer: row['Owner'] || row.developer || row.owner || '',
+    buildingNum: buildingNum,
+    unitNum: unitNum,
+    floor: null,
+    developer: developer,
   };
 }
 
 /**
- * Checks if a unit already exists in Firestore by all fields
+ * Checks if a unit already exists in Firestore by buildingNum and unitNum
  * @param {Object} unitData - Unit data with buildingNum, unitNum, floor, developer
  * @returns {Promise<Object|null>} Existing document or null
  */
@@ -84,8 +117,6 @@ async function getExistingUnit(unitData) {
     const query = await unitsCollection
       .where('buildingNum', '==', unitData.buildingNum)
       .where('unitNum', '==', unitData.unitNum)
-      .where('floor', '==', unitData.floor)
-      .where('developer', '==', unitData.developer)
       .limit(1)
       .get();
     
@@ -130,28 +161,33 @@ async function importUnits() {
         // Transform data
         const unitData = transformUnit(row);
         
-        // Validate required fields
+        // Validate required fields (only unitNum is required, buildingNum can be empty)
         if (!unitData.unitNum) {
           console.log(`⚠️  Skipped row ${i + 1}: Missing unit number`);
           skipped++;
           continue;
         }
         
-        // Check if unit already exists (by all fields combination)
+        // Check if unit already exists (by buildingNum and unitNum)
         const existingUnit = await getExistingUnit(unitData);
+        
+        // Create display name for unit
+        const unitDisplay = unitData.buildingNum 
+          ? `${unitData.buildingNum}-${unitData.unitNum}` 
+          : unitData.unitNum;
         
         if (existingUnit) {
           // Update existing unit
           await unitsCollection.doc(existingUnit.id).update(unitData);
           console.log(
-            `🔁 Updated unit ${unitData.unitNum} in building ${unitData.buildingNum}, floor ${unitData.floor}`
+            `🔁 Updated unit ${unitDisplay} (Developer: ${unitData.developer})`
           );
           updated++;
         } else {
           // Add new unit
           await unitsCollection.add(unitData);
           console.log(
-            `✅ Added unit ${unitData.unitNum} in building ${unitData.buildingNum}, floor ${unitData.floor}`
+            `✅ Added unit ${unitDisplay} (Developer: ${unitData.developer})`
           );
           added++;
         }
@@ -163,7 +199,7 @@ async function importUnits() {
         
       } catch (error) {
         console.error(
-          `❌ Error processing unit ${row['Unit Num'] || row.unitNum}:`,
+          `❌ Error processing unit ${row['unit'] || row['Unit']}:`,
           error.message
         );
         errors++;
