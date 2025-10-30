@@ -681,11 +681,16 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && 
         request.auth.uid == request.resource.data.userId;
+      // Allow users to update their own comments OR update reactions field on any comment
       allow update: if request.auth != null && 
         (request.auth.uid == resource.data.userId || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+         // Allow any authenticated user to update reactions field only
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'updatedAt']));
+      // Allow users to delete their own comments OR admins to delete any comment
       allow delete: if request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        (request.auth.uid == resource.data.userId ||
+         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     
     // Allow listing project news comments
@@ -696,14 +701,17 @@ service cloud.firestore {
     // Project News Reactions - allow authenticated users to read/write reactions within project
     match /projects/{projectId}/news/{newsId}/reactions/{reactionId} {
       allow read: if request.auth != null;
+      // Allow users to create their own reactions
       allow create: if request.auth != null && 
         request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-      allow delete: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      // Allow users to update their own reactions  
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Allow admins to update any reaction
+      allow update: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      // Allow users to delete their own reactions
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Allow admins to delete any reaction
+      allow delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
     // Allow listing project news reactions
