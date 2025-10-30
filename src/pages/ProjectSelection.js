@@ -64,7 +64,7 @@ const ProjectSelection = () => {
       }));
       
       // Calculate stats for each project
-      const projectsWithStats = projectsData.map(project => {
+      const projectsWithStats = await Promise.all(projectsData.map(async (project) => {
         // Count users in this project
         const projectUsers = usersData.filter(user => {
           if (user.projects && Array.isArray(user.projects)) {
@@ -73,22 +73,32 @@ const ProjectSelection = () => {
           return false;
         });
         
+        // Count units in this project
+        let projectUnits = 0;
+        try {
+          const unitsSnapshot = await getDocs(collection(db, 'projects', project.id, 'units'));
+          projectUnits = unitsSnapshot.size;
+        } catch (error) {
+          console.error(`Error fetching units for project ${project.id}:`, error);
+        }
+        
         // Count bookings for this project (if you have a bookings collection)
         let projectBookings = 0;
         let projectEvents = 0;
         
         // You can add similar logic for bookings and events if you have those collections
-        // For now, we'll just show user count
+        // For now, we'll just show user count and units
         
         return {
           ...project,
           stats: {
             users: projectUsers.length,
+            units: projectUnits,
             bookings: projectBookings,
             events: projectEvents
           }
         };
-      });
+      }));
       
       setProjects(projectsWithStats);
       
@@ -165,6 +175,7 @@ const ProjectSelection = () => {
     }
     return {
       users: 0,
+      units: 0,
       bookings: 0,
       events: 0
     };
@@ -314,7 +325,7 @@ const ProjectSelection = () => {
                     </div>
 
                     {/* Project Stats */}
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-pre-red">
                           {loading ? (
@@ -326,9 +337,19 @@ const ProjectSelection = () => {
                         <div className="text-xs text-gray-500">Users</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-pre-red">
+                        <div className="text-2xl font-bold text-blue-600">
                           {loading ? (
-                            <div className="animate-pulse bg-red-200 h-8 w-12 rounded mx-auto"></div>
+                            <div className="animate-pulse bg-blue-200 h-8 w-12 rounded mx-auto"></div>
+                          ) : (
+                            stats.units
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">Units</div>
+                      </div>
+                      {/* <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {loading ? (
+                            <div className="animate-pulse bg-green-200 h-8 w-12 rounded mx-auto"></div>
                           ) : (
                             stats.bookings
                           )}
@@ -344,7 +365,7 @@ const ProjectSelection = () => {
                           )}
                         </div>
                         <div className="text-xs text-gray-500">Events</div>
-                      </div>
+                      </div> */}
                     </div>
 
                     {/* Quick Actions */}
