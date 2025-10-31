@@ -68,17 +68,19 @@ cd /Users/hady/Documents/Work/ClixSys/Projects/MobileApps/PRE/pre-dashboard/func
 firebase deploy --only functions
 ```
 
-Or deploy only the specific function:
-```bash
-firebase deploy --only functions:sendNotificationOnCreate
-```
+This will deploy all Cloud Functions, including the new `sendNotificationOnCreate` function.
 
 ### 3. Verify deployment:
-After deployment, Firebase will show:
+After deployment, Firebase will show something like:
 ```
 ✔  functions: Finished running predeploy script.
-✔  functions[sendNotificationOnCreate(us-central1)]: Successful update operation.
+✔  functions[sendNotificationOnCreate(us-central1)]: Successful create operation.
+✔  functions[processPushNotifications(us-central1)]: Successful update operation.
+✔  functions[onDeviceKeyResetRequestUpdate(us-central1)]: Successful update operation.
+... (other existing functions)
 ```
+
+Look for the **sendNotificationOnCreate** function in the deployment output.
 
 ### 4. Test the fix:
 1. Go to your dashboard

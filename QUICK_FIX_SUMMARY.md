@@ -27,7 +27,7 @@ cd /Users/hady/Documents/Work/ClixSys/Projects/MobileApps/PRE/pre-dashboard
 ### Option 2: Manual deployment
 ```bash
 cd /Users/hady/Documents/Work/ClixSys/Projects/MobileApps/PRE/pre-dashboard
-firebase deploy --only functions:sendNotificationOnCreate
+firebase deploy --only functions
 ```
 
 ## Test The Fix

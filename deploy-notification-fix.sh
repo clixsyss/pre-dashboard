@@ -62,8 +62,8 @@ echo ""
 echo "🚀 Deploying Cloud Functions..."
 echo ""
 
-# Deploy only the sendNotificationOnCreate function
-firebase deploy --only functions:sendNotificationOnCreate
+# Deploy all functions (includes the new sendNotificationOnCreate function)
+firebase deploy --only functions
 
 # Check deployment status
 if [ $? -eq 0 ]; then
