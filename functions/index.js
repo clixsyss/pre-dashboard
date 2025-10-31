@@ -359,6 +359,307 @@ exports.sendImmediatePushNotification = functions.https.onCall(async (data, cont
 });
 
 /**
+ * Process project notifications when created
+ * This function triggers when a notification document is created in projects/{projectId}/notifications
+ * It handles sending push notifications to the specified audience (all users, specific users, units, buildings, or topic)
+ */
+exports.sendNotificationOnCreate = functions.firestore
+  .document('projects/{projectId}/notifications/{notificationId}')
+  .onCreate(async (snapshot, context) => {
+    const notification = snapshot.data();
+    const { projectId, notificationId } = context.params;
+
+    console.log(`Processing notification ${notificationId} for project ${projectId}`);
+
+    try {
+      // Check if notification should be sent now
+      if (!notification.sendNow) {
+        console.log('Notification is scheduled for later, skipping');
+        return null;
+      }
+
+      // Determine which users should receive this notification
+      const userIds = [];
+      const audience = notification.audience || {};
+
+      if (audience.all) {
+        // Send to all users in the project
+        console.log('Sending to all users in project');
+        const usersSnapshot = await db
+          .collection('users')
+          .where('projects', 'array-contains-any', [
+            { projectId: projectId },
+            // Also check for string format
+          ])
+          .get();
+
+        // Filter users who have this project
+        usersSnapshot.docs.forEach(userDoc => {
+          const userData = userDoc.data();
+          const hasProject = userData.projects?.some(p => 
+            (typeof p === 'string' ? p : p.projectId) === projectId
+          );
+          if (hasProject) {
+            userIds.push(userDoc.id);
+          }
+        });
+
+        console.log(`Found ${userIds.length} users in project`);
+      } else if (audience.uids && audience.uids.length > 0) {
+        // Send to specific users
+        console.log(`Sending to specific users: ${audience.uids.join(', ')}`);
+        userIds.push(...audience.uids);
+      } else if (audience.units && audience.units.length > 0) {
+        // Send to specific units
+        console.log(`Sending to units: ${audience.units.join(', ')}`);
+        const usersSnapshot = await db.collection('users').get();
+        
+        usersSnapshot.docs.forEach(userDoc => {
+          const userData = userDoc.data();
+          const userProject = userData.projects?.find(p => 
+            (typeof p === 'string' ? p : p.projectId) === projectId
+          );
+          
+          if (userProject && audience.units.includes(userProject.unit)) {
+            userIds.push(userDoc.id);
+          }
+        });
+
+        console.log(`Found ${userIds.length} users in specified units`);
+      } else if (audience.buildings && audience.buildings.length > 0) {
+        // Send to specific buildings
+        console.log(`Sending to buildings: ${audience.buildings.join(', ')}`);
+        const usersSnapshot = await db.collection('users').get();
+        
+        usersSnapshot.docs.forEach(userDoc => {
+          const userData = userDoc.data();
+          const userProject = userData.projects?.find(p => 
+            (typeof p === 'string' ? p : p.projectId) === projectId
+          );
+          
+          if (userProject && userProject.unit) {
+            const [building] = userProject.unit.split('-');
+            if (audience.buildings.includes(building)) {
+              userIds.push(userDoc.id);
+            }
+          }
+        });
+
+        console.log(`Found ${userIds.length} users in specified buildings`);
+      } else if (audience.topic) {
+        // Topic-based notifications are handled by FCM directly
+        console.log(`Sending to topic: ${audience.topic}`);
+        
+        const title = notification.title_en || 'Notification';
+        const body = notification.body_en || '';
+        
+        const message = {
+          topic: audience.topic,
+          notification: {
+            title: title,
+            body: body,
+            icon: notification.meta?.image || '/favicon.ico',
+          },
+          data: {
+            projectId: projectId,
+            type: notification.type || 'general',
+            deepLink: notification.meta?.deepLink || '',
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+            }
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+              }
+            }
+          }
+        };
+
+        const response = await admin.messaging().send(message);
+        console.log('Topic notification sent:', response);
+
+        // Update notification status
+        await snapshot.ref.update({
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return { success: true, topic: audience.topic };
+      } else {
+        console.log('No valid audience specified');
+        await snapshot.ref.update({
+          status: 'failed',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          error: 'No valid audience specified'
+        });
+        return null;
+      }
+
+      if (userIds.length === 0) {
+        console.log('No users found to send notification to');
+        await snapshot.ref.update({
+          status: 'failed',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          error: 'No users found in specified audience'
+        });
+        return null;
+      }
+
+      // Send notifications to each user
+      let successCount = 0;
+      let failCount = 0;
+      const results = [];
+
+      // Use user's preferred language if available, default to English
+      const title = notification.title_en || 'Notification';
+      const body = notification.body_en || '';
+
+      for (const userId of userIds) {
+        try {
+          // Get user's FCM tokens
+          const tokensSnapshot = await db
+            .collection(`users/${userId}/tokens`)
+            .where('isActive', '==', true)
+            .get();
+
+          if (tokensSnapshot.empty) {
+            console.log(`No active tokens for user ${userId}`);
+            failCount++;
+            results.push({
+              userId: userId,
+              success: false,
+              error: 'No active tokens'
+            });
+            continue;
+          }
+
+          // Send to all user's devices
+          let userSuccess = false;
+          for (const tokenDoc of tokensSnapshot.docs) {
+            const tokenData = tokenDoc.data();
+            
+            try {
+              // Get user's language preference
+              const userDoc = await db.collection('users').doc(userId).get();
+              const userLang = userDoc.exists ? userDoc.data().preferredLanguage : 'en';
+              
+              const finalTitle = userLang === 'ar' && notification.title_ar ? notification.title_ar : title;
+              const finalBody = userLang === 'ar' && notification.body_ar ? notification.body_ar : body;
+
+              const message = {
+                token: tokenData.token,
+                notification: {
+                  title: finalTitle,
+                  body: finalBody,
+                  icon: notification.meta?.image || '/favicon.ico',
+                },
+                data: {
+                  projectId: projectId,
+                  notificationId: notificationId,
+                  type: notification.type || 'general',
+                  deepLink: notification.meta?.deepLink || '',
+                },
+                android: {
+                  priority: 'high',
+                  notification: {
+                    sound: 'default',
+                  }
+                },
+                apns: {
+                  payload: {
+                    aps: {
+                      sound: 'default',
+                      badge: 1,
+                    }
+                  }
+                }
+              };
+
+              const response = await admin.messaging().send(message);
+              console.log(`Sent to user ${userId} token ${tokenData.token.substring(0, 20)}...`);
+              userSuccess = true;
+
+            } catch (tokenError) {
+              console.error(`Error sending to token ${tokenData.token.substring(0, 20)}...:`, tokenError);
+              
+              // Mark invalid tokens as inactive
+              if (tokenError.code === 'messaging/invalid-registration-token' || 
+                  tokenError.code === 'messaging/registration-token-not-registered') {
+                await tokenDoc.ref.update({
+                  isActive: false,
+                  deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  deactivationReason: tokenError.message
+                });
+              }
+            }
+          }
+
+          if (userSuccess) {
+            successCount++;
+            results.push({
+              userId: userId,
+              success: true
+            });
+          } else {
+            failCount++;
+            results.push({
+              userId: userId,
+              success: false,
+              error: 'Failed to send to any device'
+            });
+          }
+
+        } catch (userError) {
+          console.error(`Error processing user ${userId}:`, userError);
+          failCount++;
+          results.push({
+            userId: userId,
+            success: false,
+            error: userError.message
+          });
+        }
+      }
+
+      // Update notification status
+      await snapshot.ref.update({
+        status: successCount > 0 ? 'sent' : 'failed',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        sendResults: {
+          totalUsers: userIds.length,
+          successCount: successCount,
+          failCount: failCount,
+        }
+      });
+
+      console.log(`Notification processing complete: ${successCount} success, ${failCount} failed`);
+      return { 
+        success: successCount > 0, 
+        totalUsers: userIds.length,
+        successCount: successCount,
+        failCount: failCount 
+      };
+
+    } catch (error) {
+      console.error('Error processing notification:', error);
+      
+      // Update notification status to failed
+      await snapshot.ref.update({
+        status: 'failed',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        error: error.message
+      });
+
+      throw error;
+    }
+  });
+
+/**
  * Clean up old push notification records
  * This function runs daily to clean up old notification records
  */
