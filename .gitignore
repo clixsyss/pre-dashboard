@@ -25,6 +25,11 @@ yarn-error.log*
 # Firebase Admin SDK credentials
 serviceAccountKey.json
 firebase-service-account.json
+**/serviceAccountKey.json
+**/firebase-service-account.json
+*.pem
+*.key
+*-key.json
 
 # User data (sensitive)
 users.json

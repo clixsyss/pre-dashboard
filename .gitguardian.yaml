@@ -1,0 +1,29 @@
+# GitGuardian Configuration
+# Prevents false positives for common Firebase Cloud Functions patterns
+
+version: 2
+
+# Paths to exclude from scanning
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/build/**"
+  - "**/dist/**"
+  - "**/*.lock"
+  - "**/*.log"
+  - "**/test/**"
+  - "**/*.example.json"
+
+# Patterns that are not secrets (Firebase/Cloud Functions specific)
+matches-ignore:
+  - name: Firebase Cloud Messaging Token References
+    match: tokenData\.token|tokensSnapshot|tokenDoc
+  - name: Firebase Functions Config Placeholders
+    match: your-email@gmail\.com|your-app-password
+  - name: Firebase Project IDs
+    match: projectId|notificationId|userId
+  - name: Example Values
+    match: example\.json|serviceAccountKey\.example
+
+# Only scan specific file types
+# Exclude binary and generated files
+
