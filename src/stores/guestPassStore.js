@@ -6,6 +6,7 @@ export const useGuestPassStore = create((set, get) => ({
   stats: null,
   users: [],
   passes: [],
+  units: [], // NEW: Track units instead of/in addition to users
   globalSettings: null,
   loading: false,
   error: null,
@@ -77,7 +78,7 @@ export const useGuestPassStore = create((set, get) => ({
     } catch (error) {
       console.error('Error fetching global settings:', error);
       const defaultSettings = {
-        monthlyLimit: 100,
+        monthlyLimit: 30,
         autoReset: true,
         allowOverrides: true,
         createdAt: new Date(),
@@ -219,6 +220,127 @@ export const useGuestPassStore = create((set, get) => ({
       });
     } catch (error) {
       console.error('❌ [Store] Error updating global limit:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Toggle project-wide blocking
+  toggleProjectWideBlocking: async (projectId, blockAllUsers) => {
+    try {
+      set({ loading: true, error: null });
+      await guestPassesService.toggleProjectWideBlocking(projectId, blockAllUsers);
+      
+      const currentSettings = get().globalSettings;
+      const updatedSettings = { ...currentSettings, blockAllUsers };
+      
+      set({ 
+        globalSettings: updatedSettings,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error toggling project-wide blocking:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Toggle family members blocking
+  toggleFamilyMembersBlocking: async (projectId, blockFamilyMembers) => {
+    try {
+      set({ loading: true, error: null });
+      await guestPassesService.toggleFamilyMembersBlocking(projectId, blockFamilyMembers);
+      
+      const currentSettings = get().globalSettings;
+      const updatedSettings = { ...currentSettings, blockFamilyMembers };
+      
+      set({ 
+        globalSettings: updatedSettings,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error toggling family members blocking:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Get units for a project
+  fetchUnits: async (projectId) => {
+    try {
+      set({ loading: true, error: null });
+      const units = await guestPassesService.getUnits(projectId);
+      set({ units, loading: false });
+      return units;
+    } catch (error) {
+      console.error('Error fetching units:', error);
+      set({ error: error.message, loading: false, units: [] });
+      throw error;
+    }
+  },
+
+  // Update unit limit
+  updateUnitLimit: async (projectId, unit, newLimit) => {
+    try {
+      set({ loading: true, error: null });
+      await guestPassesService.updateUnitLimit(projectId, unit, newLimit);
+      
+      // Update local state
+      const { units } = get();
+      const updatedUnits = units.map(u => 
+        u.unit === unit ? { ...u, monthlyLimit: newLimit, hasCustomLimit: true } : u
+      );
+      set({ 
+        units: updatedUnits,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error updating unit limit:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Block/unblock a unit
+  toggleUnitBlocking: async (projectId, unit, blocked, reason = '') => {
+    try {
+      set({ loading: true, error: null });
+      await guestPassesService.toggleUnitBlocking(projectId, unit, blocked, reason);
+      
+      // Update local state
+      const { units } = get();
+      const updatedUnits = units.map(u => 
+        u.unit === unit ? { ...u, blocked } : u
+      );
+      set({ 
+        units: updatedUnits,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error toggling unit blocking:', error);
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
+  // Reset unit to default limit
+  resetUnitToDefault: async (projectId, unit) => {
+    try {
+      set({ loading: true, error: null });
+      await guestPassesService.resetUnitToDefault(projectId, unit);
+      
+      // Update local state
+      const { units, globalSettings } = get();
+      const defaultLimit = globalSettings?.monthlyLimit || 30;
+      const updatedUnits = units.map(u => 
+        u.unit === unit ? { ...u, monthlyLimit: defaultLimit, hasCustomLimit: false } : u
+      );
+      set({ 
+        units: updatedUnits,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error resetting unit to default:', error);
       set({ error: error.message, loading: false });
       throw error;
     }

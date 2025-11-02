@@ -26,11 +26,12 @@ const AdminControls = ({
   onBlockUser,
   onUnblockUser,
   onToggleBlockAll,
-  projectId
+  projectId,
+  hideUserControls = false // NEW: Hide per-user sections when true
 }) => {
-  const [activeSection, setActiveSection] = useState('users');
+  const [activeSection, setActiveSection] = useState(hideUserControls ? 'global' : 'users');
   const [editingGlobalLimit, setEditingGlobalLimit] = useState(false);
-  const [newGlobalLimit, setNewGlobalLimit] = useState(globalSettings?.monthlyLimit || 100);
+  const [newGlobalLimit, setNewGlobalLimit] = useState(globalSettings?.monthlyLimit || 30);
   const [editingValidityDuration, setEditingValidityDuration] = useState(false);
   const [newValidityDuration, setNewValidityDuration] = useState(globalSettings?.validityDurationHours || 2);
   const [editingUserLimit, setEditingUserLimit] = useState(null);
@@ -39,7 +40,11 @@ const AdminControls = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showResetAllConfirm, setShowResetAllConfirm] = useState(false);
 
-  const sections = [
+  // Only show sections based on hideUserControls
+  const sections = hideUserControls ? [
+    { id: 'global', name: 'Global Settings', icon: Settings },
+    { id: 'actions', name: 'Bulk Actions', icon: Shield }
+  ] : [
     { id: 'users', name: 'User Management', icon: Users },
     { id: 'global', name: 'Global Settings', icon: Settings },
     { id: 'actions', name: 'Bulk Actions', icon: Shield }
@@ -220,9 +225,23 @@ const AdminControls = ({
         ))}
       </div>
 
-      {/* User Management */}
-      {activeSection === 'users' && (
+      {/* User Management - HIDDEN when hideUserControls is true */}
+      {!hideUserControls && activeSection === 'users' && (
         <div className="space-y-6">
+          {/* DEPRECATED NOTICE */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-semibold text-yellow-900">Per-User Controls Deprecated</h4>
+                <p className="text-sm text-yellow-700 mt-1">
+                  This feature is being phased out. Please use <strong>Unit Management</strong> instead. 
+                  All family members in the same unit should share one limit.
+                </p>
+              </div>
+            </div>
+          </div>
+          
           {/* Header with Stats */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -238,7 +257,7 @@ const AdminControls = ({
               <button
                 onClick={() => setShowResetAllConfirm(true)}
                 className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-lg hover:shadow-xl font-medium"
-                title={`Reset all ${customLimitCount} users to default limit (${globalSettings?.monthlyLimit || 100})`}
+                title={`Reset all ${customLimitCount} users to default limit (${globalSettings?.monthlyLimit || 10})`}
               >
                 <RefreshCcw className="h-4 w-4" />
                 <span>Reset All to Default ({customLimitCount})</span>
@@ -355,7 +374,7 @@ const AdminControls = ({
                               <UserCog className="h-16 w-16 text-gray-300 mb-4" />
                               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Custom Limits Set</h3>
                               <p className="text-gray-500 max-w-md mb-2">
-                                All users are currently using the default global limit of <span className="font-semibold text-gray-900">{globalSettings?.monthlyLimit || 100} passes</span>.
+                                All users are currently using the default global limit of <span className="font-semibold text-gray-900">{globalSettings?.monthlyLimit || 10} passes</span>.
                               </p>
                               <p className="text-sm text-gray-400">
                                 Click the edit icon next to a user's limit to set a custom value.
@@ -535,7 +554,7 @@ const AdminControls = ({
                 <button
                   onClick={() => {
                     setEditingGlobalLimit(false);
-                    setNewGlobalLimit(globalSettings?.monthlyLimit || 100);
+                    setNewGlobalLimit(globalSettings?.monthlyLimit || 10);
                   }}
                   className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
@@ -545,7 +564,7 @@ const AdminControls = ({
               </div>
             ) : (
               <div className="text-3xl font-bold text-gray-900">
-                {globalSettings?.monthlyLimit || 100} passes
+                {globalSettings?.monthlyLimit || 10} passes
               </div>
             )}
           </div>
@@ -611,6 +630,7 @@ const AdminControls = ({
             )}
           </div>
 
+          {/* COMMENTED OUT: Block All Users - now shown in parent page Global Settings tab
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -653,6 +673,7 @@ const AdminControls = ({
               </div>
             )}
           </div>
+          */}
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Settings Overview</h3>
@@ -785,7 +806,7 @@ const AdminControls = ({
               <h3 className="text-xl font-bold text-gray-900">Reset Custom Limits?</h3>
             </div>
             <p className="text-sm text-gray-600 mb-2 leading-relaxed">
-              This will reset <span className="font-semibold text-gray-900">{customLimitCount} users</span> with custom limits back to the default limit of <span className="font-semibold text-orange-600">{globalSettings?.monthlyLimit || 100} passes</span>.
+              This will reset <span className="font-semibold text-gray-900">{customLimitCount} users</span> with custom limits back to the default limit of <span className="font-semibold text-orange-600">{globalSettings?.monthlyLimit || 10} passes</span>.
             </p>
             <p className="text-sm text-gray-500 mb-6">
               This action cannot be undone. Previous custom limits will be lost.

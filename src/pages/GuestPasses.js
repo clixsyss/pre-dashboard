@@ -8,13 +8,16 @@ import {
   Filter,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Building2,
   RefreshCw,
-  MapPin
+  MapPin,
+  ShieldOff
 } from 'lucide-react';
 import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
 import AdminControls from '../components/AdminControls';
+import UnitControls from '../components/UnitControls';
 import ExportButton from '../components/ExportButton';
 import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
 
@@ -28,11 +31,13 @@ const GuestPasses = () => {
     stats,
     users,
     passes,
+    units,
     globalSettings,
     loading,
     fetchStats,
     fetchUsers,
     fetchPasses,
+    fetchUnits,
     fetchGlobalSettings,
     blockUser,
     unblockUser,
@@ -40,6 +45,11 @@ const GuestPasses = () => {
     updateGlobalLimit,
     updateValidityDuration,
     toggleBlockAll,
+    toggleProjectWideBlocking,
+    toggleFamilyMembersBlocking,
+    updateUnitLimit,
+    toggleUnitBlocking,
+    resetUnitToDefault,
     resetMonthlyUsage
   } = useGuestPassStore();
 
@@ -65,14 +75,16 @@ const GuestPasses = () => {
         fetchStats(activeProjectId);
         fetchUsers(activeProjectId);
         fetchPasses(activeProjectId);
+        fetchUnits(activeProjectId);
         fetchGlobalSettings(activeProjectId);
       }
     }
-  }, [projectId, fetchStats, fetchUsers, fetchPasses, fetchGlobalSettings]);
+  }, [projectId, fetchStats, fetchUsers, fetchPasses, fetchUnits, fetchGlobalSettings]);
 
   const tabs = [
     { id: 'passes', name: 'Pass Logs', icon: Calendar },
-    { id: 'admin', name: 'Admin Controls', icon: Settings },
+    { id: 'units', name: 'Unit Management', icon: Building2 },
+    { id: 'settings', name: 'Global Settings', icon: Settings },
     { id: 'location', name: 'Location Settings', icon: MapPin }
   ];
 
@@ -148,6 +160,7 @@ const GuestPasses = () => {
                 fetchStats(activeProjectId);
                 fetchUsers(activeProjectId);
                 fetchPasses(activeProjectId);
+                fetchUnits(activeProjectId);
                 fetchGlobalSettings(activeProjectId);
               }
             }}
@@ -285,26 +298,111 @@ const GuestPasses = () => {
             </div>
           )}
 
-          {activeTab === 'admin' && (
-            <div>
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-900 flex items-center">
-                  <Settings className="h-6 w-6 mr-2 text-pre-red" />
-                  Administrative Controls
-                </h3>
-                <p className="text-gray-600 mt-1">Manage users, limits, and system settings</p>
+          {activeTab === 'units' && (
+            <UnitControls 
+              units={units}
+              globalSettings={globalSettings}
+              onUpdateUnitLimit={updateUnitLimit}
+              onBlockUnit={(projectId, unit, reason) => toggleUnitBlocking(projectId, unit, true, reason)}
+              onUnblockUnit={(projectId, unit) => toggleUnitBlocking(projectId, unit, false)}
+              onResetUnitToDefault={resetUnitToDefault}
+              projectId={selectedProject?.id || projectId}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="space-y-6">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Global Project Settings</h3>
+              
+              {/* Blocking Controls */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-6">Blocking Controls</h3>
+                
+                {/* Block All Users */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900 flex items-center">
+                        <ShieldOff className="h-4 w-4 mr-2 text-red-600" />
+                        Block All Users
+                      </h4>
+                      <p className="text-sm text-gray-500 mt-1">Block everyone (owners and family members)</p>
+                    </div>
+                    <button
+                      onClick={() => toggleProjectWideBlocking(selectedProject?.id || projectId, !globalSettings?.blockAllUsers)}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        globalSettings?.blockAllUsers 
+                          ? 'bg-red-600 focus:ring-red-500' 
+                          : 'bg-gray-300 focus:ring-gray-400'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                          globalSettings?.blockAllUsers ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  
+                  {globalSettings?.blockAllUsers && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-xs text-red-700">
+                        All users are blocked. This overrides all other settings.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Block Family Members Only */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900 flex items-center">
+                        <UserCheck className="h-4 w-4 mr-2 text-orange-600" />
+                        Block Family Members Only
+                      </h4>
+                      <p className="text-sm text-gray-500 mt-1">Block only family members, allow owners</p>
+                    </div>
+                    <button
+                      onClick={() => toggleFamilyMembersBlocking(selectedProject?.id || projectId, !globalSettings?.blockFamilyMembers)}
+                      disabled={globalSettings?.blockAllUsers}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        globalSettings?.blockFamilyMembers 
+                          ? 'bg-orange-600 focus:ring-orange-500' 
+                          : 'bg-gray-300 focus:ring-gray-400'
+                      } ${globalSettings?.blockAllUsers ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-200 ${
+                          globalSettings?.blockFamilyMembers ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  
+                  {globalSettings?.blockFamilyMembers && !globalSettings?.blockAllUsers && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-xs text-orange-700">
+                        Only family members are blocked. Property owners can still generate passes.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Global Limit & Validity - Editable */}
               <AdminControls 
                 globalSettings={globalSettings}
-                users={users}
+                users={[]} // Pass empty array - per-user controls are disabled
                 onUpdateGlobalLimit={updateGlobalLimit}
                 onUpdateValidityDuration={updateValidityDuration}
                 onResetUsage={resetMonthlyUsage}
-                onUpdateUserLimit={updateUserLimit}
-                onBlockUser={blockUser}
-                onUnblockUser={unblockUser}
-                onToggleBlockAll={toggleBlockAll}
-                projectId={projectId}
+                onUpdateUserLimit={() => {}} // Disabled
+                onBlockUser={() => {}} // Disabled
+                onUnblockUser={() => {}} // Disabled
+                onToggleBlockAll={toggleProjectWideBlocking}
+                projectId={selectedProject?.id || projectId}
+                hideUserControls={true} // NEW prop to hide user sections
               />
             </div>
           )}

@@ -1,0 +1,486 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Home, 
+  Users, 
+  Settings, 
+  Search, 
+  X, 
+  Check, 
+  Edit2, 
+  RefreshCcw,
+  ShieldOff,
+  ShieldCheck,
+  AlertTriangle,
+  Building2,
+  Ban,
+  CheckCircle
+} from 'lucide-react';
+
+const UnitControls = ({
+  units = [],
+  globalSettings = {},
+  onUpdateUnitLimit,
+  onBlockUnit,
+  onUnblockUnit,
+  onResetUnitToDefault,
+  projectId
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUnitLimit, setEditingUnitLimit] = useState(null);
+  const [newUnitLimit, setNewUnitLimit] = useState('');
+  const [showBlockConfirm, setShowBlockConfirm] = useState(null);
+  const [blockReason, setBlockReason] = useState('');
+
+  // Filter and search units
+  const filteredUnits = useMemo(() => {
+    if (!units) return [];
+
+    let filtered = [...units];
+    const defaultLimit = globalSettings.monthlyLimit || 30;
+
+    if (searchTerm.trim()) {
+      // When searching, show ALL matching units
+      filtered = filtered.filter(unit => 
+        unit.unit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        unit.users?.some(u => 
+          u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+    } else {
+      // When NOT searching, show ONLY units with custom limits or blocked units
+      filtered = filtered.filter(unit => {
+        const hasCustomLimit = unit.monthlyLimit !== undefined && 
+                              unit.monthlyLimit !== null && 
+                              unit.monthlyLimit !== defaultLimit;
+        return hasCustomLimit || unit.blocked;
+      });
+    }
+
+    return filtered.sort((a, b) => a.unit.localeCompare(b.unit));
+  }, [units, searchTerm, globalSettings?.monthlyLimit]);
+
+  // Count units with custom limits or blocked
+  const customUnitsCount = useMemo(() => {
+    if (!units || !globalSettings?.monthlyLimit) return 0;
+    const defaultLimit = globalSettings.monthlyLimit;
+    
+    return units.filter(unit => {
+      const hasCustomLimit = unit.monthlyLimit !== undefined && 
+                            unit.monthlyLimit !== null && 
+                            unit.monthlyLimit !== defaultLimit;
+      return hasCustomLimit || unit.blocked;
+    }).length;
+  }, [units, globalSettings?.monthlyLimit]);
+
+  const handleEditUnitLimit = (unit) => {
+    setEditingUnitLimit(unit.unit);
+    setNewUnitLimit(unit.monthlyLimit || globalSettings.monthlyLimit || 30);
+  };
+
+  const handleSaveUnitLimit = async () => {
+    if (!editingUnitLimit || !newUnitLimit) return;
+    
+    try {
+      const limit = parseInt(newUnitLimit, 10);
+      if (isNaN(limit) || limit < 0) {
+        alert('Please enter a valid number');
+        return;
+      }
+      
+      await onUpdateUnitLimit(projectId, editingUnitLimit, limit);
+      setEditingUnitLimit(null);
+      setNewUnitLimit('');
+    } catch (error) {
+      console.error('Error saving unit limit:', error);
+      alert('Failed to update unit limit');
+    }
+  };
+
+  const handleBlockUnit = async (unit, currentlyBlocked) => {
+    if (currentlyBlocked) {
+      // Unblock immediately
+      await onUnblockUnit(projectId, unit);
+      setShowBlockConfirm(null);
+    } else {
+      // Show confirmation dialog for blocking
+      setShowBlockConfirm(unit);
+      setBlockReason('');
+    }
+  };
+
+  const confirmBlockUnit = async () => {
+    if (!showBlockConfirm) return;
+    
+    try {
+      await onBlockUnit(projectId, showBlockConfirm, blockReason || 'Blocked by admin');
+      setShowBlockConfirm(null);
+      setBlockReason('');
+    } catch (error) {
+      console.error('Error blocking unit:', error);
+      alert('Failed to block unit');
+    }
+  };
+
+  const getUsageColor = (used, limit) => {
+    const percentage = (used / limit) * 100;
+    if (percentage >= 90) return 'bg-red-500';
+    if (percentage >= 75) return 'bg-orange-500';
+    if (percentage >= 50) return 'bg-yellow-500';
+    return 'bg-green-500';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header with Stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-bold text-gray-900 flex items-center">
+            <Home className="h-6 w-6 mr-2 text-pre-red" />
+            Unit Limits & Status
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            {units?.length || 0} total units · {customUnitsCount} with custom settings
+          </p>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200">
+        <div className="flex items-center gap-4">
+          <div className="flex-1 relative">
+            <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search units by number or resident name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-pre-red focus:border-transparent transition-all duration-200 bg-white"
+            />
+          </div>
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="px-4 py-3 text-gray-600 hover:text-gray-800 hover:bg-white rounded-xl transition-all duration-200 flex items-center space-x-2"
+              title="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center space-x-2 text-sm">
+          <Building2 className="h-4 w-4 text-pre-red" />
+          <span className="text-gray-700">
+            {searchTerm ? (
+              <>Search results from <span className="font-semibold text-gray-900">all units</span></>
+            ) : (
+              <>Showing only units with <span className="font-semibold text-pre-red">custom settings or blocked status</span></>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Results Info */}
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-600">
+          {searchTerm ? (
+            <>
+              Found <span className="font-semibold text-gray-900">{filteredUnits.length}</span> unit{filteredUnits.length !== 1 ? 's' : ''} matching "{searchTerm}"
+            </>
+          ) : (
+            <>
+              Showing <span className="font-semibold text-gray-900">{filteredUnits.length}</span> unit{filteredUnits.length !== 1 ? 's' : ''} with custom settings
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* Units Table */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Unit
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Residents
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Monthly Limit
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Usage This Month
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUnits.length > 0 ? (
+                filteredUnits.map((unit) => (
+                  <tr key={unit.unit} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                          <Home className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900">{unit.unit}</div>
+                          <div className="text-xs text-gray-500">{unit.userCount} resident{unit.userCount !== 1 ? 's' : ''}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        {unit.users?.slice(0, 2).map((user, idx) => (
+                          <div key={idx} className="truncate">{user.name}</div>
+                        ))}
+                        {unit.users?.length > 2 && (
+                          <div className="text-xs text-gray-400">+{unit.users.length - 2} more</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {editingUnitLimit === unit.unit ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={newUnitLimit}
+                            onChange={(e) => setNewUnitLimit(e.target.value)}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-pre-red focus:border-transparent"
+                            autoFocus
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveUnitLimit();
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={handleSaveUnitLimit}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Save"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingUnitLimit(null);
+                              setNewUnitLimit('');
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-sm font-semibold ${unit.hasCustomLimit ? 'text-pre-red' : 'text-gray-600'}`}>
+                            {unit.monthlyLimit} passes
+                          </span>
+                          {unit.hasCustomLimit && (
+                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
+                              Custom
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleEditUnitLimit(unit)}
+                            className="p-1 text-gray-400 hover:text-pre-red hover:bg-red-50 rounded-lg transition-colors"
+                            title="Edit limit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          {unit.hasCustomLimit && (
+                            <button
+                              onClick={() => onResetUnitToDefault(projectId, unit.unit)}
+                              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Reset to default"
+                            >
+                              <RefreshCcw className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-gray-600">
+                              {unit.usedThisMonth} / {unit.monthlyLimit}
+                            </span>
+                          </div>
+                          <div className="w-20 bg-gray-200 rounded-full h-2.5 shadow-inner">
+                            <div 
+                              className={`h-2.5 rounded-full transition-all duration-500 ${getUsageColor(unit.usedThisMonth, unit.monthlyLimit)}`}
+                              style={{ width: `${Math.min((unit.usedThisMonth / unit.monthlyLimit) * 100, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        <span className="text-xs font-medium text-gray-500">
+                          {Math.round((unit.usedThisMonth / unit.monthlyLimit) * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {unit.blocked ? (
+                        <div className="flex items-center">
+                          <span className="px-3 py-1.5 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+                            <Ban className="h-3 w-3 mr-1" />
+                            Blocked
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <span className="px-3 py-1.5 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Active
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleBlockUnit(unit.unit, unit.blocked)}
+                          className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                            unit.blocked
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
+                              : 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
+                          }`}
+                        >
+                          {unit.blocked ? (
+                            <>
+                              <ShieldCheck className="h-4 w-4" />
+                              <span>Unblock</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldOff className="h-4 w-4" />
+                              <span>Block</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="px-6 py-12">
+                    <div className="text-center">
+                      {searchTerm ? (
+                        <>
+                          <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Units Found</h3>
+                          <p className="text-gray-500 max-w-md mx-auto mb-4">
+                            No units matching "<span className="font-semibold">{searchTerm}</span>"
+                          </p>
+                          <button
+                            onClick={() => setSearchTerm('')}
+                            className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                            <span>Clear Search</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Home className="h-16 w-16 text-gray-300 mb-4 mx-auto" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Custom Unit Settings</h3>
+                          <p className="text-gray-500 max-w-md mb-2 mx-auto">
+                            All units are currently using the default global limit of <span className="font-semibold text-gray-900">{globalSettings?.monthlyLimit || 30} passes</span>.
+                          </p>
+                          <p className="text-sm text-gray-400">
+                            Search for a unit to set a custom limit or block it.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Info Box */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+        <div className="flex items-start space-x-3">
+          <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="text-sm font-semibold text-blue-900 mb-2">How Unit Limits Work</h4>
+            <ul className="text-sm text-blue-800 space-y-1.5">
+              <li>• <strong>Per-Unit Limits:</strong> All family members in the same unit share one monthly limit</li>
+              <li>• <strong>Custom Limits:</strong> Set specific limits for individual units (e.g., VIP residents)</li>
+              <li>• <strong>Unit Blocking:</strong> Block entire units from generating passes (all family members affected)</li>
+              <li>• <strong>Default Behavior:</strong> Units without custom settings use the global project limit</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Block Unit Confirmation Modal */}
+      {showBlockConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <Ban className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Block Unit?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              This will block <span className="font-semibold text-gray-900">all family members</span> in unit{' '}
+              <span className="font-semibold text-pre-red">{showBlockConfirm}</span> from generating guest passes.
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason (optional)
+              </label>
+              <input
+                type="text"
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                placeholder="e.g., Violation of compound rules"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pre-red focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowBlockConfirm(null);
+                  setBlockReason('');
+                }}
+                className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBlockUnit}
+                className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl font-medium flex items-center space-x-2"
+              >
+                <Ban className="h-4 w-4" />
+                <span>Block Unit</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UnitControls;
+

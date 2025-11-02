@@ -12,7 +12,8 @@ import {
   orderBy, 
   limit,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 
 class GuestPassesService {
@@ -20,10 +21,12 @@ class GuestPassesService {
     this.collections = {
       users: 'users', // Use main users collection
       settings: 'guestPassSettings',
-      userProjectSettings: (projectId) => `projects/${projectId}/userGuestPassSettings` // Per-project user settings
+      userProjectSettings: (projectId) => `projects/${projectId}/userGuestPassSettings`, // Per-project user settings (DEPRECATED)
+      unitProjectSettings: (projectId) => `projects/${projectId}/unitGuestPassSettings` // Per-unit settings (NEW)
     };
     // Note: passes are now per-project subcollections: projects/{projectId}/guestPasses
-    // Note: user settings are now per-project: projects/{projectId}/userGuestPassSettings/{userId}
+    // Note: Settings are now per-UNIT: projects/{projectId}/unitGuestPassSettings/{unit}
+    // Old per-user settings kept for backward compatibility but DEPRECATED
   }
 
   // Get statistics for a project
@@ -89,7 +92,7 @@ class GuestPassesService {
       // Try to get global settings
       try {
         const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
-        const globalSettings = settingsDoc.exists() ? settingsDoc.data() : { monthlyLimit: 100 };
+        const globalSettings = settingsDoc.exists() ? settingsDoc.data() : { monthlyLimit: 10 };
         globalLimit = globalSettings.monthlyLimit;
       } catch (error) {
         console.log('No settings collection found yet, using default values');
@@ -119,11 +122,11 @@ class GuestPassesService {
   async getUsers(projectId) {
     try {
       // First, get the global settings to know the default limit
-      let defaultLimit = 100; // Fallback default
+      let defaultLimit = 10; // Fallback default (10 guest passes per month)
       try {
         const settingsDoc = await getDoc(doc(db, this.collections.settings, projectId));
         if (settingsDoc.exists()) {
-          defaultLimit = settingsDoc.data().monthlyLimit || 100;
+          defaultLimit = settingsDoc.data().monthlyLimit || 10;
         }
       } catch (error) {
         console.log('Could not fetch global settings, using fallback default:', defaultLimit);
@@ -260,7 +263,7 @@ class GuestPassesService {
         console.log(`⚠️ [Service] No global settings found, returning defaults`);
         // Return default settings without creating them in the database yet
         return {
-          monthlyLimit: 100,
+          monthlyLimit: 10, // Default to 10 guest passes per month
           autoReset: true,
           allowOverrides: true,
           createdAt: new Date(),
@@ -271,7 +274,7 @@ class GuestPassesService {
       console.error(`❌ [Service] Error getting global settings:`, error);
       console.log('No settings collection found yet, returning default settings');
       return {
-        monthlyLimit: 100,
+        monthlyLimit: 10, // Default to 10 guest passes per month
         autoReset: true,
         allowOverrides: true,
         createdAt: new Date(),
@@ -508,6 +511,11 @@ class GuestPassesService {
       
       console.log(`🔧 [Service] Saving as number:`, limitAsNumber, '(type:', typeof limitAsNumber, ')');
       
+      // Get the OLD global limit before updating
+      const oldSettings = await this.getGlobalSettings(projectId);
+      const oldLimit = oldSettings.monthlyLimit;
+      console.log(`📊 [Service] Old global limit was: ${oldLimit}`);
+      
       // Use setDoc to create or update the document
       await setDoc(doc(db, this.collections.settings, projectId), {
         monthlyLimit: limitAsNumber,  // ✅ Save as number
@@ -517,9 +525,84 @@ class GuestPassesService {
       }, { merge: true }); // merge: true allows partial updates
       
       console.log(`✅ [Service] Global limit updated successfully`);
+      
+      // Clean up users who have explicit limits matching the OLD global limit
+      // These users should now inherit the NEW global limit automatically
+      if (oldLimit !== undefined && oldLimit !== limitAsNumber) {
+        console.log(`🧹 [Service] Cleaning up users with explicit limit = ${oldLimit} (old global)...`);
+        await this.cleanupDefaultUserLimits(projectId, oldLimit);
+      }
     } catch (error) {
       console.error('❌ [Service] Error updating global limit:', error);
       throw new Error('Failed to update global limit');
+    }
+  }
+  
+  // Clean up users who have monthlyLimit explicitly set to the default value
+  // This ensures they automatically inherit the global limit
+  async cleanupDefaultUserLimits(projectId, defaultLimit) {
+    try {
+      console.log(`🧹 [Cleanup] Removing explicit limits matching ${defaultLimit} from users in project ${projectId}`);
+      
+      // Get all per-project user settings
+      const userSettingsPath = this.collections.userProjectSettings(projectId);
+      const settingsSnapshot = await getDocs(collection(db, userSettingsPath));
+      
+      let cleanedCount = 0;
+      let skippedCount = 0;
+      const batch = writeBatch(db);
+      let batchCount = 0;
+      const MAX_BATCH_SIZE = 500; // Firestore batch limit
+      
+      for (const settingDoc of settingsSnapshot.docs) {
+        const settings = settingDoc.data();
+        const userId = settingDoc.id;
+        
+        // Check if user has explicit monthlyLimit set
+        if (settings.monthlyLimit !== undefined && settings.monthlyLimit !== null) {
+          const userLimit = typeof settings.monthlyLimit === 'string' 
+            ? parseInt(settings.monthlyLimit, 10) 
+            : settings.monthlyLimit;
+          
+          // If user's limit matches the old global default, remove it
+          if (userLimit === defaultLimit) {
+            console.log(`  ✅ Removing limit from user ${userId}: ${userLimit} (matches old global)`);
+            
+            // Remove the monthlyLimit field using deleteField()
+            const settingsRef = doc(db, userSettingsPath, userId);
+            batch.update(settingsRef, {
+              monthlyLimit: deleteField(), // Properly delete the field
+              updatedAt: serverTimestamp()
+            });
+            
+            cleanedCount++;
+            batchCount++;
+            
+            // Commit batch if we hit the limit
+            if (batchCount >= MAX_BATCH_SIZE) {
+              await batch.commit();
+              console.log(`  📦 Committed batch of ${batchCount} updates`);
+              batchCount = 0;
+            }
+          } else {
+            console.log(`  ⏭️  Keeping custom limit for user ${userId}: ${userLimit} (differs from old global ${defaultLimit})`);
+            skippedCount++;
+          }
+        }
+      }
+      
+      // Commit remaining updates
+      if (batchCount > 0) {
+        await batch.commit();
+        console.log(`  📦 Committed final batch of ${batchCount} updates`);
+      }
+      
+      console.log(`✅ [Cleanup] Complete: cleaned ${cleanedCount} users, kept ${skippedCount} with custom limits`);
+      return { cleanedCount, skippedCount };
+    } catch (error) {
+      console.error('❌ [Cleanup] Error cleaning up default user limits:', error);
+      // Don't throw - cleanup failure shouldn't block the global limit update
+      return { cleanedCount: 0, skippedCount: 0, error: error.message };
     }
   }
 
@@ -858,6 +941,189 @@ class GuestPassesService {
     } catch (error) {
       console.error('Error initializing user:', error);
       throw new Error('Failed to initialize user');
+    }
+  }
+
+  // ========== NEW: PER-UNIT MANAGEMENT METHODS ==========
+
+  // Toggle project-wide user blocking (block ALL users from generating passes)
+  async toggleProjectWideBlocking(projectId, blockAllUsers) {
+    try {
+      console.log(`🔧 [Service] Toggle project-wide blocking for project ${projectId} to ${blockAllUsers}`);
+      
+      await setDoc(doc(db, this.collections.settings, projectId), {
+        blockAllUsers: blockAllUsers,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ [Service] Project-wide blocking updated: ${blockAllUsers ? 'ENABLED' : 'DISABLED'}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ [Service] Error toggling project-wide blocking:', error);
+      throw new Error('Failed to toggle project-wide blocking');
+    }
+  }
+
+  // Toggle blocking for family members only (all units with role="family")
+  async toggleFamilyMembersBlocking(projectId, blockFamilyMembers) {
+    try {
+      console.log(`🔧 [Service] Toggle family members blocking for project ${projectId} to ${blockFamilyMembers}`);
+      
+      await setDoc(doc(db, this.collections.settings, projectId), {
+        blockFamilyMembers: blockFamilyMembers,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ [Service] Family members blocking updated: ${blockFamilyMembers ? 'ENABLED' : 'DISABLED'}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ [Service] Error toggling family members blocking:', error);
+      throw new Error('Failed to toggle family members blocking');
+    }
+  }
+
+  // Get all units in a project with their guest pass settings
+  async getUnits(projectId) {
+    try {
+      console.log(`📋 [Service] Getting units for project ${projectId}`);
+      
+      // Get all users in the project and extract unique units
+      const usersSnapshot = await getDocs(collection(db, this.collections.users));
+      const unitsMap = new Map();
+      
+      usersSnapshot.docs.forEach(doc => {
+        const userData = doc.data();
+        if (userData.projects && Array.isArray(userData.projects)) {
+          const projectInfo = userData.projects.find(project => project.projectId === projectId);
+          if (projectInfo && projectInfo.unit) {
+            const unit = projectInfo.unit;
+            if (!unitsMap.has(unit)) {
+              unitsMap.set(unit, {
+                unit: unit,
+                users: [],
+                passCount: 0
+              });
+            }
+            unitsMap.get(unit).users.push({
+              id: doc.id,
+              name: userData.fullName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+              email: userData.email
+            });
+          }
+        }
+      });
+      
+      // Get per-unit settings
+      const unitSettingsPath = this.collections.unitProjectSettings(projectId);
+      let unitSettings = {};
+      try {
+        const settingsSnapshot = await getDocs(collection(db, unitSettingsPath));
+        settingsSnapshot.docs.forEach(doc => {
+          unitSettings[doc.id] = doc.data();
+        });
+      } catch (error) {
+        console.log('No per-unit settings found yet');
+      }
+      
+      // Get global settings for default limit
+      const globalSettings = await this.getGlobalSettings(projectId);
+      const defaultLimit = globalSettings.monthlyLimit || 30;
+      
+      // Combine unit data with settings
+      const units = Array.from(unitsMap.values()).map(unitData => {
+        const settings = unitSettings[unitData.unit] || {};
+        return {
+          unit: unitData.unit,
+          users: unitData.users,
+          userCount: unitData.users.length,
+          monthlyLimit: settings.monthlyLimit ?? defaultLimit,
+          usedThisMonth: settings.usedThisMonth || 0,
+          blocked: settings.blocked || false,
+          hasCustomLimit: settings.monthlyLimit !== undefined && settings.monthlyLimit !== null,
+          lastPassCreated: settings.lastPassCreated?.toDate?.() || null,
+          lastPassCreatedBy: settings.lastPassCreatedByName || null,
+          updatedAt: settings.updatedAt?.toDate?.() || new Date()
+        };
+      });
+      
+      console.log(`✅ [Service] Found ${units.length} units in project ${projectId}`);
+      return units;
+    } catch (error) {
+      console.error('❌ [Service] Error getting units:', error);
+      return [];
+    }
+  }
+
+  // Update unit monthly limit
+  async updateUnitLimit(projectId, unit, newLimit) {
+    try {
+      console.log(`🔧 [Service] Updating limit for unit ${unit} in project ${projectId} to ${newLimit}`);
+      
+      const limitAsNumber = typeof newLimit === 'string' ? parseInt(newLimit, 10) : newLimit;
+      if (isNaN(limitAsNumber) || limitAsNumber < 0) {
+        throw new Error(`Invalid limit value: ${newLimit}`);
+      }
+      
+      const unitSettingsRef = doc(db, this.collections.unitProjectSettings(projectId), unit);
+      await setDoc(unitSettingsRef, {
+        monthlyLimit: limitAsNumber,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`✅ [Service] Unit ${unit} limit updated to ${limitAsNumber}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ [Service] Error updating unit limit:', error);
+      throw new Error('Failed to update unit limit');
+    }
+  }
+
+  // Block/unblock a unit
+  async toggleUnitBlocking(projectId, unit, blocked, reason = '') {
+    try {
+      console.log(`🔧 [Service] ${blocked ? 'Blocking' : 'Unblocking'} unit ${unit} in project ${projectId}`);
+      
+      const unitSettingsRef = doc(db, this.collections.unitProjectSettings(projectId), unit);
+      const updateData = {
+        blocked: blocked,
+        updatedAt: serverTimestamp()
+      };
+      
+      if (blocked) {
+        updateData.blockedAt = serverTimestamp();
+        updateData.blockedReason = reason || 'Blocked by admin';
+      } else {
+        updateData.unblockedAt = serverTimestamp();
+        updateData.blockedReason = deleteField();
+        updateData.blockedAt = deleteField();
+      }
+      
+      await setDoc(unitSettingsRef, updateData, { merge: true });
+      
+      console.log(`✅ [Service] Unit ${unit} ${blocked ? 'blocked' : 'unblocked'} successfully`);
+      return { success: true };
+    } catch (error) {
+      console.error(`❌ [Service] Error ${blocked ? 'blocking' : 'unblocking'} unit:`, error);
+      throw new Error(`Failed to ${blocked ? 'block' : 'unblock'} unit`);
+    }
+  }
+
+  // Reset unit limit to use global default
+  async resetUnitToDefault(projectId, unit) {
+    try {
+      console.log(`🔧 [Service] Resetting unit ${unit} to default limit`);
+      
+      const unitSettingsRef = doc(db, this.collections.unitProjectSettings(projectId), unit);
+      await updateDoc(unitSettingsRef, {
+        monthlyLimit: deleteField(),
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log(`✅ [Service] Unit ${unit} reset to default limit`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ [Service] Error resetting unit limit:', error);
+      throw new Error('Failed to reset unit limit');
     }
   }
 }

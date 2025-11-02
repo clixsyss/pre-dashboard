@@ -855,6 +855,35 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
+    // ============================================
+    // PER-UNIT GUEST PASS SETTINGS - New Architecture
+    // All family members in the same unit share ONE limit
+    // ============================================
+    match /projects/{projectId}/unitGuestPassSettings/{unitId} {
+      // All authenticated users can read unit settings (to check their own unit's limit)
+      allow read: if request.auth != null;
+      
+      // Only admins can create or fully manage unit settings
+      allow create, delete: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Admins can update any field
+      allow update: if request.auth != null && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+         // Users can update usage count when creating passes (specific fields only)
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedThisMonth', 'updatedAt']));
+    }
+    
+    // Allow listing per-unit guest pass settings
+    match /projects/{projectId}/unitGuestPassSettings {
+      // Admins can list all unit settings
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      
+      // Regular users can also list (for their own unit)
+      allow list: if request.auth != null;
+    }
+    
     // GUEST PASS USERS COLLECTION - Allow users to read/write their own data
     match /guestPassUsers/{userId} {
       allow read, write: if request.auth != null && 
