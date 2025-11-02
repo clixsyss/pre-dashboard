@@ -144,12 +144,9 @@ const NotificationManager = () => {
           return false;
         });
 
-      // Count tokens
-      let tokenCount = 0;
-      for (const user of users) {
-        const tokensSnapshot = await getDocs(collection(db, `users/${user.id}/tokens`));
-        tokenCount += tokensSnapshot.size;
-      }
+      // Count users with FCM tokens (using flat fcmToken field - no subcollection queries!)
+      const tokenCount = users.filter(user => user.fcmToken && user.fcmToken.length > 0).length;
+      console.log(`✅ Token count: ${tokenCount} users have FCM tokens`);
 
       // Count notifications sent today
       const today = new Date();

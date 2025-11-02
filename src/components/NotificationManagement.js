@@ -85,6 +85,8 @@ const NotificationManagement = ({ projectId }) => {
   const [projectUnits, setProjectUnits] = useState([]);
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
   const [buildingSearchTerm, setBuildingSearchTerm] = useState('');
+  const [hoveredNotificationId, setHoveredNotificationId] = useState(null);
+  const [audienceDetails, setAudienceDetails] = useState({});
 
   // Load recent notifications
   const loadRecentNotifications = useCallback(async () => {
@@ -105,10 +107,35 @@ const NotificationManagement = ({ projectId }) => {
       }));
 
       setRecentNotifications(notifications);
+      
+      // Fetch audience details for notifications with specific users
+      const detailsMap = {};
+      for (const notification of notifications) {
+        if (notification.audience?.uids && notification.audience.uids.length > 0) {
+          const userDetails = await Promise.all(
+            notification.audience.uids.slice(0, 10).map(async (uid) => {
+              try {
+                const userDoc = projectUsers.find(u => u.id === uid);
+                if (userDoc) {
+                  return {
+                    name: `${userDoc.firstName || ''} ${userDoc.lastName || ''}`.trim() || 'Unknown',
+                    email: userDoc.email || 'No email'
+                  };
+                }
+                return { name: 'Unknown User', email: uid };
+              } catch (error) {
+                return { name: 'Unknown User', email: uid };
+              }
+            })
+          );
+          detailsMap[notification.id] = userDetails;
+        }
+      }
+      setAudienceDetails(detailsMap);
     } catch (error) {
       console.error('Error loading recent notifications:', error);
     }
-  }, [projectId]);
+  }, [projectId, projectUsers]);
 
   // Load project data
   const loadProjectData = useCallback(async () => {
@@ -139,21 +166,10 @@ const NotificationManagement = ({ projectId }) => {
         setProjectUnits([]);
       }
 
-      // Count tokens (optional - may not have permission)
-      let tokenCount = 0;
-      try {
-        for (const user of users) {
-          try {
-            const tokensSnapshot = await getDocs(collection(db, `users/${user.id}/tokens`));
-            tokenCount += tokensSnapshot.size;
-          } catch (err) {
-            // Silently skip token counting if no permission
-            console.warn(`Cannot count tokens for user ${user.id}: insufficient permissions`);
-          }
-        }
-      } catch (err) {
-        console.warn('Token counting not available due to permissions');
-      }
+      // Count users with FCM tokens (using flat fcmToken field - no subcollection queries needed!)
+      // This is MUCH cheaper than querying subcollections for 5000+ users
+      const tokenCount = users.filter(user => user.fcmToken && user.fcmToken.length > 0).length;
+      console.log(`✅ Token count: ${tokenCount} users have FCM tokens (no expensive subcollection queries!)`);
 
       // Count notifications sent today
       const today = new Date();
@@ -1651,12 +1667,70 @@ const NotificationManagement = ({ projectId }) => {
                             <Target className="h-4 w-4 mr-2 text-gray-400" />
                             Topic: {notification.audience.topic}
                           </div>
-                        ) : (
+                        ) : notification.audience?.units && notification.audience.units.length > 0 ? (
                           <div className="flex items-center">
-                            <Users className="h-4 w-4 mr-2 text-gray-400" />
-                            {notification.audience?.uids?.length || 0} users
-        </div>
-      )}
+                            <Home className="h-4 w-4 mr-2 text-gray-400" />
+                            <span className="cursor-help" title={`Units: ${notification.audience.units.join(', ')}`}>
+                              {notification.audience.units.length} unit{notification.audience.units.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        ) : notification.audience?.buildings && notification.audience.buildings.length > 0 ? (
+                          <div className="flex items-center">
+                            <Building className="h-4 w-4 mr-2 text-gray-400" />
+                            <span className="cursor-help" title={`Buildings: ${notification.audience.buildings.join(', ')}`}>
+                              {notification.audience.buildings.length} building{notification.audience.buildings.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        ) : notification.audience?.uids && notification.audience.uids.length > 0 ? (
+                          <div 
+                            className="relative"
+                            onMouseEnter={() => setHoveredNotificationId(notification.id)}
+                            onMouseLeave={() => setHoveredNotificationId(null)}
+                          >
+                            <div className="flex items-center cursor-help">
+                              <User className="h-4 w-4 mr-2 text-gray-400" />
+                              {notification.audience.uids.length} user{notification.audience.uids.length > 1 ? 's' : ''}
+                            </div>
+                            
+                            {/* Tooltip */}
+                            {hoveredNotificationId === notification.id && audienceDetails[notification.id] && (
+                              <div className="absolute z-50 left-0 top-full mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                                <div className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                  Recipients ({audienceDetails[notification.id].length}{notification.audience.uids.length > 10 ? ` of ${notification.audience.uids.length}` : ''})
+                                </div>
+                                <div className="space-y-2 max-h-64 overflow-y-auto">
+                                  {audienceDetails[notification.id].map((user, idx) => (
+                                    <div key={idx} className="flex items-start space-x-2 p-2 bg-gray-50 rounded">
+                                      <div className="flex-shrink-0">
+                                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <User className="h-4 w-4 text-blue-600" />
+                                        </div>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-gray-900 truncate">
+                                          {user.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate">
+                                          {user.email}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {notification.audience.uids.length > 10 && (
+                                    <div className="text-xs text-center text-gray-500 pt-2 border-t border-gray-200">
+                                      +{notification.audience.uids.length - 10} more recipients
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-gray-400">
+                            <Users className="h-4 w-4 mr-2" />
+                            No audience
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center">

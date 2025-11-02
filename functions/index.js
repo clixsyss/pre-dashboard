@@ -110,10 +110,6 @@ exports.processPushNotifications = functions.pubsub
                 notification: {
                   title: notification.title,
                   body: notification.message,
-                  icon: '/favicon.ico',
-                  badge: '/favicon.ico',
-                  image: notification.imageUrl || undefined,
-                  click_action: notification.actionUrl || undefined
                 },
                 data: {
                   actionType: notification.actionType || 'general',
@@ -124,13 +120,15 @@ exports.processPushNotifications = functions.pubsub
                   requiresAction: notification.requiresAction ? 'true' : 'false',
                   actionUrl: notification.actionUrl || '',
                   actionText: notification.actionText || '',
+                  imageUrl: notification.imageUrl || '',
                   ...notification.metadata
                 },
                 android: {
                   priority: 'high',
                   notification: {
                     sound: 'default',
-                    click_action: notification.actionUrl || undefined
+                    icon: 'notification_icon',
+                    imageUrl: notification.imageUrl || undefined,
                   }
                 },
                 apns: {
@@ -138,9 +136,13 @@ exports.processPushNotifications = functions.pubsub
                     aps: {
                       sound: 'default',
                       badge: 1,
-                      'content-available': 1
+                      'content-available': 1,
+                      'mutable-content': 1,
                     }
-                  }
+                  },
+                  fcm_options: notification.imageUrl ? {
+                    image: notification.imageUrl
+                  } : undefined
                 }
               };
 
@@ -295,9 +297,6 @@ exports.sendImmediatePushNotification = functions.https.onCall(async (data, cont
           notification: {
             title: title,
             body: message,
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            click_action: actionUrl || undefined
           },
           data: {
             actionType: actionType || 'general',
@@ -310,7 +309,7 @@ exports.sendImmediatePushNotification = functions.https.onCall(async (data, cont
             priority: 'high',
             notification: {
               sound: 'default',
-              click_action: actionUrl || undefined
+              icon: 'notification_icon',
             }
           },
           apns: {
@@ -318,7 +317,7 @@ exports.sendImmediatePushNotification = functions.https.onCall(async (data, cont
               aps: {
                 sound: 'default',
                 badge: 1,
-                'content-available': 1
+                'content-available': 1,
               }
             }
           }
@@ -369,14 +368,21 @@ exports.sendNotificationOnCreate = functions.firestore
     const notification = snapshot.data();
     const { projectId, notificationId } = context.params;
 
-    console.log(`Processing notification ${notificationId} for project ${projectId}`);
+    console.log(`🚀 Cloud Function triggered: Processing notification ${notificationId} for project ${projectId}`);
+    console.log(`📋 Notification data:`, JSON.stringify(notification, null, 2));
 
     try {
       // Check if notification should be sent now
       if (!notification.sendNow) {
-        console.log('Notification is scheduled for later, skipping');
+        console.log('⏰ Notification is scheduled for later, skipping');
+        await snapshot.ref.update({
+          status: 'scheduled',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
         return null;
       }
+
+      console.log('✅ sendNow is true, proceeding with delivery...');
 
       // Determine which users should receive this notification
       const userIds = [];
@@ -458,7 +464,6 @@ exports.sendNotificationOnCreate = functions.firestore
           notification: {
             title: title,
             body: body,
-            icon: notification.meta?.image || '/favicon.ico',
           },
           data: {
             projectId: projectId,
@@ -469,6 +474,7 @@ exports.sendNotificationOnCreate = functions.firestore
             priority: 'high',
             notification: {
               sound: 'default',
+              icon: 'notification_icon', // Android only
             }
           },
           apns: {
@@ -476,6 +482,7 @@ exports.sendNotificationOnCreate = functions.firestore
               aps: {
                 sound: 'default',
                 badge: 1,
+                'content-available': 1,
               }
             }
           }
@@ -522,42 +529,68 @@ exports.sendNotificationOnCreate = functions.firestore
 
       for (const userId of userIds) {
         try {
-          // Get user's FCM tokens
+          // Get user document first (for language preference and flat fcmToken fallback)
+          const userDoc = await db.collection('users').doc(userId).get();
+          if (!userDoc.exists) {
+            console.log(`User ${userId} not found`);
+            failCount++;
+            results.push({
+              userId: userId,
+              success: false,
+              error: 'User not found'
+            });
+            continue;
+          }
+
+          const userData = userDoc.data();
+          const userLang = userData.preferredLanguage || 'en';
+          const finalTitle = userLang === 'ar' && notification.title_ar ? notification.title_ar : title;
+          const finalBody = userLang === 'ar' && notification.body_ar ? notification.body_ar : body;
+
+          // Try to get tokens from subcollection first (preferred)
           const tokensSnapshot = await db
             .collection(`users/${userId}/tokens`)
             .where('isActive', '==', true)
             .get();
 
-          if (tokensSnapshot.empty) {
-            console.log(`No active tokens for user ${userId}`);
+          // Collect all tokens (subcollection + flat field fallback)
+          const tokens = [];
+          
+          // Add tokens from subcollection
+          tokensSnapshot.docs.forEach(tokenDoc => {
+            const tokenData = tokenDoc.data();
+            if (tokenData.token) {
+              tokens.push(tokenData.token);
+            }
+          });
+
+          // Fallback: If no subcollection tokens, try flat fcmToken field
+          if (tokens.length === 0 && userData.fcmToken) {
+            console.log(`Using flat fcmToken field for user ${userId}`);
+            tokens.push(userData.fcmToken);
+          }
+
+          if (tokens.length === 0) {
+            console.log(`No FCM tokens found for user ${userId}`);
             failCount++;
             results.push({
               userId: userId,
               success: false,
-              error: 'No active tokens'
+              error: 'No FCM tokens'
             });
             continue;
           }
 
-          // Send to all user's devices
+          // Send to all user's tokens
           let userSuccess = false;
-          for (const tokenDoc of tokensSnapshot.docs) {
-            const tokenData = tokenDoc.data();
-            
+          for (const token of tokens) {
             try {
-              // Get user's language preference
-              const userDoc = await db.collection('users').doc(userId).get();
-              const userLang = userDoc.exists ? userDoc.data().preferredLanguage : 'en';
-              
-              const finalTitle = userLang === 'ar' && notification.title_ar ? notification.title_ar : title;
-              const finalBody = userLang === 'ar' && notification.body_ar ? notification.body_ar : body;
 
               const message = {
-                token: tokenData.token,
+                token: token,
                 notification: {
                   title: finalTitle,
                   body: finalBody,
-                  icon: notification.meta?.image || '/favicon.ico',
                 },
                 data: {
                   projectId: projectId,
@@ -569,6 +602,7 @@ exports.sendNotificationOnCreate = functions.firestore
                   priority: 'high',
                   notification: {
                     sound: 'default',
+                    icon: 'notification_icon', // Android only
                   }
                 },
                 apns: {
@@ -576,26 +610,37 @@ exports.sendNotificationOnCreate = functions.firestore
                     aps: {
                       sound: 'default',
                       badge: 1,
+                      'content-available': 1,
                     }
                   }
                 }
               };
 
               const response = await admin.messaging().send(message);
-              console.log(`Sent to user ${userId} token ${tokenData.token.substring(0, 20)}...`);
+              console.log(`✅ Sent push notification to user ${userId} token ${token.substring(0, 20)}...`);
               userSuccess = true;
 
             } catch (tokenError) {
-              console.error(`Error sending to token ${tokenData.token.substring(0, 20)}...:`, tokenError);
+              console.error(`❌ Error sending to token ${token.substring(0, 20)}...:`, tokenError.message);
               
-              // Mark invalid tokens as inactive
+              // If token is invalid and it's from subcollection, mark as inactive
               if (tokenError.code === 'messaging/invalid-registration-token' || 
                   tokenError.code === 'messaging/registration-token-not-registered') {
-                await tokenDoc.ref.update({
-                  isActive: false,
-                  deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  deactivationReason: tokenError.message
-                });
+                // Find the token document in subcollection to mark as inactive
+                const tokenDocSnapshot = await db
+                  .collection(`users/${userId}/tokens`)
+                  .where('token', '==', token)
+                  .limit(1)
+                  .get();
+                
+                if (!tokenDocSnapshot.empty) {
+                  await tokenDocSnapshot.docs[0].ref.update({
+                    isActive: false,
+                    deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    deactivationReason: tokenError.message
+                  });
+                  console.log(`Marked token as inactive: ${token.substring(0, 20)}...`);
+                }
               }
             }
           }
@@ -627,8 +672,13 @@ exports.sendNotificationOnCreate = functions.firestore
       }
 
       // Update notification status
+      console.log(`📊 Final results: ${successCount} successful, ${failCount} failed out of ${userIds.length} users`);
+      
+      const finalStatus = successCount > 0 ? 'sent' : 'failed';
+      console.log(`📝 Updating notification document with status: ${finalStatus}`);
+      
       await snapshot.ref.update({
-        status: successCount > 0 ? 'sent' : 'failed',
+        status: finalStatus,
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
         sendResults: {
           totalUsers: userIds.length,
@@ -637,7 +687,7 @@ exports.sendNotificationOnCreate = functions.firestore
         }
       });
 
-      console.log(`Notification processing complete: ${successCount} success, ${failCount} failed`);
+      console.log(`✅ Notification processing complete: ${successCount} success, ${failCount} failed`);
       return { 
         success: successCount > 0, 
         totalUsers: userIds.length,
@@ -646,14 +696,21 @@ exports.sendNotificationOnCreate = functions.firestore
       };
 
     } catch (error) {
-      console.error('Error processing notification:', error);
+      console.error('❌ Critical error processing notification:', error);
+      console.error('Error stack:', error.stack);
       
       // Update notification status to failed
-      await snapshot.ref.update({
-        status: 'failed',
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        error: error.message
-      });
+      try {
+        await snapshot.ref.update({
+          status: 'failed',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          error: error.message || 'Unknown error',
+          errorStack: error.stack || ''
+        });
+        console.log('📝 Updated notification status to failed');
+      } catch (updateError) {
+        console.error('❌ Failed to update notification status:', updateError);
+      }
 
       throw error;
     }
