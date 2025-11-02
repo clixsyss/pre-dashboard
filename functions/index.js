@@ -610,7 +610,6 @@ exports.sendNotificationOnCreate = functions.firestore
                     aps: {
                       sound: 'default',
                       badge: 1,
-                      'content-available': 1,
                     }
                   }
                 }
