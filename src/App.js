@@ -3,15 +3,11 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Users from './pages/Users';
-import Projects from './pages/Projects';
+// REMOVED IMPORTS: Dashboard, Users, Projects, AdminDashboard, NotificationManager, DataExportPage
+// Cost optimization: Removed data-heavy pages for super admins
 import ProjectSelection from './pages/ProjectSelection';
 import ProjectDashboard from './pages/ProjectDashboard';
-import AdminDashboard from './pages/AdminDashboard';
 import AdminManagement from './components/AdminManagement';
-import NotificationManager from './components/NotificationManager';
-import DataExportPage from './pages/DataExport';
 import Layout from './components/Layout';
 import NotificationContainer from './components/NotificationContainer';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -56,21 +52,23 @@ const AppRouter = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Super admins get the main layout with all pages
+  // Super admins get simplified routes - only project selection and admin management
+  // COST OPTIMIZATION: Removed all data-heavy pages to reduce database reads
   if (isSuperAdminMemo) {
-    console.log('AppRouter: Rendering super admin routes');
+    console.log('AppRouter: Rendering super admin routes (simplified)');
     return (
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="users" element={<Users />} />
-          <Route path="projects" element={<Projects />} />
-          <Route path="admin" element={<AdminDashboard />} />
+          <Route index element={<Navigate to="/project-selection" replace />} />
           <Route path="admin-management" element={<AdminManagement />} />
           <Route path="project-selection" element={<ProjectSelection />} />
-          <Route path="notifications" element={<NotificationManager />} />
-          <Route path="data-export" element={<DataExportPage />} />
+          {/* Redirect all removed pages to project selection */}
+          <Route path="dashboard" element={<Navigate to="/project-selection" replace />} />
+          <Route path="users" element={<Navigate to="/project-selection" replace />} />
+          <Route path="projects" element={<Navigate to="/project-selection" replace />} />
+          <Route path="admin" element={<Navigate to="/project-selection" replace />} />
+          <Route path="notifications" element={<Navigate to="/project-selection" replace />} />
+          <Route path="data-export" element={<Navigate to="/project-selection" replace />} />
         </Route>
         <Route path="/project/:projectId/*" element={<ProjectDashboard />} />
       </Routes>

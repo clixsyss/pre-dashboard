@@ -9,7 +9,8 @@ import {
   Save,
   X,
   GripVertical,
-  BarChart3
+  BarChart3,
+  Download
 } from 'lucide-react';
 
 // Import ads service functions
@@ -22,6 +23,7 @@ import {
   deleteAdImage,
   toggleAdStatus,
 } from '../services/adsService';
+import * as XLSX from 'xlsx';
 
 const AdsManagement = ({ projectId }) => {
   const [ads, setAds] = useState([]);
@@ -38,6 +40,9 @@ const AdsManagement = ({ projectId }) => {
     imageFile: null,
     imageUrl: ''
   });
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   const loadAds = useCallback(async () => {
     try {
@@ -168,6 +173,86 @@ const AdsManagement = ({ projectId }) => {
   const getActiveAdsCount = () => ads.filter(ad => ad.isActive).length;
   const getTotalAdsCount = () => ads.length;
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = ads;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = ads.filter(ad => {
+          const adDate = ad.createdAt?.toDate ? ad.createdAt.toDate() : new Date(ad.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return adDate >= start && adDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return adDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return adDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(ad => ({
+        'ID': ad.id,
+        'Link URL': ad.linkUrl || 'N/A',
+        'Order': ad.order || 0,
+        'Status': ad.isActive ? 'Active' : 'Inactive',
+        'Image URL': ad.imageUrl || 'N/A',
+        'Created At': ad.createdAt?.toDate ? ad.createdAt.toDate().toLocaleString() : 'N/A'
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 40 }, // Link URL
+        { wch: 10 }, // Order
+        { wch: 12 }, // Status
+        { wch: 50 }, // Image URL
+        { wch: 20 }  // Created At
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Ads');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `Ads_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('Ads exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -184,16 +269,25 @@ const AdsManagement = ({ projectId }) => {
           <h2 className="text-2xl font-bold text-gray-900">Ads Management</h2>
           <p className="text-gray-600">Manage promotional banners and advertisements</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add New Ad
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Ad
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -438,6 +532,66 @@ const AdsManagement = ({ projectId }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

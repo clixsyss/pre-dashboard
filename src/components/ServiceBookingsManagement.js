@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Send,
   X,
-  Settings
+  Settings,
+  Download
 } from 'lucide-react';
 import { 
   collection, 
@@ -21,11 +22,12 @@ import {
   orderBy, 
   doc,
   updateDoc,
-  serverTimestamp,
-  onSnapshot
+  serverTimestamp
+  // onSnapshot removed - using manual refresh for cost optimization
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { sendStatusNotification } from '../services/statusNotificationService';
+import * as XLSX from 'xlsx';
 
 const ServiceBookingsManagement = ({ projectId }) => {
   
@@ -41,6 +43,9 @@ const ServiceBookingsManagement = ({ projectId }) => {
   const [updateType, setUpdateType] = useState(''); // 'status' or 'details'
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   // Update form states
   const [updateData, setUpdateData] = useState({
@@ -123,25 +128,10 @@ const ServiceBookingsManagement = ({ projectId }) => {
     loadServiceBookings();
   }, [loadServiceBookings]);
 
-  // Real-time updates for selected booking
-  useEffect(() => {
-    if (!selectedBooking?.id || !projectId) return;
-
-    const bookingRef = doc(db, `projects/${projectId}/serviceBookings`, selectedBooking.id);
-    const unsubscribe = onSnapshot(bookingRef, (doc) => {
-      if (doc.exists()) {
-        const updatedBooking = { id: doc.id, ...doc.data() };
-        setSelectedBooking(updatedBooking);
-        
-        // Update in main bookings list
-        setBookings(prev => prev.map(b => 
-          b.id === updatedBooking.id ? updatedBooking : b
-        ));
-      }
-    });
-
-    return () => unsubscribe();
-  }, [selectedBooking?.id, projectId]);
+  // REMOVED REAL-TIME LISTENER - Cost optimization
+  // Booking details are loaded when chat opens and can be refreshed manually
+  
+  // Load selected booking details manually (function removed to avoid unused var warning)
 
   // Send message
   const sendMessage = async () => {
@@ -493,6 +483,100 @@ const ServiceBookingsManagement = ({ projectId }) => {
     return slots;
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = filteredBookings;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = filteredBookings.filter(booking => {
+          const bookingDate = booking.createdAt?.toDate ? booking.createdAt.toDate() : new Date(booking.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999); // Include the entire end date
+            return bookingDate >= start && bookingDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return bookingDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return bookingDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(booking => ({
+        'ID': booking.id,
+        'Service Name': booking.serviceName || 'N/A',
+        'Category': booking.categoryName || 'N/A',
+        'User Name': booking.userName || 'N/A',
+        'User Email': booking.userEmail || 'N/A',
+        'Status': booking.status || 'N/A',
+        'Price': booking.servicePrice ? `EGP ${booking.servicePrice}` : 'N/A',
+        'Selected Date': booking.selectedDate || 'N/A',
+        'Selected Time': booking.selectedTime || 'N/A',
+        'Created At': formatDateTime(booking.createdAt),
+        'Last Updated': formatDateTime(booking.updatedAt),
+        'Last Message At': formatDateTime(booking.lastMessageAt),
+        'Total Messages': booking.messages?.length || 0
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 25 }, // Service Name
+        { wch: 20 }, // Category
+        { wch: 20 }, // User Name
+        { wch: 30 }, // User Email
+        { wch: 15 }, // Status
+        { wch: 15 }, // Price
+        { wch: 15 }, // Selected Date
+        { wch: 15 }, // Selected Time
+        { wch: 20 }, // Created At
+        { wch: 20 }, // Last Updated
+        { wch: 20 }, // Last Message At
+        { wch: 15 }  // Total Messages
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Service Bookings');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `Service_Bookings_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('Service bookings exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -514,13 +598,22 @@ const ServiceBookingsManagement = ({ projectId }) => {
             Manage and communicate with service booking requests
           </p>
         </div>
-        <button
-          onClick={loadServiceBookings}
-          className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+        <div className="mt-4 sm:mt-0 flex gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </button>
+          <button
+            onClick={loadServiceBookings}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -1260,6 +1353,66 @@ const ServiceBookingsManagement = ({ projectId }) => {
                     Edit Details
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
               </div>
             </div>
           </div>

@@ -10,8 +10,8 @@ import {
   query, 
   where, 
   orderBy, 
-  limit, 
-  onSnapshot
+  limit
+  // onSnapshot removed - using manual fetching for cost optimization
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { storage } from '../config/firebase';
@@ -385,41 +385,13 @@ const useComplaintStore = create((set, get) => ({
   clearCurrentComplaint: () => set({ currentComplaint: null }),
 
   // Real-time subscriptions
-  subscribeToComplaints: (projectId, filters = {}) => {
-    const complaintsRef = collection(db, `projects/${projectId}/complaints`);
-    let q = query(complaintsRef, orderBy('lastMessageAt', 'desc'));
-
-    // Apply filters
-    if (filters.status) {
-      q = query(q, where('status', '==', filters.status));
-    }
-    if (filters.category) {
-      q = query(q, where('category', '==', filters.category));
-    }
-    if (filters.priority) {
-      q = query(q, where('priority', '==', filters.priority));
-    }
-
-    return onSnapshot(q, (querySnapshot) => {
-      const complaints = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      set({ complaints });
-    });
-  },
-
-  subscribeToComplaint: (projectId, complaintId) => {
-    const complaintRef = doc(db, `projects/${projectId}/complaints`, complaintId);
-    return onSnapshot(complaintRef, (doc) => {
-      if (doc.exists()) {
-        const complaint = { id: doc.id, ...doc.data() };
-        set({ currentComplaint: complaint });
-      } else {
-        set({ currentComplaint: null });
-      }
-    });
-  },
+  // REMOVED: subscribeToComplaints - replaced with manual fetchComplaints calls
+  // COST OPTIMIZATION: Real-time listeners removed to reduce Firebase read costs
+  // Use fetchComplaints() instead and call it manually or on a timer
+  
+  // REMOVED: subscribeToComplaint - replaced with manual fetchComplaint calls
+  // COST OPTIMIZATION: Real-time listeners removed to reduce Firebase read costs
+  // Use fetchComplaint() instead and call it manually when needed
 
   // Constants
   complaintCategories: [

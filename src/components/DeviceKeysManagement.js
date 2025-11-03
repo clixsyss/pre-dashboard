@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Key, Clock, Check, X, AlertCircle, Smartphone, RefreshCw, Building2, Search, Eye, User, FileText, History, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc, Timestamp, onSnapshot, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp, getDoc, limit } from 'firebase/firestore';
+// onSnapshot removed - using manual refresh for cost optimization
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
@@ -41,9 +42,11 @@ const DeviceKeysManagement = ({ projectId }) => {
         return;
       }
 
-      // Get all users and filter by search term
+      // OPTIMIZATION: Get LIMITED users and filter by search term
+      console.log('📊 Searching users with limit...');
       const usersRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersRef);
+      const usersQuery = query(usersRef, limit(500)); // Max 500 users to search through
+      const usersSnapshot = await getDocs(usersQuery);
       
       const searchLower = searchQuery.toLowerCase();
       const keysData = [];
@@ -78,6 +81,7 @@ const DeviceKeysManagement = ({ projectId }) => {
       }
 
       setDeviceKeys(keysData);
+      console.log(`✅ Searched and found ${keysData.length} users [Reads: ${usersSnapshot.size}]`);
     } catch (error) {
       console.error('Error searching users:', error);
       setErrorMessage('Failed to search users. Please try again.');
@@ -91,9 +95,10 @@ const DeviceKeysManagement = ({ projectId }) => {
       setLoading(true);
       setErrorMessage('');
 
-      // OPTIMIZATION: Only load users WITH device keys (not all users)
+      // OPTIMIZATION: Only load users WITH device keys (not all users) with LIMIT
+      console.log('📊 Fetching device keys with limit...');
       const usersRef = collection(db, 'users');
-      const usersQuery = query(usersRef, where('deviceKey', '!=', null));
+      const usersQuery = query(usersRef, where('deviceKey', '!=', null), limit(200)); // Max 200 users with keys
       const usersSnapshot = await getDocs(usersQuery);
       
       const keysData = [];
@@ -120,6 +125,7 @@ const DeviceKeysManagement = ({ projectId }) => {
       }
 
       setDeviceKeys(keysData);
+      console.log(`✅ Fetched ${keysData.length} device keys [Reads: ${usersSnapshot.size}]`);
     } catch (error) {
       console.error('Error loading device keys:', error);
       setErrorMessage('Failed to load device keys. Please try again.');
@@ -149,12 +155,14 @@ const DeviceKeysManagement = ({ projectId }) => {
         ...doc.data()
       }));
 
-      // Fetch user names for each request
+      // Fetch user names for each request (optimized with getDoc)
       for (let request of fetchedRequests) {
         try {
-          const userSnap = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
-          if (!userSnap.empty) {
-            const userData = userSnap.docs[0].data();
+          // Use getDoc instead of getDocs for single document fetch
+          const userRef = doc(db, 'users', request.userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
             request.userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
             request.userEmail = userData.email || '';
             

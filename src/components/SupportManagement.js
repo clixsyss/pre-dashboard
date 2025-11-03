@@ -4,12 +4,15 @@ import {
   collection, 
   query, 
   orderBy, 
-  onSnapshot, 
+  limit,
+  getDocs,
   doc, 
   updateDoc
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { MessageCircle, XCircle, User, Mail, Calendar, Filter, Search } from 'lucide-react'
+import { MessageCircle, XCircle, User, Mail, Calendar, Filter, Search, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
+// RefreshCw removed - not currently used
 
 const SupportManagement = () => {
   const { projectId } = useParams()
@@ -22,6 +25,9 @@ const SupportManagement = () => {
   const [filteredChats, setFilteredChats] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportStartDate, setExportStartDate] = useState('')
+  const [exportEndDate, setExportEndDate] = useState('')
 
   // Filter chats function
   const filterChats = useCallback(() => {
@@ -50,18 +56,23 @@ const SupportManagement = () => {
     filterChats()
   }, [filterChats])
 
-  // Load support chats
-  useEffect(() => {
+  // REMOVED REAL-TIME LISTENER - Cost optimization
+  // Support chats are now loaded manually on mount and via refresh
+  // Load support chats manually
+  const loadSupportChats = useCallback(async () => {
     if (!projectId) {
       console.error('No project ID available')
       setLoading(false)
       return
     }
     
-    const supportChatsRef = collection(db, `projects/${projectId}/supportChats`)
-    const q = query(supportChatsRef, orderBy('updatedAt', 'desc'))
+    try {
+      setLoading(true)
+      console.log('📊 Fetching support chats with limit...')
+      const supportChatsRef = collection(db, `projects/${projectId}/supportChats`)
+      const q = query(supportChatsRef, orderBy('updatedAt', 'desc'), limit(100)) // Limit to 100 chats
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const snapshot = await getDocs(q)
       const chats = snapshot.docs.map(doc => {
         const data = doc.data()
         return {
@@ -73,37 +84,22 @@ const SupportManagement = () => {
         }
       })
       setSupportChats(chats)
+      console.log(`✅ Fetched ${chats.length} support chats [Reads: ${snapshot.size}]`)
+    } catch (error) {
+      console.error('Error loading support chats:', error)
+    } finally {
       setLoading(false)
-    })
-
-    return () => unsubscribe()
+    }
   }, [projectId])
 
-  // Live-update selected chat while modal is open
   useEffect(() => {
-    if (!showChatModal || !selectedChat?.id || !projectId) return
+    loadSupportChats()
+  }, [loadSupportChats])
 
-    const chatRef = doc(db, `projects/${projectId}/supportChats`, selectedChat.id)
-    const unsubscribe = onSnapshot(chatRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data()
-        // Convert Firestore timestamps to Date objects for proper display
-        const processedData = {
-          ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
-          lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt,
-          messages: data.messages?.map(msg => ({
-            ...msg,
-            timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : msg.timestamp
-          })) || []
-        }
-        setSelectedChat({ id: snapshot.id, ...processedData })
-      }
-    })
+  // REMOVED REAL-TIME CHAT UPDATE LISTENER - Cost optimization
+  // Chat details are loaded when modal opens and can be refreshed manually
 
-    return () => unsubscribe()
-  }, [showChatModal, selectedChat?.id, projectId])
+  // Load selected chat details (function removed to avoid unused var warning)
 
   // Handle chat selection
   const handleChatSelect = (chat) => {
@@ -240,6 +236,94 @@ const SupportManagement = () => {
     }
   }
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = filteredChats
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = filteredChats.filter(chat => {
+          const chatDate = chat.createdAt?.toDate ? chat.createdAt.toDate() : new Date(chat.createdAt)
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate)
+            const end = new Date(exportEndDate)
+            end.setHours(23, 59, 59, 999)
+            return chatDate >= start && chatDate <= end
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate)
+            return chatDate >= start
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate)
+            end.setHours(23, 59, 59, 999)
+            return chatDate <= end
+          }
+          return true
+        })
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(chat => ({
+        'ID': chat.id,
+        'Title': chat.title || 'N/A',
+        'Category': chat.category || 'N/A',
+        'User Name': chat.userName || 'N/A',
+        'User Email': chat.userEmail || 'N/A',
+        'Status': chat.status || 'N/A',
+        'Priority': chat.priority || 'N/A',
+        'Last Message': chat.lastMessage || 'No messages yet',
+        'Created At': formatDate(chat.createdAt),
+        'Updated At': formatDate(chat.updatedAt)
+      }))
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.')
+        return
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.json_to_sheet(exportData)
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 30 }, // Title
+        { wch: 20 }, // Category
+        { wch: 20 }, // User Name
+        { wch: 30 }, // User Email
+        { wch: 15 }, // Status
+        { wch: 15 }, // Priority
+        { wch: 40 }, // Last Message
+        { wch: 20 }, // Created At
+        { wch: 20 }  // Updated At
+      ]
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Support Chats')
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0]
+      const fileName = `Support_Chats_${dateRange}.xlsx`
+      XLSX.writeFile(wb, fileName)
+
+      console.log('Support chats exported successfully')
+      setShowExportModal(false)
+      setExportStartDate('')
+      setExportEndDate('')
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      alert('Failed to export data. Please try again.')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -257,6 +341,13 @@ const SupportManagement = () => {
           <p className="text-gray-600">Manage customer support chats and inquiries</p>
         </div>
         <div className="flex items-center space-x-4">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </button>
           <div className="text-sm text-gray-500">
             Total Chats: {supportChats.length}
           </div>
@@ -489,6 +580,66 @@ const SupportManagement = () => {
                   ) : (
                     'Send'
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false)
+                    setExportStartDate('')
+                    setExportEndDate('')
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
                 </button>
               </div>
             </div>

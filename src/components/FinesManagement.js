@@ -12,7 +12,8 @@ import {
   User,
   Upload,
   X,
-  Send
+  Send,
+  Download
 } from 'lucide-react';
 import {
   getFines,
@@ -20,10 +21,10 @@ import {
   updateFineStatus,
   searchUsers,
   uploadFineImage,
-  addMessage,
-  onFineChange
+  addMessage
 } from '../services/finesService';
 import { sendStatusNotification } from '../services/statusNotificationService';
+import * as XLSX from 'xlsx';
 
 const FinesManagement = ({ projectId }) => {
   const [fines, setFines] = useState([]);
@@ -62,6 +63,9 @@ const FinesManagement = ({ projectId }) => {
     evidenceImage: null
   });
   const [uploading, setUploading] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   // Load fines
   const loadFines = useCallback(async () => {
@@ -86,34 +90,14 @@ const FinesManagement = ({ projectId }) => {
     }
   }, [projectId]);
 
-  // Setup real-time chat listener
-  const setupChatListener = useCallback((fineId) => {
-    return onFineChange(projectId, fineId, (updatedFine) => {
-      if (updatedFine) {
-        setChatMessages(updatedFine.messages || []);
-        setSelectedFine(updatedFine);
-      }
-    });
-  }, [projectId]);
+  // REMOVED REAL-TIME LISTENER - Cost optimization
+  // Fine chat details are loaded when chat opens and can be refreshed manually
+  
+  // Load fine details manually (function removed to avoid unused var warning)
 
   useEffect(() => {
     loadFines();
   }, [loadFines]);
-
-  // Setup real-time listener when chat opens
-  useEffect(() => {
-    let unsubscribe = null;
-
-    if (showChat && selectedFine) {
-      unsubscribe = setupChatListener(selectedFine.id);
-    }
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [showChat, selectedFine, setupChatListener]);
 
   // Filter fines
   useEffect(() => {
@@ -417,6 +401,96 @@ const FinesManagement = ({ projectId }) => {
     });
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = filteredFines;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = filteredFines.filter(fine => {
+          const fineDate = fine.createdAt?.toDate ? fine.createdAt.toDate() : new Date(fine.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return fineDate >= start && fineDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return fineDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return fineDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(fine => ({
+        'ID': fine.id,
+        'User Name': fine.userName || 'N/A',
+        'User Email': fine.userEmail || 'N/A',
+        'Unit': fine.userUnit || 'N/A',
+        'Reason': fine.reason || 'N/A',
+        'Amount': fine.amount ? `EGP ${fine.amount}` : 'N/A',
+        'Status': fine.status || 'N/A',
+        'Occurrence Date': formatDate(fine.occurrenceDate),
+        'Issuing Date': formatDate(fine.issuingDate),
+        'Created At': formatDate(fine.createdAt),
+        'Description': fine.description || 'N/A'
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 20 }, // User Name
+        { wch: 30 }, // User Email
+        { wch: 15 }, // Unit
+        { wch: 30 }, // Reason
+        { wch: 15 }, // Amount
+        { wch: 15 }, // Status
+        { wch: 15 }, // Occurrence Date
+        { wch: 15 }, // Issuing Date
+        { wch: 20 }, // Created At
+        { wch: 40 }  // Description
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Fines');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `Fines_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('Fines exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -434,13 +508,22 @@ const FinesManagement = ({ projectId }) => {
             <h1 className="text-2xl font-bold text-gray-900">Fines & Violations</h1>
             <p className="text-gray-600">Manage user fines and violations</p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            Issue Fine
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Excel
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" />
+              Issue Fine
+            </button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -1114,8 +1197,68 @@ const FinesManagement = ({ projectId }) => {
           </div>
         </div>
       )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </>
       );
 };
 
-      export default FinesManagement;
+export default FinesManagement;

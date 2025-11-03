@@ -11,7 +11,7 @@ import {
   where, 
   orderBy, 
   limit, 
-  onSnapshot,
+  // onSnapshot removed - not used, manual fetching for cost optimization
   increment
 } from 'firebase/firestore';
 

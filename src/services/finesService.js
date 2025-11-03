@@ -7,8 +7,8 @@ import {
   getDoc, 
   query, 
   where, 
-  orderBy, 
-  onSnapshot
+  orderBy
+  // onSnapshot removed - using manual refresh for cost optimization
 } from 'firebase/firestore';
 import { 
   ref, 
@@ -273,18 +273,9 @@ export const addMessage = async (projectId, fineId, messageData) => {
   }
 };
 
-// Listen to real-time fine changes
-export const onFineChange = (projectId, fineId, callback) => {
-  const fineDoc = doc(db, 'projects', projectId, 'fines', fineId);
-  
-  return onSnapshot(fineDoc, (doc) => {
-    if (doc.exists()) {
-      callback({ id: doc.id, ...doc.data() });
-    } else {
-      callback(null);
-    }
-  });
-};
+// REMOVED: onFineChange - replaced with manual getFine calls
+// COST OPTIMIZATION: Real-time listener removed to reduce Firebase read costs
+// Use getFine() instead and call it manually when needed (e.g., on button click or timer)
 
 // Upload fine evidence image
 export const uploadFineImage = async (projectId, fineId, imageFile) => {
@@ -380,7 +371,7 @@ const finesService = {
   updateFineStatus,
   updateFineDetails,
   addMessage,
-  onFineChange,
+  // onFineChange removed - use getFine() instead for cost optimization
   uploadFineImage,
   deleteFineImage,
   searchUsers

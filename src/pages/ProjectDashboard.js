@@ -46,7 +46,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot, limit, startAfter } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, limit, startAfter } from 'firebase/firestore';
+// onSnapshot removed - using manual refresh for cost optimization
 import userService from '../services/userService';
 import { db } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -1124,7 +1125,7 @@ const ProjectDashboard = () => {
     }
   }, [setPendingAdminsCount]);
 
-  // Fetch device reset requests
+  // Fetch device reset requests (OPTIMIZED: with limit)
   const fetchDeviceResetRequests = useCallback(async (projectId) => {
     try {
       if (!projectId) {
@@ -1132,11 +1133,14 @@ const ProjectDashboard = () => {
         return;
       }
       
+      console.log('📊 Fetching device reset requests with limit...');
       // Read from project subcollection: projects/{projectId}/deviceKeyResetRequests
+      // COST OPTIMIZATION: Added limit(100) to prevent excessive reads
       const requestsSnapshot = await getDocs(
         query(
           collection(db, 'projects', projectId, 'deviceKeyResetRequests'),
-          orderBy('requestedAt', 'desc')
+          orderBy('requestedAt', 'desc'),
+          limit(100) // Max 100 most recent requests
         )
       );
       const requestsData = requestsSnapshot.docs.map(doc => ({
@@ -1144,6 +1148,7 @@ const ProjectDashboard = () => {
         ...doc.data()
       }));
       setDeviceResetRequests(requestsData);
+      console.log(`✅ Fetched ${requestsData.length} device reset requests [Reads: ${requestsSnapshot.size}]`);
     } catch (error) {
       console.error('Error fetching device reset requests:', error);
       setDeviceResetRequests([]);
@@ -1305,45 +1310,10 @@ const ProjectDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, dataLoaded]);
 
-  // Set up real-time listener for device reset requests (same as other tabs)
-  useEffect(() => {
-    if (!projectId) return;
-
-    console.log('🔄 Setting up real-time listener for device reset requests...');
-    
-    const requestsRef = collection(db, 'projects', projectId, 'deviceKeyResetRequests');
-    // Try without orderBy first to avoid index issues
-    const q = query(requestsRef);
-    
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        let requestsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Sort manually by requestedAt (newest first)
-        requestsData.sort((a, b) => {
-          const aTime = a.requestedAt?.toMillis?.() || a.requestedAt?.seconds * 1000 || 0;
-          const bTime = b.requestedAt?.toMillis?.() || b.requestedAt?.seconds * 1000 || 0;
-          return bTime - aTime;
-        });
-        
-        setDeviceResetRequests(requestsData);
-      },
-      (error) => {
-        console.error('❌ Error in device reset requests listener:', error);
-        console.error('❌ Error details:', error.message, error.code);
-      }
-    );
-
-    // Cleanup listener on unmount
-    return () => {
-      console.log('🧹 Cleaning up device reset requests listener');
-      unsubscribe();
-    };
-  }, [projectId]);
+  // REMOVED REAL-TIME LISTENER - Cost optimization
+  // Device reset requests are now loaded manually via fetchDeviceResetRequests()
+  // Use the refresh button or call refreshAllData() to update
+  // This prevents continuous read costs from onSnapshot listeners
 
   // Refresh all data function
   const refreshAllData = useCallback(async () => {
@@ -1357,6 +1327,7 @@ const ProjectDashboard = () => {
         fetchComplaints(projectId),
         fetchSupportTickets(projectId),
         fetchFines(projectId),
+        fetchDeviceResetRequests(projectId), // Added
         fetchGatePasses(projectId),
         fetchServiceBookings(projectId),
         fetchRequestSubmissions(projectId),

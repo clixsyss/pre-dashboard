@@ -10,7 +10,8 @@ import {
   FileText,
   Image as ImageIcon,
   Paperclip,
-  MessageCircle
+  MessageCircle,
+  Download
 } from 'lucide-react';
 import AdminRequestChat from './AdminRequestChat';
 import { 
@@ -27,6 +28,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { sendStatusNotification } from '../services/statusNotificationService';
+import * as XLSX from 'xlsx';
 
 const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) => {
   const [submissions, setSubmissions] = useState([]);
@@ -41,6 +43,9 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
   const [chatSubmission, setChatSubmission] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loadingUserData, setLoadingUserData] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   // Fetch categories for filter
   const fetchCategories = useCallback(async () => {
@@ -291,6 +296,92 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
     });
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = filteredSubmissions;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = filteredSubmissions.filter(submission => {
+          const submissionDate = submission.createdAt?.toDate ? submission.createdAt.toDate() : new Date(submission.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return submissionDate >= start && submissionDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return submissionDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return submissionDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(submission => ({
+        'ID': submission.id,
+        'Category': submission.categoryName || 'N/A',
+        'User Name': submission.userName || 'N/A',
+        'User Email': submission.userEmail || 'N/A',
+        'Status': submission.status || 'N/A',
+        'Created At': formatDate(submission.createdAt),
+        'Updated At': formatDate(submission.updatedAt),
+        'Total Messages': submission.messages?.length || 0,
+        'Notes': submission.notes || 'N/A'
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 25 }, // Category
+        { wch: 20 }, // User Name
+        { wch: 30 }, // User Email
+        { wch: 15 }, // Status
+        { wch: 20 }, // Created At
+        { wch: 20 }, // Updated At
+        { wch: 15 }, // Total Messages
+        { wch: 40 }  // Notes
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Request Submissions');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `Request_Submissions_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('Request submissions exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (loading && submissions.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -325,6 +416,13 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
             </p>
           </div>
         </div>
+        <button
+          onClick={() => setShowExportModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Export Excel
+        </button>
       </div>
 
       {/* Filters */}
@@ -960,6 +1058,66 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
           onBack={closeChat}
           onStatusUpdate={handleStatusUpdate}
         />
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

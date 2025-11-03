@@ -15,7 +15,8 @@ import {
   MessageCircle,
   User,
   Calendar,
-  Trash
+  Trash,
+  Download
 } from 'lucide-react';
 import { 
   collection, 
@@ -39,6 +40,7 @@ import {
 import { db, storage } from '../config/firebase';
 import { useUINotificationStore } from '../stores/uiNotificationStore';
 import newsService from '../services/newsService';
+import * as XLSX from 'xlsx';
 
 const NewsManagementSystem = ({ projectId }) => {
   const { success, error: showError, warning, info } = useUINotificationStore();
@@ -71,6 +73,9 @@ const NewsManagementSystem = ({ projectId }) => {
     linkUrl: '',
     linkTitle: ''
   });
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   const fetchCategories = useCallback(async () => {
     if (!projectId) return;
@@ -777,6 +782,100 @@ const NewsManagementSystem = ({ projectId }) => {
     });
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = newsItems;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = newsItems.filter(item => {
+          const itemDate = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return itemDate >= start && itemDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return itemDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return itemDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(item => ({
+        'ID': item.id,
+        'Title': item.title || 'N/A',
+        'Category': item.category || 'N/A',
+        'Status': item.isPublished ? 'Published' : 'Draft',
+        'Featured': item.featured ? 'Yes' : 'No',
+        'Interactions': item.interactionsEnabled ? 'Enabled' : 'Disabled',
+        'Views': item.views || 0,
+        'Likes': item.reactionCounts?.like || 0,
+        'Hearts': item.reactionCounts?.heart || 0,
+        'Comments Count': item.commentsCount || 0,
+        'Created By': item.createdBy || 'N/A',
+        'Created At': formatDate(item.createdAt),
+        'Updated At': formatDate(item.updatedAt)
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 40 }, // Title
+        { wch: 20 }, // Category
+        { wch: 12 }, // Status
+        { wch: 10 }, // Featured
+        { wch: 15 }, // Interactions
+        { wch: 10 }, // Views
+        { wch: 10 }, // Likes
+        { wch: 10 }, // Hearts
+        { wch: 15 }, // Comments Count
+        { wch: 20 }, // Created By
+        { wch: 20 }, // Created At
+        { wch: 20 }  // Updated At
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'News');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `News_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('News exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -785,16 +884,25 @@ const NewsManagementSystem = ({ projectId }) => {
           <h2 className="text-2xl font-bold text-gray-900">News Management</h2>
           <p className="text-gray-600 mt-1">Create and manage news posts for your project</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          Create News Post
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
+          >
+            <Plus className="h-5 w-5" />
+            Create News Post
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -1458,6 +1566,66 @@ const NewsManagementSystem = ({ projectId }) => {
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
                 </button>
               </div>
             </div>

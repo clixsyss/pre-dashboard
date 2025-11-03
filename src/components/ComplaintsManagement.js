@@ -20,10 +20,12 @@ import {
   Activity,
   TrendingUp,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Download
 } from 'lucide-react';
 import useComplaintStore from '../stores/complaintStore';
 import { getComprehensiveUserDetails, formatUserForDisplay } from '../services/userService';
+import * as XLSX from 'xlsx';
 
 const ComplaintsManagement = ({ projectId }) => {
   const {
@@ -46,6 +48,9 @@ const ComplaintsManagement = ({ projectId }) => {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [loadingUserDetails, setLoadingUserDetails] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   useEffect(() => {
     if (projectId) {
@@ -175,6 +180,92 @@ const ComplaintsManagement = ({ projectId }) => {
     return lastMessage.text || 'Image message';
   };
 
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = complaints;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = complaints.filter(complaint => {
+          const complaintDate = complaint.createdAt?.toDate ? complaint.createdAt.toDate() : new Date(complaint.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return complaintDate >= start && complaintDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return complaintDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return complaintDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Prepare data for export
+      const exportData = dataToExport.map(complaint => ({
+        'ID': complaint.id,
+        'Title': complaint.title || 'N/A',
+        'Category': complaint.category || 'N/A',
+        'User ID': complaint.userId || 'N/A',
+        'Status': complaint.status || 'N/A',
+        'Priority': complaint.priority || 'N/A',
+        'Last Message': getLastMessage(complaint),
+        'Created At': formatDate(complaint.createdAt),
+        'Updated At': formatDate(complaint.updatedAt)
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 25 }, // ID
+        { wch: 30 }, // Title
+        { wch: 20 }, // Category
+        { wch: 25 }, // User ID
+        { wch: 15 }, // Status
+        { wch: 15 }, // Priority
+        { wch: 40 }, // Last Message
+        { wch: 20 }, // Created At
+        { wch: 20 }  // Updated At
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Complaints');
+
+      // Generate Excel file
+      const dateRange = exportStartDate && exportEndDate 
+        ? `${exportStartDate}_to_${exportEndDate}`
+        : exportStartDate 
+        ? `from_${exportStartDate}`
+        : exportEndDate 
+        ? `to_${exportEndDate}`
+        : new Date().toISOString().split('T')[0];
+      const fileName = `Complaints_${dateRange}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      console.log('Complaints exported successfully');
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -195,6 +286,13 @@ const ComplaintsManagement = ({ projectId }) => {
           <h2 className="text-2xl font-bold text-gray-900">Complaints Management</h2>
           <p className="text-gray-600">Manage user complaints and support requests</p>
         </div>
+        <button
+          onClick={() => setShowExportModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Export Excel
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -485,6 +583,66 @@ const ComplaintsManagement = ({ projectId }) => {
             setShowUserDetails(false);
           }}
         />
+      )}
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

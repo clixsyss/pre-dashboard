@@ -8,8 +8,6 @@ import {
   LogOut,
   Settings,
   Bell,
-  BarChart3,
-  UserCheck,
   Shield
 } from 'lucide-react';
 import logo from '../logo.png';
@@ -20,10 +18,9 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // SIMPLIFIED NAVIGATION - Cost optimization: Removed data-heavy pages
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, description: 'Overview & Analytics' },
-    { name: 'Projects', href: '/projects', icon: Building2, description: 'Manage Projects' },
-    { name: 'Users', href: '/users', icon: UserCheck, description: 'Manage User Accounts' },
+    { name: 'Project Selection', href: '/project-selection', icon: Building2, description: 'Select Project to Manage' },
     { name: 'Admin Management', href: '/admin-management', icon: Shield, description: 'Manage Admin Accounts & Approvals' },
   ];
 
