@@ -987,9 +987,15 @@ class GuestPassesService {
     try {
       console.log(`📋 [Service] Getting units for project ${projectId}`);
       
-      // Get all users in the project and extract unique units
-      const usersSnapshot = await getDocs(collection(db, this.collections.users));
+      // OPTIMIZATION: Get limited users in the project and extract unique units
+      const usersQuery = query(
+        collection(db, this.collections.users),
+        limit(2000) // Limit to 2000 users for better performance
+      );
+      const usersSnapshot = await getDocs(usersQuery);
       const unitsMap = new Map();
+      
+      console.log(`📊 GuestPassService: Fetched ${usersSnapshot.size} users (limited)`);
       
       usersSnapshot.docs.forEach(doc => {
         const userData = doc.data();

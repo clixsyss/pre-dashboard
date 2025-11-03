@@ -142,8 +142,13 @@ const NotificationManagement = ({ projectId }) => {
     if (!projectId) return;
 
     try {
-      // Fetch users for this project
-      const usersSnapshot = await getDocs(collection(db, 'users'));
+      console.log('📊 NotificationManagement: Fetching users with limit...');
+      // OPTIMIZATION: Fetch limited users for this project
+      const usersQuery = query(
+        collection(db, 'users'),
+        limit(1000) // Limit to 1000 users
+      );
+      const usersSnapshot = await getDocs(usersQuery);
       const users = usersSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(user => {
@@ -152,15 +157,23 @@ const NotificationManagement = ({ projectId }) => {
           }
           return false;
         });
+      
+      console.log(`✅ NotificationManagement: Fetched ${users.length} project users (limited)`);
 
       // Store project users for selection
       setProjectUsers(users);
 
-      // Fetch units for this project
+      // Fetch units for this project (OPTIMIZED with limit)
       try {
-        const unitsSnapshot = await getDocs(collection(db, `projects/${projectId}/units`));
+        console.log('📊 NotificationManagement: Fetching units with limit...');
+        const unitsQuery = query(
+          collection(db, `projects/${projectId}/units`),
+          limit(500) // OPTIMIZATION: Limit to 500 units
+        );
+        const unitsSnapshot = await getDocs(unitsQuery);
         const units = unitsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProjectUnits(units);
+        console.log(`✅ NotificationManagement: Fetched ${units.length} units (limited)`);
       } catch (err) {
         console.warn('Units not available:', err);
         setProjectUnits([]);

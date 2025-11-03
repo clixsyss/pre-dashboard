@@ -1,52 +1,78 @@
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { fetchUsersPaginated, fetchProjectsCached, searchUsers as searchUsersOptimized } from '../utils/firestoreOptimization'
 
 class UserService {
   /**
-   * Fetch all users with enhanced project information
-   * @returns {Promise<Array>} Array of user objects with enhanced data
+   * Fetch all users with pagination support (OPTIMIZED)
+   * @param {Object} options - Pagination options
+   * @returns {Promise<Object>} Object with users array and pagination info
    */
-  async getAllUsers() {
+  async getAllUsers(options = {}) {
     try {
-      // Fetch users
-      const usersSnapshot = await getDocs(collection(db, 'users'))
-      
-      // Fetch projects for project name resolution
-      const projectsSnapshot = await getDocs(collection(db, 'projects'))
-      const projectsMap = {}
-      projectsSnapshot.docs.forEach(doc => {
-        projectsMap[doc.id] = doc.data()
-      })
-      
-      const usersData = usersSnapshot.docs.map(doc => {
-        const userData = doc.data()
-        
-        // Enhance projects data with actual project names
-        let enhancedProjects = []
-        if (userData.projects && Array.isArray(userData.projects)) {
-          enhancedProjects = userData.projects.map(project => ({
+      const {
+        pageSize = 50,
+        lastDoc = null,
+        projectId = null,
+        useCache = true
+      } = options;
+
+      console.log('🔍 UserService: Fetching users with pagination', { pageSize, projectId });
+
+      // Fetch users with pagination
+      const { users, lastDoc: newLastDoc, hasMore } = await fetchUsersPaginated({
+        pageSize,
+        lastDoc,
+        projectId,
+        useCache
+      });
+
+      // Fetch projects for project name resolution (cached)
+      const projects = await fetchProjectsCached({ useCache });
+      const projectsMap = {};
+      projects.forEach(project => {
+        projectsMap[project.id] = project;
+      });
+
+      // Enhance users with project information
+      const enhancedUsers = users.map(user => {
+        let enhancedProjects = [];
+        if (user.projects && Array.isArray(user.projects)) {
+          enhancedProjects = user.projects.map(project => ({
             ...project,
             projectName: projectsMap[project.projectId]?.name || 'Unknown Project',
             projectType: projectsMap[project.projectId]?.type || 'Unknown Type',
             projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
-          }))
+          }));
         }
-        
+
         return {
-          id: doc.id,
-          ...userData,
-          enhancedProjects,
-          createdAt: userData.createdAt?.toDate?.() || new Date(),
-          lastLoginAt: userData.lastLoginAt?.toDate?.() || null,
-          updatedAt: userData.updatedAt?.toDate?.() || null
-        }
-      })
-      
-      return usersData
+          ...user,
+          enhancedProjects
+        };
+      });
+
+      console.log(`✅ UserService: Fetched ${enhancedUsers.length} users`);
+
+      return {
+        users: enhancedUsers,
+        lastDoc: newLastDoc,
+        hasMore
+      };
     } catch (error) {
-      console.error('Error fetching users:', error)
-      throw error
+      console.error('Error fetching users:', error);
+      throw error;
     }
+  }
+
+  /**
+   * Legacy method - fetches first page of users
+   * Maintained for backward compatibility
+   * @returns {Promise<Array>} Array of user objects
+   */
+  async getAllUsersLegacy() {
+    const { users } = await this.getAllUsers({ pageSize: 100 });
+    return users;
   }
 
   /**
@@ -77,48 +103,44 @@ class UserService {
   }
 
   /**
-   * Search users by various criteria
+   * Search users by various criteria (OPTIMIZED)
    * @param {string} searchTerm - Search term
    * @param {string} field - Field to search in ('name', 'email', 'mobile', 'nationalId')
    * @returns {Promise<Array>} Array of matching users
    */
   async searchUsers(searchTerm, field = 'name') {
     try {
-      const users = await this.getAllUsers()
+      console.log('🔍 UserService: Searching users', { searchTerm, field });
       
-      return users.filter(user => {
-        switch (field) {
-          case 'name':
-            const fullName = user.firstName && user.lastName 
-              ? `${user.firstName} ${user.lastName}`.toLowerCase()
-              : user.fullName?.toLowerCase() || ''
-            return fullName.includes(searchTerm.toLowerCase())
-          
-          case 'email':
-            return user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-          
-          case 'mobile':
-            return user.mobile?.includes(searchTerm)
-          
-          case 'nationalId':
-            return user.nationalId?.includes(searchTerm)
-          
-          default:
-            // Search in all fields
-            const name = user.firstName && user.lastName 
-              ? `${user.firstName} ${user.lastName}`.toLowerCase()
-              : user.fullName?.toLowerCase() || ''
-            return (
-              name.includes(searchTerm.toLowerCase()) ||
-              user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              user.mobile?.includes(searchTerm) ||
-              user.nationalId?.includes(searchTerm)
-            )
+      // Use optimized search that limits data fetching
+      const users = await searchUsersOptimized(searchTerm, field);
+
+      // Enhance with project information
+      const projects = await fetchProjectsCached({ useCache: true });
+      const projectsMap = {};
+      projects.forEach(project => {
+        projectsMap[project.id] = project;
+      });
+
+      return users.map(user => {
+        let enhancedProjects = [];
+        if (user.projects && Array.isArray(user.projects)) {
+          enhancedProjects = user.projects.map(project => ({
+            ...project,
+            projectName: projectsMap[project.projectId]?.name || 'Unknown Project',
+            projectType: projectsMap[project.projectId]?.type || 'Unknown Type',
+            projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
+          }));
         }
-      })
+
+        return {
+          ...user,
+          enhancedProjects
+        };
+      });
     } catch (error) {
-      console.error('Error searching users:', error)
-      throw error
+      console.error('Error searching users:', error);
+      throw error;
     }
   }
 
@@ -174,53 +196,60 @@ class UserService {
   }
 
   /**
-   * Get users with missing required documents
+   * Get users with missing required documents (OPTIMIZED - uses pagination)
    * @returns {Promise<Array>} Array of users missing required documents
    */
-  async getUsersWithMissingDocuments() {
+  async getUsersWithMissingDocuments(options = {}) {
     try {
-      const users = await this.getAllUsers()
+      const { pageSize = 100 } = options;
+      const { users } = await this.getAllUsers({ pageSize });
+      
       return users.filter(user => {
         const status = this.getDocumentStatus(user)
         return !status.allRequired
-      })
+      });
     } catch (error) {
-      console.error('Error fetching users with missing documents:', error)
-      throw error
+      console.error('Error fetching users with missing documents:', error);
+      throw error;
     }
   }
 
   /**
-   * Get document statistics
+   * Get document statistics (OPTIMIZED - uses limited fetch)
+   * Note: For accurate stats on large datasets, consider using Cloud Functions with aggregation
    * @returns {Promise<Object>} Document statistics
    */
-  async getDocumentStatistics() {
+  async getDocumentStatistics(options = {}) {
     try {
-      const users = await this.getAllUsers()
+      console.log('⚠️ UserService: Document statistics - fetching limited sample');
+      const { pageSize = 200 } = options; // Sample only
+      const { users } = await this.getAllUsers({ pageSize });
       
       const stats = {
         total: users.length,
+        isSample: true, // Indicate this is a sample
+        sampleSize: users.length,
         withProfilePicture: 0,
         withFrontId: 0,
         withBackId: 0,
         withAllRequired: 0,
         withAnyDocuments: 0
-      }
+      };
       
       users.forEach(user => {
-        const status = this.getDocumentStatus(user)
+        const status = this.getDocumentStatus(user);
         
-        if (status.profilePicture) stats.withProfilePicture++
-        if (status.frontId) stats.withFrontId++
-        if (status.backId) stats.withBackId++
-        if (status.allRequired) stats.withAllRequired++
-        if (status.anyDocuments) stats.withAnyDocuments++
-      })
+        if (status.profilePicture) stats.withProfilePicture++;
+        if (status.frontId) stats.withFrontId++;
+        if (status.backId) stats.withBackId++;
+        if (status.allRequired) stats.withAllRequired++;
+        if (status.anyDocuments) stats.withAnyDocuments++;
+      });
       
-      return stats
+      return stats;
     } catch (error) {
-      console.error('Error getting document statistics:', error)
-      throw error
+      console.error('Error getting document statistics:', error);
+      throw error;
     }
   }
 

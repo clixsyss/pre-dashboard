@@ -22,7 +22,8 @@ import {
   where,
   doc,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  limit
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { sendStatusNotification } from '../services/statusNotificationService';
@@ -59,15 +60,18 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
     }
   }, [projectId]);
 
-  // Fetch submissions
+  // Fetch submissions with pagination
   const fetchSubmissions = useCallback(async () => {
     if (!projectId) return;
     
     setLoading(true);
     try {
+      console.log('📊 RequestSubmissions: Fetching with optimization...');
+      
       let q = query(
         collection(db, `projects/${projectId}/requestSubmissions`),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(100) // OPTIMIZATION: Limit to 100 most recent submissions
       );
 
       // Apply category filter if specific category is selected
@@ -75,7 +79,8 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
         q = query(
           collection(db, `projects/${projectId}/requestSubmissions`),
           where('categoryId', '==', selectedCategory.id),
-          orderBy('createdAt', 'desc')
+          orderBy('createdAt', 'desc'),
+          limit(100) // OPTIMIZATION: Limit to 100 submissions
         );
       }
 
@@ -85,7 +90,7 @@ const RequestSubmissionsManagement = ({ projectId, selectedCategory, onBack }) =
         ...doc.data()
       }));
       
-      
+      console.log(`✅ RequestSubmissions: Fetched ${submissionsData.length} submissions (limited)`);
       setSubmissions(submissionsData);
     } catch (error) {
       console.error('Error fetching submissions:', error);

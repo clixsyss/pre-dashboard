@@ -24,10 +24,11 @@ import {
   Tooltip, 
   ResponsiveContainer
 } from 'recharts';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, limit, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAuth } from 'firebase/auth';
 import AdminSetup from '../components/AdminSetup';
+import { fetchUsersPaginated, fetchProjectsCached, fetchUsersCount } from '../utils/firestoreOptimization';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -85,37 +86,39 @@ const Dashboard = () => {
       let recentUsersData = [];
       
       try {
-        // Fetch users
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        totalUsers = usersSnapshot.size;
+        console.log('📊 Dashboard: Fetching users with optimization...');
         
-        // Get recent users for display
-        usersSnapshot.forEach(doc => {
-          if (recentUsersData.length < 5) {
-            const userData = doc.data();
-            recentUsersData.push({
-              id: doc.id,
-              ...userData,
-              createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
-              name: userData.firstName && userData.lastName ? 
-                `${userData.firstName} ${userData.lastName}` : 
-                userData.email || 'Unknown User',
-              email: userData.email || 'No email',
-              status: userData.registrationStatus || 'pending'
-            });
-          }
+        // Fetch user count efficiently (cached)
+        totalUsers = await fetchUsersCount({ useCache: true });
+        console.log('✅ User count:', totalUsers);
+        
+        // Fetch recent users only (limited to 100 for stats)
+        const { users: recentUsersList } = await fetchUsersPaginated({
+          pageSize: 100,
+          useCache: true
         });
         
-        // Check for pending users
-        usersSnapshot.forEach(doc => {
-          const userData = doc.data();
-          if (userData.registrationStatus === 'pending') {
+        // Get 5 most recent for display
+        recentUsersData = recentUsersList.slice(0, 5).map(user => ({
+          id: user.id,
+          ...user,
+          createdAt: user.createdAt || new Date(),
+          name: user.firstName && user.lastName ? 
+            `${user.firstName} ${user.lastName}` : 
+            user.email || 'Unknown User',
+          email: user.email || 'No email',
+          status: user.registrationStatus || 'pending'
+        }));
+        
+        // Calculate stats from limited dataset (100 users sample)
+        recentUsersList.forEach(user => {
+          if (user.registrationStatus === 'pending') {
             pendingUsers++;
           }
           
           // Check for new users today
-          if (userData.createdAt) {
-            const userDate = new Date(userData.createdAt.seconds * 1000);
+          if (user.createdAt) {
+            const userDate = user.createdAt instanceof Date ? user.createdAt : new Date(user.createdAt);
             const today = new Date();
             if (userDate.toDateString() === today.toDateString()) {
               newUsersToday++;
@@ -123,14 +126,25 @@ const Dashboard = () => {
           }
         });
         
-        console.log('Users fetched:', totalUsers);
+        console.log('✅ Dashboard: Users fetched (optimized)', {
+          total: totalUsers,
+          recent: recentUsersData.length,
+          pending: pendingUsers,
+          newToday: newUsersToday
+        });
       } catch (err) {
         console.warn('Could not fetch users:', err.message);
       }
 
       try {
-        // Fetch bookings
-        const bookingsSnapshot = await getDocs(collection(db, 'bookings'));
+        console.log('📊 Dashboard: Fetching bookings with limit...');
+        // Fetch bookings with limit (first 200 for stats)
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          orderBy('createdAt', 'desc'),
+          limit(200)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
         totalBookings = bookingsSnapshot.size;
         
         // Calculate revenue and get recent bookings
@@ -177,10 +191,11 @@ const Dashboard = () => {
       }
 
       try {
-        // Fetch projects
-        const projectsSnapshot = await getDocs(collection(db, 'projects'));
-        totalProjects = projectsSnapshot.size;
-        console.log('Projects fetched:', totalProjects);
+        console.log('📊 Dashboard: Fetching projects with optimization...');
+        // Fetch projects (cached)
+        const projects = await fetchProjectsCached({ useCache: true });
+        totalProjects = projects.length;
+        console.log('✅ Dashboard: Projects fetched (cached):', totalProjects);
       } catch (err) {
         console.warn('Could not fetch projects:', err.message);
       }

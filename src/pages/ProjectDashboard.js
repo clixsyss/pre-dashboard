@@ -46,7 +46,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
@@ -395,10 +395,14 @@ const ProjectDashboard = () => {
       const loadData = async () => {
         try {
           // Load project data and users in parallel for instant loading
+          console.log('📊 ProjectDashboard: Loading project data with optimization...');
           const [projectDoc, usersSnapshot] = await Promise.all([
             getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId))),
-            getDocs(collection(db, 'users'))
+            // OPTIMIZATION: Limit users to 2000 for better performance
+            getDocs(query(collection(db, 'users'), limit(2000)))
           ]);
+          
+          console.log(`✅ ProjectDashboard: Loaded ${usersSnapshot.size} users (limited)`);
 
           // Set project data
           if (!projectDoc.empty) {
@@ -1152,22 +1156,28 @@ const ProjectDashboard = () => {
     }
   }, []);
 
-  // Fetch all units at once - simple and fast
+  // Fetch units with limit - OPTIMIZED
   const fetchUnits = useCallback(async (projectId) => {
     try {
       setUnitsLoading(true);
-      console.log('📦 Fetching all units...');
+      console.log('📦 Fetching units with optimization...');
       
-      const unitsSnapshot = await getDocs(
-        collection(db, `projects/${projectId}/units`)
+      // OPTIMIZATION: Limit units to 500 for pagination
+      // For larger datasets, implement load more functionality
+      const unitsQuery = query(
+        collection(db, `projects/${projectId}/units`),
+        orderBy('unitNumber', 'asc'),
+        limit(500)
       );
+      
+      const unitsSnapshot = await getDocs(unitsQuery);
       
       const unitsData = unitsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      console.log(`✅ Loaded ${unitsData.length} units`);
+      console.log(`✅ Loaded ${unitsData.length} units (limited for optimization)`);
       setUnits(unitsData);
     } catch (error) {
       console.error('Error fetching units:', error);

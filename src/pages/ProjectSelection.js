@@ -10,7 +10,7 @@ import {
   Settings as SettingsIcon,
   X
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,22 +46,30 @@ const ProjectSelection = () => {
     try {
       console.log('ProjectSelection: Starting to fetch projects...');
       setLoading(true);
+      console.log('📊 ProjectSelection: Fetching data with optimization...');
       
-      // Fetch projects
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      // OPTIMIZATION: Fetch projects with limit
+      const projectsQuery = query(collection(db, 'projects'), limit(50));
+      const projectsSnapshot = await getDocs(projectsQuery);
       const projectsData = projectsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      console.log('ProjectSelection: Fetched projects:', projectsData.length);
+      console.log('✅ ProjectSelection: Fetched projects:', projectsData.length);
       
-      // Fetch users to get real stats for each project
-      const usersSnapshot = await getDocs(collection(db, 'users'));
+      // OPTIMIZATION: Fetch limited users for stats (sample)
+      const usersQuery = query(
+        collection(db, 'users'),
+        limit(1000) // Limit to 1000 users for stats
+      );
+      const usersSnapshot = await getDocs(usersQuery);
       const usersData = usersSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log(`✅ ProjectSelection: Fetched ${usersData.length} users (limited for stats)`)
       
       // Calculate stats for each project
       const projectsWithStats = await Promise.all(projectsData.map(async (project) => {

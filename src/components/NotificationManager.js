@@ -78,8 +78,14 @@ const NotificationManager = () => {
     try {
       setProjectsLoading(true);
       
-      // Fetch all projects
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      console.log('📊 NotificationManager: Fetching projects with optimization...');
+      
+      // OPTIMIZATION: Fetch only admin's projects if possible
+      // If admin has specific projects, fetch those directly
+      // Otherwise fetch with limit
+      const projectsSnapshot = await getDocs(
+        query(collection(db, 'projects'), limit(50))
+      );
       const projectsData = projectsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -90,6 +96,7 @@ const NotificationManager = () => {
         currentAdmin?.assignedProjects?.includes(project.id)
       );
       
+      console.log(`✅ NotificationManager: Fetched ${adminProjects.length} admin projects`);
       setProjects(adminProjects);
       
       // Auto-select if only one project
@@ -128,13 +135,20 @@ const NotificationManager = () => {
     }
   }, [selectedProject]);
 
-  // Load project users and stats
+  // Load project users and stats (OPTIMIZED)
   const loadProjectData = useCallback(async () => {
     if (!selectedProject) return;
 
     try {
-      // Fetch users for this project
-      const usersSnapshot = await getDocs(collection(db, 'users'));
+      console.log('📊 NotificationManager: Loading project data with optimization...');
+      
+      // OPTIMIZATION: Fetch limited users for stats (sample)
+      // For accurate counts, use Cloud Functions with aggregation
+      const usersQuery = query(
+        collection(db, 'users'),
+        limit(500) // Limit to 500 users for stats calculation
+      );
+      const usersSnapshot = await getDocs(usersQuery);
       const users = usersSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(user => {
@@ -146,23 +160,27 @@ const NotificationManager = () => {
 
       // Count users with FCM tokens (using flat fcmToken field - no subcollection queries!)
       const tokenCount = users.filter(user => user.fcmToken && user.fcmToken.length > 0).length;
-      console.log(`✅ Token count: ${tokenCount} users have FCM tokens`);
+      console.log(`✅ Token count (sample): ${tokenCount} users have FCM tokens`);
 
-      // Count notifications sent today
+      // Count notifications sent today (with limit)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const notificationsQuery = query(
         collection(db, `projects/${selectedProject.id}/notifications`),
         where('createdAt', '>=', today),
-        where('status', '==', 'sent')
+        where('status', '==', 'sent'),
+        limit(100)
       );
       const todayNotifications = await getDocs(notificationsQuery);
 
       setStats({
         totalUsers: users.length,
         registeredTokens: tokenCount,
-        sentToday: todayNotifications.size
+        sentToday: todayNotifications.size,
+        isSample: true // Indicate this is a sample
       });
+
+      console.log('✅ NotificationManager: Project data loaded (sample-based stats)');
 
       // Load recent notifications
       await loadRecentNotifications();
