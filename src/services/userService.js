@@ -26,7 +26,7 @@ class UserService {
         projectId,
         useCache
       });
-
+      
       // Fetch projects for project name resolution (cached)
       const projects = await fetchProjectsCached({ useCache });
       const projectsMap = {};
@@ -45,7 +45,7 @@ class UserService {
             projectLocation: projectsMap[project.projectId]?.location || 'Unknown Location'
           }));
         }
-
+        
         return {
           ...user,
           enhancedProjects

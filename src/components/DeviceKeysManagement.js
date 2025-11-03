@@ -30,21 +30,77 @@ const DeviceKeysManagement = ({ projectId }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
+  // Search for users by name or email (like the Users page)
+  const searchUsers = useCallback(async (activeProjectId, searchQuery) => {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+
+      if (!searchQuery || searchQuery.length < 2) {
+        setDeviceKeys([]);
+        return;
+      }
+
+      // Get all users and filter by search term
+      const usersRef = collection(db, 'users');
+      const usersSnapshot = await getDocs(usersRef);
+      
+      const searchLower = searchQuery.toLowerCase();
+      const keysData = [];
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+        
+        // Check if user belongs to this project
+        const userProject = userData.projects?.find(p => p.projectId === activeProjectId);
+        
+        if (userProject) {
+          const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+          const email = userData.email || '';
+          
+          // Filter by search term
+          if (fullName.toLowerCase().includes(searchLower) || 
+              email.toLowerCase().includes(searchLower)) {
+            keysData.push({
+              id: userDoc.id,
+              userId: userDoc.id,
+              userName: fullName || 'Unknown',
+              email: email || 'No email',
+              deviceKey: userData.deviceKey || 'Not set',
+              unit: userProject.unit || 'N/A',
+              role: userProject.role || 'N/A',
+              lastLogin: userData.lastLoginAt || userData.lastLogin || null,
+              deviceKeyUpdatedAt: userData.deviceKeyUpdatedAt || null,
+              createdAt: userData.createdAt || null
+            });
+          }
+        }
+      }
+
+      setDeviceKeys(keysData);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setErrorMessage('Failed to search users. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const loadDeviceKeys = useCallback(async (activeProjectId) => {
     try {
       setLoading(true);
       setErrorMessage('');
 
-      // Get all users in the project
+      // OPTIMIZATION: Only load users WITH device keys (not all users)
       const usersRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersRef);
+      const usersQuery = query(usersRef, where('deviceKey', '!=', null));
+      const usersSnapshot = await getDocs(usersQuery);
       
       const keysData = [];
       for (const userDoc of usersSnapshot.docs) {
         const userData = userDoc.data();
         
         // Check if user belongs to this project
-        // Projects is an array of objects, not an object with project IDs as keys
         const userProject = userData.projects?.find(p => p.projectId === activeProjectId);
         
         if (userProject) {
@@ -133,6 +189,7 @@ const DeviceKeysManagement = ({ projectId }) => {
     }
   }, [filter]);
 
+  // Load data on mount - NO real-time listeners (too expensive)
   useEffect(() => {
     const selectedProjectData = localStorage.getItem('adminSelectedProject');
     if (!selectedProjectData) return;
@@ -142,115 +199,38 @@ const DeviceKeysManagement = ({ projectId }) => {
     
     const activeProjectId = project?.id || projectId;
     if (!activeProjectId) {
-      console.log('⚠️ No project ID, skipping real-time listener setup');
+      console.log('⚠️ No project ID, skipping data load');
       return;
     }
 
-    console.log('🔄 Setting up real-time listeners for device keys and reset requests...');
+    console.log('📊 Loading device keys and reset requests (no real-time listener to save costs)...');
 
-    // Set up real-time listener for ALL USERS (to get device keys)
-    const usersRef = collection(db, 'users');
-    const usersQuery = query(usersRef);
+    // Load data once on mount (no expensive real-time listeners)
+    loadDeviceKeys(activeProjectId);
+    loadResetRequests(activeProjectId);
 
-    const unsubscribeUsers = onSnapshot(
-      usersQuery,
-      (snapshot) => {
-        console.log('📡 Real-time update received for users - processing device keys...');
-        const keysData = [];
-        
-        snapshot.docs.forEach(userDoc => {
-          const userData = userDoc.data();
-          
-          // Check if user belongs to this project
-          const userProject = userData.projects?.find(p => p.projectId === activeProjectId);
-          
-          if (userProject) {
-            keysData.push({
-              id: userDoc.id,
-              userId: userDoc.id,
-              userName: `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown',
-              email: userData.email || 'No email',
-              deviceKey: userData.deviceKey || 'Not set',
-              unit: userProject.unit || 'N/A',
-              role: userProject.role || 'N/A',
-              lastLogin: userData.lastLoginAt || userData.lastLogin || null,
-              deviceKeyUpdatedAt: userData.deviceKeyUpdatedAt || null,
-              createdAt: userData.createdAt || null
-            });
-          }
-        });
+    // COST OPTIMIZATION: No real-time listeners - admin can use refresh button if needed
+  }, [projectId, filter, loadDeviceKeys, loadResetRequests]);
 
-        setDeviceKeys(keysData);
-        console.log('✅ Real-time device keys updated:', keysData.length, 'users');
-      },
-      (error) => {
-        console.error('❌ Real-time listener error for users:', error);
-        setErrorMessage('Error loading real-time device keys. Please refresh the page.');
+  // Debounced search effect
+  useEffect(() => {
+    const activeProjectId = selectedProject?.id || projectId;
+    if (!activeProjectId) return;
+
+    // Debounce search - wait 500ms after user stops typing
+    const searchTimeout = setTimeout(() => {
+      if (searchTerm && searchTerm.length >= 2) {
+        // Search when user types 2+ characters
+        searchUsers(activeProjectId, searchTerm);
+      } else if (!searchTerm) {
+        // Load users with device keys when search is cleared
+        loadDeviceKeys(activeProjectId);
       }
-    );
+    }, 500);
 
-    // Set up real-time listener for reset requests
-    const requestsRef = collection(db, 'projects', activeProjectId, 'deviceKeyResetRequests');
-    const requestsQuery = query(requestsRef);
-
-    const unsubscribeRequests = onSnapshot(
-      requestsQuery,
-      async (snapshot) => {
-        console.log('📡 Real-time update received - processing requests...');
-        let fetchedRequests = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Fetch user names for each request
-        for (let request of fetchedRequests) {
-          try {
-            const userSnap = await getDocs(query(collection(db, 'users'), where('__name__', '==', request.userId)));
-            if (!userSnap.empty) {
-              const userData = userSnap.docs[0].data();
-              request.userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
-              request.userEmail = userData.email || '';
-              
-              // Get user's unit in the project
-              const userProject = userData.projects?.find(p => p.projectId === request.projectId);
-              request.userUnit = userProject?.unit || 'N/A';
-              request.userRole = userProject?.role || 'N/A';
-            }
-          } catch (err) {
-            console.error('Error fetching user data:', err);
-          }
-        }
-
-        // Apply status filter
-        if (filter !== 'all') {
-          fetchedRequests = fetchedRequests.filter(req => req.status === filter);
-        }
-
-        // Sort by requestedAt descending (newest first)
-        fetchedRequests.sort((a, b) => {
-          const aTime = a.requestedAt?.toMillis() || 0;
-          const bTime = b.requestedAt?.toMillis() || 0;
-          return bTime - aTime;
-        });
-
-        setRequests(fetchedRequests);
-        setLoading(false);
-        console.log('✅ Real-time requests updated:', fetchedRequests.length, 'requests');
-      },
-      (error) => {
-        console.error('❌ Real-time listener error for requests:', error);
-        setErrorMessage('Error loading real-time updates. Please refresh the page.');
-        setLoading(false);
-      }
-    );
-
-    // Cleanup both listeners on unmount
-    return () => {
-      console.log('🔌 Cleaning up real-time listeners...');
-      unsubscribeUsers();
-      unsubscribeRequests();
-    };
-  }, [projectId, filter]);
+    return () => clearTimeout(searchTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]);
 
   // Reset to page 1 when search term changes
   useEffect(() => {

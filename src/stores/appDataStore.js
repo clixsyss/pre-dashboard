@@ -12,11 +12,11 @@ import { create } from 'zustand';
 import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// Cache configuration
+// Cache configuration (Extended for cost optimization)
 const CACHE_DURATION = {
-  users: 10 * 60 * 1000, // 10 minutes
-  projects: 15 * 60 * 1000, // 15 minutes (projects change rarely)
-  counts: 30 * 60 * 1000 // 30 minutes (counts update slowly)
+  users: 24 * 60 * 60 * 1000, // 24 hours
+  projects: 7 * 24 * 60 * 60 * 1000, // 7 days (projects rarely change)
+  counts: 24 * 60 * 60 * 1000 // 24 hours
 };
 
 export const useAppDataStore = create((set, get) => ({

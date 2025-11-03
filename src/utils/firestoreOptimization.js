@@ -10,7 +10,7 @@ import { db } from '../config/firebase';
 
 // In-memory cache with timestamps
 const queryCache = new Map();
-const DEFAULT_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours (extended for cost optimization)
 const DEFAULT_PAGE_SIZE = 50;
 
 /**

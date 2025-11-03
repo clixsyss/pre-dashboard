@@ -36,16 +36,48 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
-    // Users collection - TEMPORARY: Open for iOS registration workaround
-    match /users/{userId} {
-      allow read: if true;
-      allow write: if true; // Temporarily allow all writes for registration
+    // Helper function to check if user is deleted
+    function isUserDeleted(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.isDeleted == true;
     }
     
-    // Allow listing users collection (needed for admin dashboard)
-    match /users {
-      allow list: if request.auth != null && 
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null && 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Users collection - Updated with soft delete support
+    match /users/{userId} {
+      // Allow read if:
+      // 1. User is reading their own data, OR
+      // 2. User is an admin
+      allow read: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+      
+      // Allow create if authenticated (registration)
+      allow create: if request.auth != null;
+      
+      // Allow update if:
+      // 1. User is updating their own account (including soft delete), OR
+      // 2. User is an admin (for restore/management)
+      allow update: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+      
+      // Only admins can hard delete (but we use soft delete instead)
+      allow delete: if isAdmin();
+    }
+    
+    // Allow listing users collection (needed for admin dashboard and user search)
+    match /users {
+      // Admins can list all users
+      // Regular users can list for search functionality (but read rules still apply per document)
+      allow list: if request.auth != null;
+    }
+    
+    // User notification read status subcollection
+    match /users/{userId}/notificationReadStatus/{notificationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // Projects collection - allow public read access for registration
@@ -87,7 +119,18 @@ service cloud.firestore {
     }
     
     // PROJECT-SPECIFIC COLLECTIONS - New Architecture
-    // These rules allow authenticated users to access data within specific projects
+    // Block deleted users from accessing any project data
+    function canAccessProject(projectId) {
+      return request.auth != null && 
+        !isUserDeleted(request.auth.uid) &&
+        (isAdmin() || userHasProjectAccess(projectId));
+    }
+    
+    function userHasProjectAccess(projectId) {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.projects != null && 
+        userDoc.data.projects.hasAny([projectId]);
+    }
     
     // Project Users - users can access user data within their project
     match /projects/{projectId}/users/{userId} {
@@ -101,9 +144,10 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
-    // Project Sports - allow authenticated users to read/write within project
+    // Project Sports - block deleted users
     match /projects/{projectId}/sports/{sportId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     // Allow listing project sports
@@ -111,9 +155,10 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
-    // Project Courts - allow authenticated users to read/write within project
+    // Project Courts - block deleted users
     match /projects/{projectId}/courts/{courtId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     // Allow listing project courts
@@ -121,9 +166,10 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
-    // Project Academies - allow authenticated users to read/write within project
+    // Project Academies - block deleted users
     match /projects/{projectId}/academies/{academyId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     // Allow listing project academies
@@ -143,9 +189,10 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
-    // Project Service Categories - allow authenticated users to read/write within project
+    // Project Service Categories - block deleted users
     match /projects/{projectId}/serviceCategories/{categoryId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     // Allow listing project service categories
@@ -163,9 +210,10 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
     
-    // Project Request Categories - allow authenticated users to read/write within project
+    // Project Request Categories - block deleted users
     match /projects/{projectId}/requestCategories/{categoryId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow write: if isAdmin();
     }
     
     // Allow listing project request categories
@@ -173,9 +221,12 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
-    // Project Request Submissions - allow authenticated users to read/write within project
+    // Project Request Submissions - block deleted users
     match /projects/{projectId}/requestSubmissions/{submissionId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow create: if canAccessProject(projectId);
+      allow update, delete: if isAdmin() || 
+        (request.auth.uid == resource.data.userId && !isUserDeleted(request.auth.uid));
     }
     
     // Allow listing project request submissions
@@ -203,9 +254,12 @@ service cloud.firestore {
       allow list, get: if request.auth != null;
     }
     
-    // Project Complaints - allow authenticated users to read/write within project
+    // Project Complaints - block deleted users
     match /projects/{projectId}/complaints/{complaintId} {
-      allow read, write: if request.auth != null;
+      allow read: if canAccessProject(projectId) || isAdmin();
+      allow create: if canAccessProject(projectId);
+      allow update, delete: if isAdmin() || 
+        (request.auth.uid == resource.data.userId && !isUserDeleted(request.auth.uid));
     }
     
     // Allow listing project complaints

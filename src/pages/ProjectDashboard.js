@@ -46,7 +46,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc, setDoc, serverTimestamp, onSnapshot, limit, startAfter } from 'firebase/firestore';
+import userService from '../services/userService';
 import { db } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
@@ -94,6 +95,7 @@ const ProjectDashboard = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [migrationStatusFilter, setMigrationStatusFilter] = useState('all');
+  const [deletionStatusFilter, setDeletionStatusFilter] = useState('active'); // active, deleted, all
   const [activeTab, setActiveTab] = useState('dashboard');
   const [servicesSubTab, setServicesSubTab] = useState('categories');
   const [requestsSubTab, setRequestsSubTab] = useState('categories');
@@ -123,6 +125,8 @@ const ProjectDashboard = () => {
   const [deviceResetRequests, setDeviceResetRequests] = useState([]);
   const [units, setUnits] = useState([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitsLastDoc, setUnitsLastDoc] = useState(null);
+  const [unitsHasMore, setUnitsHasMore] = useState(false);
   const [unitRequests, setUnitRequests] = useState([]);
   const [unitRequestsLoading, setUnitRequestsLoading] = useState(false);
   
@@ -275,7 +279,7 @@ const ProjectDashboard = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(50); // Default to 50 for better performance
 
   // Add User modal state
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -439,8 +443,16 @@ const ProjectDashboard = () => {
 
   // Memoized filtered users for better performance
   const filteredUsers = useMemo(() => {
-    if (searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all') {
+    if (searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all' || deletionStatusFilter !== 'all') {
       let filtered = [...projectUsers];
+
+      // Deletion status filter (active, deleted, all)
+      if (deletionStatusFilter === 'active') {
+        filtered = filtered.filter(user => !user.isDeleted);
+      } else if (deletionStatusFilter === 'deleted') {
+        filtered = filtered.filter(user => user.isDeleted);
+      }
+      // If deletionStatusFilter === 'all', show all users
 
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -486,7 +498,7 @@ const ProjectDashboard = () => {
     } else {
       return projectUsers;
     }
-  }, [searchTerm, statusFilter, userStatusFilter, migrationStatusFilter, projectUsers]);
+  }, [searchTerm, statusFilter, userStatusFilter, migrationStatusFilter, deletionStatusFilter, projectUsers]);
 
   // Filter users function - now just returns the memoized value
   const filterUsers = useCallback(() => {
@@ -641,20 +653,7 @@ const ProjectDashboard = () => {
   );
 
   const pendingDeviceKeyResetRequestsCount = useMemo(() => {
-    const count = deviceResetRequests?.filter(request => {
-      const isPending = request.status === 'pending';
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`   Checking request ${request.id}:`, { status: request.status, isPending });
-      }
-      return isPending;
-    }).length || 0;
-    
-    console.log('🔢 Calculating pendingDeviceKeyResetRequestsCount:', {
-      total: deviceResetRequests?.length || 0,
-      pending: count,
-      statuses: deviceResetRequests?.map(r => r.status).join(', ') || 'none'
-    });
-    
+    const count = deviceResetRequests?.filter(request => request.status === 'pending').length || 0;
     return count;
   }, [deviceResetRequests]);
 
@@ -674,17 +673,9 @@ const ProjectDashboard = () => {
 
   // Update all notification counts - now just logs analytics (counts are memoized)
   const updateAllNotificationCounts = useCallback(() => {
-
-    // Reduced logging for better performance - only log in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📊 Dashboard Analytics Update:', {
-        users: { total: projectUsers.length, pending: pendingUsersCount },
-        bookings: { total: projectBookings?.length || 0, upcoming: upcomingBookingsCount },
-        orders: { total: projectOrders?.length || 0, pending: pendingOrdersCount },
-        complaints: { total: complaints?.length || 0, open: openComplaintsCount }
-      });
-    }
-  }, [pendingUsersCount, upcomingBookingsCount, pendingOrdersCount, openComplaintsCount, projectUsers, projectOrders, projectBookings, complaints]);
+    // Analytics update (silent - only log errors)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Count pending users (legacy function for compatibility)
   const updatePendingUsersCount = useCallback(() => {
@@ -746,11 +737,6 @@ const ProjectDashboard = () => {
           return isSuperAdmin() ? pendingAdminsCount : 0;
         case 'device_keys':
           // Show pending device reset requests
-          console.log('🔔 Device Keys Count Check:', {
-            total: deviceResetRequests?.length || 0,
-            pending: pendingDeviceKeyResetRequestsCount,
-            requests: deviceResetRequests
-          });
           return pendingDeviceKeyResetRequestsCount;
         case 'units':
           // Show pending unit requests
@@ -769,12 +755,8 @@ const ProjectDashboard = () => {
       }
     })();
     
-    // Log for debugging device_keys specifically
-    if (serviceId === 'device_keys' && count > 0) {
-      console.log('✅ Device Keys indicator should show:', count);
-    }
-    
     return count;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pendingUsersCount, 
     pendingServiceRequestsCount, 
@@ -786,13 +768,6 @@ const ProjectDashboard = () => {
     pendingGatePassCount,
     pendingDeviceKeyResetRequestsCount,
     pendingUnitRequestsCount,
-    deviceResetRequests,
-    projectBookings,
-    requestSubmissions,
-    stores,
-    newsItems,
-    adsItems,
-    guards,
     pendingAdminsCount,
     isSuperAdmin
   ]);
@@ -801,6 +776,25 @@ const ProjectDashboard = () => {
     // Reset to page 1 when filters change
     setCurrentPage(1);
   }, [filteredUsers]);
+
+  // Debounced search for units (like the app)
+  useEffect(() => {
+    if (!projectId) return;
+    
+    // Debounce search - wait 500ms after user stops typing
+    const searchTimeout = setTimeout(() => {
+      if (unitSearchTerm && unitSearchTerm.length >= 2) {
+        // Search Firestore when user types 2+ characters
+        searchUnitsInFirestore(projectId, unitSearchTerm);
+      } else if (!unitSearchTerm) {
+        // Load first 50 units when search is cleared
+        fetchUnits(projectId);
+      }
+    }, 500);
+    
+    return () => clearTimeout(searchTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitSearchTerm, projectId]);
 
   useEffect(() => {
     // Reset to page 1 when units filters change
@@ -1156,18 +1150,17 @@ const ProjectDashboard = () => {
     }
   }, []);
 
-  // Fetch units with limit - OPTIMIZED
-  const fetchUnits = useCallback(async (projectId) => {
+  // Search units dynamically from Firestore (like the app)
+  const searchUnitsInFirestore = useCallback(async (projectId, searchTerm) => {
     try {
       setUnitsLoading(true);
-      console.log('📦 Fetching units with optimization...');
       
-      // OPTIMIZATION: Limit units to 500 for pagination
-      // For larger datasets, implement load more functionality
+      // Search by unitNum field using range query
       const unitsQuery = query(
         collection(db, `projects/${projectId}/units`),
-        orderBy('unitNumber', 'asc'),
-        limit(500)
+        where('unitNum', '>=', searchTerm),
+        where('unitNum', '<=', searchTerm + '\uf8ff'),
+        limit(50)
       );
       
       const unitsSnapshot = await getDocs(unitsQuery);
@@ -1177,15 +1170,71 @@ const ProjectDashboard = () => {
         ...doc.data()
       }));
       
-      console.log(`✅ Loaded ${unitsData.length} units (limited for optimization)`);
       setUnits(unitsData);
+      setUnitsHasMore(false); // No pagination for search results
+      setUnitsLastDoc(null);
+      
+      console.log(`✅ Search results: ${unitsData.length} units found for "${searchTerm}"`);
     } catch (error) {
-      console.error('Error fetching units:', error);
+      console.error('❌ Error searching units:', error);
       setUnits([]);
+      setUnitsHasMore(false);
     } finally {
       setUnitsLoading(false);
     }
   }, []);
+
+  // Fetch units with limit - OPTIMIZED
+  const fetchUnits = useCallback(async (projectId, isLoadMore = false) => {
+    try {
+      setUnitsLoading(true);
+      
+      // OPTIMIZATION: Load only 50 units at a time
+      let unitsQuery;
+      
+      if (isLoadMore && unitsLastDoc) {
+        unitsQuery = query(
+          collection(db, `projects/${projectId}/units`),
+          startAfter(unitsLastDoc),
+          limit(50)
+        );
+      } else {
+        unitsQuery = query(
+          collection(db, `projects/${projectId}/units`),
+          limit(50)
+        );
+      }
+      
+      const unitsSnapshot = await getDocs(unitsQuery);
+      
+      const unitsData = unitsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Update state
+      if (isLoadMore) {
+        setUnits(prev => [...prev, ...unitsData]);
+      } else {
+        setUnits(unitsData);
+      }
+      
+      // Track pagination state
+      const lastVisible = unitsSnapshot.docs[unitsSnapshot.docs.length - 1];
+      setUnitsLastDoc(lastVisible);
+      setUnitsHasMore(unitsSnapshot.docs.length === 50); // Has more if we got exactly 50
+      
+      console.log(`✅ Units loaded: ${unitsData.length}`);
+    } catch (error) {
+      console.error('❌ Error fetching units:', error);
+      if (!isLoadMore) {
+        setUnits([]);
+        setUnitsHasMore(false);
+      }
+    } finally {
+      setUnitsLoading(false);
+    }
+  }, [unitsLastDoc]);
 
   const fetchUnitRequests = useCallback(async (projectId) => {
     try {
@@ -1253,7 +1302,8 @@ const ProjectDashboard = () => {
 
       loadAllData();
     }
-      }, [projectId, dataLoaded, fetchBookings, fetchOrders, fetchNotifications, fetchComplaints, fetchSupportTickets, fetchFines, fetchGatePasses, fetchServiceBookings, fetchRequestSubmissions, fetchRequestCategories, fetchNews, fetchAds, fetchAcademies, fetchCourts, fetchGuards, fetchStores, fetchServiceCategories, fetchProjectAdmins, fetchPendingAdmins, fetchDeviceResetRequests, fetchUnits, fetchUnitRequests]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, dataLoaded]);
 
   // Set up real-time listener for device reset requests (same as other tabs)
   useEffect(() => {
@@ -1281,14 +1331,6 @@ const ProjectDashboard = () => {
         });
         
         setDeviceResetRequests(requestsData);
-        console.log('📡 Device reset requests updated:', requestsData.length);
-        console.log('📊 Device reset requests data:', requestsData);
-        console.log('📊 Pending count:', requestsData.filter(r => r.status === 'pending').length);
-        
-        // Log each request status for debugging
-        requestsData.forEach(r => {
-          console.log(`   Request ${r.id}: status="${r.status}", user=${r.userId}`);
-        });
       },
       (error) => {
         console.error('❌ Error in device reset requests listener:', error);
@@ -1998,8 +2040,61 @@ const ProjectDashboard = () => {
           handleRemoveUserFromProject(user);
         }
         break;
+      case 'soft_delete':
+        if (window.confirm(`Delete account for ${user.firstName} ${user.lastName}? This will soft-delete and revoke access to all projects.`)) {
+          handleSoftDeleteUser(user);
+        }
+        break;
+      case 'restore':
+        if (window.confirm(`Restore account for ${user.firstName} ${user.lastName}?`)) {
+          handleRestoreUser(user);
+        }
+        break;
       default:
         break;
+    }
+  };
+
+  // Soft delete user (global) and update local project list
+  const handleSoftDeleteUser = async (user) => {
+    try {
+      const softDeleteData = {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: currentAdmin?.uid || 'admin',
+        registrationStatus: 'deleted',
+        projects: [],
+        updatedAt: new Date()
+      };
+
+      await userService.updateUser(user.id, softDeleteData);
+
+      // Update local project users state
+      setProjectUsers(prev => prev.map(u => u.id === user.id ? { ...u, ...softDeleteData } : u));
+    } catch (e) {
+      console.error('Soft delete failed:', e);
+      alert('Failed to delete user. Please try again.');
+    }
+  };
+
+  // Restore user (global) and update local project list
+  const handleRestoreUser = async (user) => {
+    try {
+      const restoreData = {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        restoredAt: new Date(),
+        restoredBy: currentAdmin?.uid || 'admin',
+        registrationStatus: 'pending',
+        updatedAt: new Date()
+      };
+
+      await userService.updateUser(user.id, restoreData);
+      setProjectUsers(prev => prev.map(u => u.id === user.id ? { ...u, ...restoreData } : u));
+    } catch (e) {
+      console.error('Restore failed:', e);
+      alert('Failed to restore user.');
     }
   };
 
@@ -3121,12 +3216,13 @@ const ProjectDashboard = () => {
     }
   };
 
-  // Pagination calculations
-  const totalUsersCount = filteredUsers.length;
+  // Pagination calculations (with safety check)
+  const safeFilteredUsers = Array.isArray(filteredUsers) ? filteredUsers : [];
+  const totalUsersCount = safeFilteredUsers.length;
   const totalPages = Math.ceil(totalUsersCount / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+  const paginatedUsers = safeFilteredUsers.slice(startIndex, endIndex);
   
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -4828,6 +4924,42 @@ const ProjectDashboard = () => {
                     </PermissionGate>
                   </div>
 
+                  {/* Deletion Status Tabs */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 mb-4">
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        onClick={() => setDeletionStatusFilter('active')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          deletionStatusFilter === 'active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Active Users ({projectUsers.filter(u => !u.isDeleted).length})
+                      </button>
+                      <button
+                        onClick={() => setDeletionStatusFilter('deleted')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          deletionStatusFilter === 'deleted'
+                            ? 'bg-red-100 text-red-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        Deleted Users ({projectUsers.filter(u => u.isDeleted).length})
+                      </button>
+                      <button
+                        onClick={() => setDeletionStatusFilter('all')}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          deletionStatusFilter === 'all'
+                            ? 'bg-gray-100 text-gray-700'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        All Users ({projectUsers.length})
+                      </button>
+                    </div>
+                  </div>
+
                   {/* User Status Tabs */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1">
                     <div className="grid grid-cols-5 gap-1">
@@ -4984,13 +5116,14 @@ const ProjectDashboard = () => {
                   </div>
                   
                   {/* Clear Filters Button */}
-                  {(searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all') && (
+                  {(searchTerm || statusFilter !== 'all' || userStatusFilter !== 'all' || migrationStatusFilter !== 'all' || deletionStatusFilter !== 'active') && (
                     <button
                       onClick={() => {
                         setSearchTerm('');
                         setStatusFilter('all');
                         setUserStatusFilter('all');
                         setMigrationStatusFilter('all');
+                        setDeletionStatusFilter('active');
                       }}
                       className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center font-medium"
                       title="Reset all filters to show all users"
@@ -5008,10 +5141,9 @@ const ProjectDashboard = () => {
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
                     className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
+                    <option value={50}>50 (Recommended)</option>
                     <option value={20}>20</option>
-                    <option value={50}>50</option>
                     <option value={100}>100</option>
-                    <option value={200}>200</option>
                   </select>
                   <span className="text-sm text-gray-500">per page</span>
                 </div>
@@ -5269,17 +5401,42 @@ const ProjectDashboard = () => {
                                           </button>
                                         </PermissionGate>
                                       )}
+
+                                      {/* Soft Delete / Restore */}
+                                      {!user.isDeleted ? (
+                                        <PermissionGate entity="users" action="delete">
+                                          <button
+                                            onClick={() => handleUserAction('soft_delete', user)}
+                                            className="group relative text-red-600 hover:text-red-900 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
+                                            title="Soft delete user (revoke all access)"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                            <span className="text-xs font-medium hidden xl:inline">Delete</span>
+                                          </button>
+                                        </PermissionGate>
+                                      ) : (
+                                        <PermissionGate entity="users" action="write">
+                                          <button
+                                            onClick={() => handleUserAction('restore', user)}
+                                            className="group relative text-green-600 hover:text-green-900 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1"
+                                            title="Restore user account"
+                                          >
+                                            <UserCheck className="h-4 w-4" />
+                                            <span className="text-xs font-medium hidden xl:inline">Restore</span>
+                                          </button>
+                                        </PermissionGate>
+                                      )}
                                     </>
                                   )}
 
                                   <PermissionGate entity="users" action="delete">
                                     <button
                                       onClick={() => handleUserAction('remove', user)}
-                                className="group relative text-red-600 hover:text-red-900 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
-                                      title="Remove user from this project"
+                                      className="group relative text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1"
+                                      title="Remove user from this project only"
                               >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="text-xs font-medium hidden xl:inline">Remove</span>
+                                      <Unlink className="h-4 w-4" />
+                                      <span className="text-xs font-medium hidden xl:inline">Remove from Project</span>
                               </button>
                                   </PermissionGate>
                             </div>
@@ -5969,8 +6126,42 @@ const ProjectDashboard = () => {
                     </table>
                   </div>
                   
-                  {/* Pagination Controls */}
+                  {/* Load More Button for Units */}
+                  {!unitSearchTerm && unitsHasMore && (
+                    <div className="bg-gradient-to-r from-red-50 to-pink-50 px-6 py-4 border-t-2 border-red-200 text-center">
+                      <button
+                        onClick={() => fetchUnits(projectId, true)}
+                        disabled={unitsLoading}
+                        className="inline-flex items-center px-6 py-3 border-2 border-red-600 text-sm font-semibold rounded-lg text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+                      >
+                        {unitsLoading ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Loading more units...
+                          </>
+                        ) : (
+                          <>
+                            <Building className="w-5 h-5 mr-2" />
+                            Load More Units (50)
+                          </>
+                        )}
+                      </button>
+                      <p className="text-xs text-gray-600 mt-2 font-medium">
+                        📦 Showing {units.length} units. Click to load 50 more.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Pagination Controls (for filtered view only - when using search/filters) */}
                   {(() => {
+                    // Only show pagination if user is filtering (not for load more)
+                    if (!unitSearchTerm && unitBuildingFilter === 'all' && unitOccupancyFilter === 'all' && unitFloorFilter === 'all' && unitDeveloperFilter === 'all') {
+                      return null; // Let Load More button handle pagination
+                    }
+                    
                     // Calculate filtered units for pagination (use enrichedUnits)
                     let filtered = enrichedUnits;
                     

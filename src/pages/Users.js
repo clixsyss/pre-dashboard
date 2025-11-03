@@ -42,6 +42,9 @@ const Users = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active'); // active, deleted, all
   const [approvalFilter, setApprovalFilter] = useState('all'); // all, pending, approved, rejected
+  const [hasMore, setHasMore] = useState(false);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -65,8 +68,9 @@ const Users = () => {
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const filterUsers = useCallback(() => {
-    let filtered = users;
-    console.log('Filtering users:', { usersCount: users.length, searchTerm, roleFilter, statusFilter, approvalFilter });
+    const base = Array.isArray(users) ? users : [];
+    let filtered = base;
+    console.log('Filtering users:', { usersCount: base.length, searchTerm, roleFilter, statusFilter, approvalFilter });
 
     // Apply status filter (active, deleted, all)
     if (statusFilter === 'active') {
@@ -111,9 +115,28 @@ const Users = () => {
     setFilteredUsers(filtered);
   }, [users, searchTerm, roleFilter, statusFilter, approvalFilter]);
 
+  // OPTIMIZATION: Don't load all users on mount - wait for user to search
   useEffect(() => {
-    fetchUsersAndProjects();
+    // Only load projects, not users
+    fetchProjects();
   }, []);
+  
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      const projectsData = projectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProjects(projectsData);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+      setError('Failed to load projects');
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (users.length > 0) {
@@ -123,31 +146,57 @@ const Users = () => {
     }
   }, [users, searchTerm, roleFilter, statusFilter, approvalFilter, filterUsers]);
 
-  const fetchUsersAndProjects = async () => {
+  // OPTIMIZATION: Fetch users only when searching (not on mount)
+  const fetchUsersAndProjects = async (isLoadMore = false) => {
     try {
+      if (isLoadMore) {
+        setLoadingMore(true);
+      } else {
       setLoading(true);
+        setLastDoc(null);
+      }
       
-      // Fetch users and projects in parallel
-      const [usersData, projectsSnapshot] = await Promise.all([
-        userService.getAllUsers(),
-        getDocs(collection(db, 'projects'))
-      ]);
+      // Fetch users with search term if provided
+      let fetchedUsers = [];
+      let newLastDoc = null;
+      let hasMoreResults = false;
       
-      console.log('Fetched users:', usersData);
-      setUsers(usersData);
+      if (searchTerm && searchTerm.length >= 2) {
+        // Search mode - no pagination
+        const usersResult = await userService.searchUsers(searchTerm);
+        fetchedUsers = Array.isArray(usersResult) ? usersResult : (usersResult?.users || []);
+        hasMoreResults = false; // Search doesn't support load more
+      } else {
+        // Pagination mode - load 50 at a time
+        const options = {
+          pageSize: 50,
+          useCache: !isLoadMore, // Use cache only for first load
+          lastDoc: isLoadMore ? lastDoc : null
+        };
+        
+        const usersResult = await userService.getAllUsers(options);
+        const resultUsers = Array.isArray(usersResult) ? usersResult : (usersResult?.users || []);
+        fetchedUsers = isLoadMore ? [...users, ...resultUsers] : resultUsers;
+        newLastDoc = usersResult?.lastDoc || null;
+        hasMoreResults = usersResult?.hasMore || false;
+      }
       
-      // Map projects to an array with id and data
-      const projectsData = projectsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Fetched projects:', projectsData);
-      setProjects(projectsData);
+      console.log('Fetched users:', fetchedUsers.length, { isLoadMore, hasMore: hasMoreResults });
+      setUsers(fetchedUsers);
+      setLastDoc(newLastDoc);
+      setHasMore(hasMoreResults);
     } catch (err) {
-      console.error('Error fetching users and projects:', err);
-      setError('Failed to load data');
+      console.error('Error fetching users:', err);
+      setError('Failed to load users');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+  
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchUsersAndProjects(true);
     }
   };
 
@@ -587,8 +636,67 @@ const Users = () => {
         </button>
       </div>
 
-      {/* Filters and Search */}
+      {/* Filters, Tabs and Search */}
       <div className="bg-white rounded-lg shadow-soft p-6">
+        {/* Status Tabs - Prominent Display */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                statusFilter === 'active'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <UsersIcon className="w-5 h-5" />
+                <span>Active Users</span>
+                <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${
+                  statusFilter === 'active' ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {(Array.isArray(users) ? users : []).filter(u => !u.isDeleted).length}
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={() => setStatusFilter('deleted')}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                statusFilter === 'deleted'
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <UserX className="w-5 h-5" />
+                <span>Deleted Users</span>
+                <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${
+                  statusFilter === 'deleted' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {(Array.isArray(users) ? users : []).filter(u => u.isDeleted).length}
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                statusFilter === 'all'
+                  ? 'border-gray-800 text-gray-800'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <UsersIcon className="w-5 h-5" />
+                <span>All Users</span>
+                <span className={`ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium ${
+                  statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {users.length}
+                </span>
+              </div>
+            </button>
+          </nav>
+        </div>
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <div className="flex-1">
@@ -596,9 +704,22 @@ const Users = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search users by name, email, or phone..."
+                placeholder="Search users by name, email, or phone (min 2 characters)..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchTerm(value);
+                  // Auto-search when user types (debounced by useEffect)
+                  if (value.length >= 2 || value.length === 0) {
+                    // Trigger fetch
+                    if (value.length >= 2) {
+                      fetchUsersAndProjects(false);
+                    } else {
+                      setUsers([]); // Clear users when search cleared
+                      setHasMore(false);
+                    }
+                  }
+                }}
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
@@ -615,19 +736,6 @@ const Users = () => {
               <option value="user">User</option>
               <option value="admin">Admin</option>
               <option value="moderator">Moderator</option>
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div className="sm:w-48">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="active">Active Users</option>
-              <option value="deleted">Deleted Users</option>
-              <option value="all">All Users</option>
             </select>
           </div>
 
@@ -891,8 +999,33 @@ const Users = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
-                    {searchTerm || roleFilter !== 'all' || approvalFilter !== 'all' ? 'No users match your filters' : 'No users found'}
+                  <td colSpan="8" className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <UsersIcon className="h-16 w-16 text-gray-300 mb-4" />
+                      {!searchTerm && users.length === 0 ? (
+                        <>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">User Management</h3>
+                          <p className="text-gray-500 mb-4">Search for specific users or load the first batch</p>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => fetchUsersAndProjects(false)}
+                              className="inline-flex items-center px-4 py-2 border border-primary-600 text-sm font-medium rounded-lg text-primary-600 bg-white hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+                            >
+                              <UsersIcon className="w-4 h-4 mr-2" />
+                              Load First 50 Users
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-4">
+                            💡 Search is recommended for better performance
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                          <p className="text-gray-500">Try adjusting your search or filters</p>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
@@ -900,8 +1033,39 @@ const Users = () => {
           </table>
         </div>
         
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
+        {/* Load More Button (replaces pagination for optimized loading) */}
+        {!searchTerm && hasMore && (
+          <div className="bg-white px-4 py-4 border-t border-gray-200 text-center">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="inline-flex items-center px-6 py-3 border border-primary-600 text-sm font-medium rounded-lg text-primary-600 bg-white hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loadingMore ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading more users...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Load More Users (50)
+                </>
+              )}
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              💡 Showing {users.length} users. Click to load 50 more.
+            </p>
+          </div>
+        )}
+        
+        {/* Standard Pagination Controls (for filtered results) */}
+        {totalPages > 1 && searchTerm && (
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
