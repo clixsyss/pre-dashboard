@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Home, 
   Search, 
@@ -11,8 +11,11 @@ import {
   AlertTriangle,
   Building2,
   Ban,
-  CheckCircle
+  CheckCircle,
+  Users,
+  User
 } from 'lucide-react';
+import { sendStatusNotification } from '../services/statusNotificationService';
 
 const UnitControls = ({
   units = [],
@@ -28,6 +31,26 @@ const UnitControls = ({
   const [newUnitLimit, setNewUnitLimit] = useState('');
   const [showBlockConfirm, setShowBlockConfirm] = useState(null);
   const [blockReason, setBlockReason] = useState('');
+  const [sendingNotification, setSendingNotification] = useState(null);
+  const [showUserNotificationModal, setShowUserNotificationModal] = useState(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Check if click is outside any dropdown
+      if (!event.target.closest('.user-notification-dropdown')) {
+        setShowUserNotificationModal(null);
+      }
+    };
+
+    if (showUserNotificationModal) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserNotificationModal]);
 
   // Filter and search units
   const filteredUnits = useMemo(() => {
@@ -126,6 +149,117 @@ const UnitControls = ({
     if (percentage >= 75) return 'bg-orange-500';
     if (percentage >= 50) return 'bg-yellow-500';
     return 'bg-green-500';
+  };
+
+  // Generate user-friendly message about guest pass consumption
+  const generateUsageMessage = (unit, user = null) => {
+    const used = unit.usedThisMonth || 0;
+    const limit = unit.monthlyLimit || globalSettings.monthlyLimit || 30;
+    const remaining = limit - used;
+    const percentage = Math.round((used / limit) * 100);
+    
+    const unitName = unit.unit;
+    const userName = user ? user.name : 'Residents';
+    
+    let message = '';
+    let messageAr = '';
+    
+    if (remaining <= 0) {
+      message = `Dear ${userName}, your unit ${unitName} has reached the monthly guest pass limit of ${limit} passes. No more guest passes can be issued this month.`;
+      messageAr = `عزيزي ${userName}، لقد وصلت وحدة ${unitName} إلى الحد الأقصى الشهري لتصاريح الضيوف البالغ ${limit} تصريح. لا يمكن إصدار المزيد من تصاريح الضيوف هذا الشهر.`;
+    } else if (remaining <= 3) {
+      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month. Only ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining. Please use them wisely.`;
+      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''} فقط. يرجى استخدامها بحكمة.`;
+    } else if (percentage >= 75) {
+      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month (${percentage}% used). ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر (${percentage}% مستخدم). بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+    } else {
+      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month. ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+    }
+    
+    return { message, messageAr };
+  };
+
+  // Send notification to all users in a unit
+  const handleSendUnitNotification = async (unit) => {
+    if (!projectId || !unit.users || unit.users.length === 0) {
+      alert('No users found in this unit');
+      return;
+    }
+
+    if (!window.confirm(`Send guest pass usage notification to all ${unit.users.length} resident(s) in unit ${unit.unit}?`)) {
+      return;
+    }
+
+    setSendingNotification(`unit-${unit.unit}`);
+    
+    try {
+      const { message, messageAr } = generateUsageMessage(unit);
+      
+      const title_en = `Guest Pass Usage - Unit ${unit.unit}`;
+      const title_ar = `استخدام تصاريح الضيوف - الوحدة ${unit.unit}`;
+      
+      // Send to all users in the unit
+      const promises = unit.users.map(user => 
+        sendStatusNotification(
+          projectId,
+          user.id,
+          title_en,
+          message,
+          title_ar,
+          messageAr,
+          'alert'
+        )
+      );
+      
+      await Promise.all(promises);
+      
+      alert(`✅ Notification sent successfully to ${unit.users.length} resident(s) in unit ${unit.unit}`);
+    } catch (error) {
+      console.error('Error sending unit notification:', error);
+      alert('Failed to send notification. Please try again.');
+    } finally {
+      setSendingNotification(null);
+    }
+  };
+
+  // Send notification to a specific user
+  const handleSendUserNotification = async (unit, user) => {
+    if (!projectId) {
+      alert('Project ID is required');
+      return;
+    }
+
+    if (!window.confirm(`Send guest pass usage notification to ${user.name}?`)) {
+      return;
+    }
+
+    setSendingNotification(`user-${user.id}`);
+    
+    try {
+      const { message, messageAr } = generateUsageMessage(unit, user);
+      
+      const title_en = `Guest Pass Usage - Unit ${unit.unit}`;
+      const title_ar = `استخدام تصاريح الضيوف - الوحدة ${unit.unit}`;
+      
+      await sendStatusNotification(
+        projectId,
+        user.id,
+        title_en,
+        message,
+        title_ar,
+        messageAr,
+        'alert'
+      );
+      
+      alert(`✅ Notification sent successfully to ${user.name}`);
+    } catch (error) {
+      console.error('Error sending user notification:', error);
+      alert('Failed to send notification. Please try again.');
+    } finally {
+      setSendingNotification(null);
+    }
   };
 
   return (
@@ -347,6 +481,79 @@ const UnitControls = ({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex items-center space-x-2">
+                        {/* Send notification to unit button */}
+                        <button
+                          onClick={() => handleSendUnitNotification(unit)}
+                          disabled={sendingNotification === `unit-${unit.unit}` || !unit.users || unit.users.length === 0}
+                          className={`px-3 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                            sendingNotification === `unit-${unit.unit}` || !unit.users || unit.users.length === 0
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300'
+                          }`}
+                          title="Send notification to all residents in this unit"
+                        >
+                          {sendingNotification === `unit-${unit.unit}` ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700"></div>
+                              <span>Sending...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Users className="h-4 w-4" />
+                              <span>Notify Unit</span>
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* User-specific notification dropdown (if multiple users) */}
+                        {unit.users && unit.users.length > 0 && (
+                          <div className="relative user-notification-dropdown">
+                            <button
+                              onClick={() => setShowUserNotificationModal(showUserNotificationModal === `unit-${unit.unit}` ? null : `unit-${unit.unit}`)}
+                              disabled={sendingNotification?.startsWith('user-')}
+                              className={`px-3 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                                sendingNotification?.startsWith('user-')
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : 'bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-300'
+                              }`}
+                              title="Send notification to specific user"
+                            >
+                              <User className="h-4 w-4" />
+                              <span>Notify User</span>
+                            </button>
+                            
+                            {/* Dropdown menu */}
+                            {showUserNotificationModal === `unit-${unit.unit}` && (
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 z-10">
+                                <div className="py-2 max-h-60 overflow-y-auto">
+                                  {unit.users.map((user) => (
+                                    <button
+                                      key={user.id}
+                                      onClick={() => {
+                                        handleSendUserNotification(unit, user);
+                                        setShowUserNotificationModal(null);
+                                      }}
+                                      disabled={sendingNotification === `user-${user.id}`}
+                                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center justify-between ${
+                                        sendingNotification === `user-${user.id}` ? 'opacity-50 cursor-not-allowed' : ''
+                                      }`}
+                                    >
+                                      <div className="flex-1">
+                                        <div className="font-medium text-gray-900">{user.name}</div>
+                                        <div className="text-xs text-gray-500">{user.email}</div>
+                                      </div>
+                                      {sendingNotification === `user-${user.id}` && (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-700"></div>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Block/Unblock button */}
                         <button
                           onClick={() => handleBlockUnit(unit.unit, unit.blocked)}
                           className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${

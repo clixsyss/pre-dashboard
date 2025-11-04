@@ -11,8 +11,11 @@ import {
   Building2,
   RefreshCw,
   MapPin,
-  ShieldOff
+  ShieldOff,
+  Bell
 } from 'lucide-react';
+import { sendStatusNotification } from '../services/statusNotificationService';
+import { useAppDataStore } from '../stores/appDataStore';
 import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
 import AdminControls from '../components/AdminControls';
@@ -25,6 +28,8 @@ const GuestPasses = () => {
   const [activeTab, setActiveTab] = useState('passes');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
+  const [sendingGlobalNotification, setSendingGlobalNotification] = useState(false);
+  const { getUsersByProject } = useAppDataStore();
   
   const {
     stats,
@@ -88,6 +93,89 @@ const GuestPasses = () => {
     pass.userName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Send global notification about guest pass usage
+  const handleSendGlobalNotification = async () => {
+    const activeProjectId = selectedProject?.id || projectId;
+    if (!activeProjectId) {
+      alert('Project ID is required');
+      return;
+    }
+
+    if (!window.confirm('Send guest pass usage notification to all project users? This will notify all residents about their monthly guest pass consumption.')) {
+      return;
+    }
+
+    setSendingGlobalNotification(true);
+    
+    try {
+      // Get all project users
+      const projectUsers = getUsersByProject(activeProjectId);
+      
+      if (projectUsers.length === 0) {
+        alert('No users found in this project');
+        return;
+      }
+
+      // Group users by unit to calculate unit usage
+      const unitStats = {};
+      units.forEach(unit => {
+        unitStats[unit.unit] = {
+          used: unit.usedThisMonth || 0,
+          limit: unit.monthlyLimit || globalSettings.monthlyLimit || 30,
+          users: unit.users || []
+        };
+      });
+
+      // Send notifications to all users with their unit-specific stats
+      const promises = projectUsers.map(user => {
+        const userProject = user.projects?.find(p => p.projectId === activeProjectId);
+        const userUnit = userProject?.unit || userProject?.userUnit || '';
+        const unitStat = unitStats[userUnit] || { used: 0, limit: globalSettings.monthlyLimit || 30 };
+        
+        const used = unitStat.used || 0;
+        const limit = unitStat.limit || globalSettings.monthlyLimit || 30;
+        const remaining = limit - used;
+        const percentage = Math.round((used / limit) * 100);
+        
+        let message = '';
+        let messageAr = '';
+        
+        if (remaining <= 0) {
+          message = `Dear ${user.fullName || user.firstName || 'Resident'}, your unit ${userUnit || 'N/A'} has reached the monthly guest pass limit of ${limit} passes. No more guest passes can be issued this month.`;
+          messageAr = `عزيزي ${user.fullName || user.firstName || 'الساكن'}، لقد وصلت وحدة ${userUnit || 'N/A'} إلى الحد الأقصى الشهري لتصاريح الضيوف البالغ ${limit} تصريح. لا يمكن إصدار المزيد من تصاريح الضيوف هذا الشهر.`;
+        } else if (remaining <= 3) {
+          message = `Dear ${user.fullName || user.firstName || 'Resident'}, your unit ${userUnit || 'N/A'} has used ${used} out of ${limit} guest passes this month. Only ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining. Please use them wisely.`;
+          messageAr = `عزيزي ${user.fullName || user.firstName || 'الساكن'}، لقد استخدمت وحدة ${userUnit || 'N/A'} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''} فقط. يرجى استخدامها بحكمة.`;
+        } else if (percentage >= 75) {
+          message = `Dear ${user.fullName || user.firstName || 'Resident'}, your unit ${userUnit || 'N/A'} has used ${used} out of ${limit} guest passes this month (${percentage}% used). ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+          messageAr = `عزيزي ${user.fullName || user.firstName || 'الساكن'}، لقد استخدمت وحدة ${userUnit || 'N/A'} ${used} من أصل ${limit} تصريح ضيف هذا الشهر (${percentage}% مستخدم). بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+        } else {
+          message = `Dear ${user.fullName || user.firstName || 'Resident'}, your unit ${userUnit || 'N/A'} has used ${used} out of ${limit} guest passes this month. ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+          messageAr = `عزيزي ${user.fullName || user.firstName || 'الساكن'}، لقد استخدمت وحدة ${userUnit || 'N/A'} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+        }
+        
+        return sendStatusNotification(
+          activeProjectId,
+          user.id,
+          'Guest Pass Usage Update',
+          message,
+          'تحديث استخدام تصاريح الضيوف',
+          messageAr,
+          'alert'
+        );
+      });
+      
+      await Promise.all(promises);
+      
+      alert(`✅ Global notification sent successfully to ${projectUsers.length} user(s)!`);
+    } catch (error) {
+      console.error('Error sending global notification:', error);
+      alert('Failed to send global notification. Please try again.');
+    } finally {
+      setSendingGlobalNotification(false);
+    }
+  };
+
   if (!selectedProject) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -147,6 +235,28 @@ const GuestPasses = () => {
         </div>
         
         <div className="flex items-center space-x-3">
+          <button
+            onClick={handleSendGlobalNotification}
+            disabled={sendingGlobalNotification}
+            className={`px-5 py-3 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ${
+              sendingGlobalNotification
+                ? 'bg-gray-400 text-white cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
+            }`}
+            title="Send guest pass usage notification to all project users"
+          >
+            {sendingGlobalNotification ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Sending...</span>
+              </>
+            ) : (
+              <>
+                <Bell className="h-5 w-5" />
+                <span>Notify All Users</span>
+              </>
+            )}
+          </button>
           <ExportButton dataType="guestPasses" />
           <button 
             onClick={() => {
