@@ -32,7 +32,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
     englishDescription: '',
     arabicDescription: '',
     price: '',
-    status: 'draft' // 'available' or 'draft'
+    status: 'available' // 'available' or 'draft' - default to 'available' so services show immediately in app
   });
 
   const [errors, setErrors] = useState({});
@@ -162,7 +162,7 @@ const IndividualServicesManagement = ({ projectId, selectedCategory, onBack }) =
       englishDescription: '',
       arabicDescription: '',
       price: '',
-      status: 'draft'
+      status: 'available' // Default new services to available
     });
     setEditingService(null);
     setErrors({});

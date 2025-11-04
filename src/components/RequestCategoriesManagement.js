@@ -47,7 +47,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
     arabicTitle: '',
     image: null,
     imageUrl: '',
-    status: 'draft', // 'available' or 'draft'
+    status: 'available', // 'available' or 'draft' - default to 'available' so requests show immediately in app
     fields: [], // Array of field objects
     allowMediaUpload: false,
     mediaRequired: false,
@@ -186,7 +186,7 @@ const RequestCategoriesManagement = ({ projectId, onCategorySelect }) => {
       arabicTitle: '',
       image: null,
       imageUrl: '',
-      status: 'draft',
+      status: 'available', // Default new request categories to available
       fields: [],
       allowMediaUpload: false,
       mediaRequired: false,

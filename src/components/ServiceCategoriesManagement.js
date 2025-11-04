@@ -43,7 +43,7 @@ const ServiceCategoriesManagement = ({ projectId, onCategorySelect }) => {
     arabicTitle: '',
     image: null,
     imageUrl: '',
-    status: 'draft', // 'available' or 'draft'
+    status: 'available', // 'available' or 'draft' - default to 'available' so services show immediately in app
     timeSlotInterval: 30, // Default 30 minutes
     availability: {
       sunday: { available: true, startTime: '09:00', endTime: '17:00' },
