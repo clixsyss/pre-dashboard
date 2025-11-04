@@ -232,5 +232,6 @@ class DataCacheService {
 }
 
 // Export singleton instance
-export default new DataCacheService();
+const dataCacheServiceInstance = new DataCacheService();
+export default dataCacheServiceInstance;
 

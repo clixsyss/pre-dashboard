@@ -55,7 +55,6 @@ const EmailNewsletterManagement = ({ projectId }) => {
     description: '',
     emails: []
   });
-  const [emailInput, setEmailInput] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
@@ -199,7 +198,6 @@ const EmailNewsletterManagement = ({ projectId }) => {
       description: '',
       emails: []
     });
-    setEmailInput('');
   };
 
   const resetCampaignForm = () => {
@@ -220,7 +218,6 @@ const EmailNewsletterManagement = ({ projectId }) => {
         ...prev,
         emails: [...prev.emails, email]
       }));
-      setEmailInput('');
     }
   };
 

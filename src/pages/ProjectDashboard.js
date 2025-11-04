@@ -183,12 +183,9 @@ const ProjectDashboard = () => {
 
   // App data store integration (for cached users and units)
   const {
-    users: cachedUsers,
     initializeProjectData,
     getUsersByProject,
-    getUnitsForProject,
-    usersLoading: appDataUsersLoading,
-    unitsLoading: appDataUnitsLoading
+    getUnitsForProject
   } = useAppDataStore();
 
   // Booking store integration

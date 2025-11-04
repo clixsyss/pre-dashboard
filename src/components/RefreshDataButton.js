@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useAppDataStore } from '../stores/appDataStore';
 
@@ -15,7 +15,7 @@ const RefreshDataButton = ({ projectId, className = '' }) => {
   const [error, setError] = useState(null);
 
   // Calculate and update "Last updated X ago" text
-  const updateLastUpdatedText = () => {
+  const updateLastUpdatedText = useCallback(() => {
     const metadata = getCacheMetadata(projectId);
     
     if (!metadata || !metadata.lastRefreshTimestamp) {
@@ -44,14 +44,14 @@ const RefreshDataButton = ({ projectId, className = '' }) => {
     } else {
       setLastUpdatedText(`${days} days ago`);
     }
-  };
+  }, [projectId, getCacheMetadata]);
 
   // Update text on mount and every minute
   useEffect(() => {
     updateLastUpdatedText();
     const interval = setInterval(updateLastUpdatedText, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [projectId]);
+  }, [updateLastUpdatedText]);
 
   // Handle refresh button click
   const handleRefresh = async () => {
