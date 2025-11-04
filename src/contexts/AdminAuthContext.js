@@ -177,6 +177,7 @@ export const AdminAuthProvider = ({ children }) => {
         news: ['read', 'write', 'delete'],
         events: ['read', 'write', 'delete'],
         notifications: ['read', 'write', 'delete', 'send'],
+        email_newsletter: ['read', 'write', 'delete', 'send'],
         store: ['read', 'write', 'delete'],
         orders: ['read', 'write', 'delete'],
         gate_pass: ['read', 'write', 'delete'],

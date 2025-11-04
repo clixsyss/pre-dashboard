@@ -15,6 +15,12 @@ import {
   writeBatch,
   deleteField
 } from 'firebase/firestore';
+import { useAppDataStore } from '../stores/appDataStore';
+
+/**
+ * Guest Passes Service
+ * OPTIMIZATION: Uses cached user data from appDataStore to reduce Firebase reads
+ */
 
 class GuestPassesService {
   constructor() {
@@ -65,28 +71,20 @@ class GuestPassesService {
         console.log('No sent passes found yet, using default values');
       }
       
-      // Try to get active users count
+      // Try to get active users count - OPTIMIZED: Use cached data
       try {
-        const usersSnapshot = await getDocs(collection(db, this.collections.users));
+        const { getUsersByProject } = useAppDataStore.getState();
+        const cachedUsers = getUsersByProject(projectId);
         
-        usersSnapshot.docs.forEach(doc => {
-          const userData = doc.data();
-          
-          // Check if user belongs to this project
-          if (userData.projects && Array.isArray(userData.projects)) {
-            const projectInfo = userData.projects.find(project => project.projectId === projectId);
-            
-            if (projectInfo) {
-              // Check if user is not blocked for guest passes
-              const guestPassData = userData.guestPassData || { blocked: false };
-              if (!guestPassData.blocked) {
-                activeUsers++;
-              }
-            }
+        cachedUsers.forEach(user => {
+          // Check if user is not blocked for guest passes
+          const guestPassData = user.guestPassData || { blocked: false };
+          if (!guestPassData.blocked) {
+            activeUsers++;
           }
         });
       } catch (error) {
-        console.log('No users collection found yet, using default values');
+        console.log('Error getting cached users, using default values');
       }
       
       // Try to get global settings
@@ -132,8 +130,10 @@ class GuestPassesService {
         console.log('Could not fetch global settings, using fallback default:', defaultLimit);
       }
 
-      // Get all users from main users collection
-      const usersSnapshot = await getDocs(collection(db, this.collections.users));
+      // Get all users from cache - OPTIMIZED
+      const { getUsersByProject } = useAppDataStore.getState();
+      const cachedUsers = getUsersByProject(projectId);
+      console.log(`✅ GuestPassService: Using ${cachedUsers.length} cached users for project`);
       
       // Get all per-project user settings
       const userSettingsPath = this.collections.userProjectSettings(projectId);
@@ -148,38 +148,29 @@ class GuestPassesService {
         console.log('No per-project user settings found, using defaults');
       }
       
-      // Filter users who belong to this project
+      // Filter users who belong to this project - already filtered by cache
       const projectUsers = [];
       
-      usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
+      cachedUsers.forEach(user => {
+        // Get per-project settings for this user, or use defaults
+        const projectSettings = userSettings[user.id] || {};
         
-        // Check if user belongs to this project
-        if (userData.projects && Array.isArray(userData.projects)) {
-          const projectInfo = userData.projects.find(project => project.projectId === projectId);
-          
-          if (projectInfo) {
-            // Get per-project settings for this user, or use defaults
-            const projectSettings = userSettings[doc.id] || {};
-            
-            // Use per-project settings if they exist, otherwise use global defaults
-            const monthlyLimit = projectSettings.monthlyLimit ?? defaultLimit;
-            const usedThisMonth = projectSettings.usedThisMonth ?? 0;
-            const blocked = projectSettings.blocked ?? false;
-            
-            projectUsers.push({
-              id: doc.id,
-              name: userData.fullName || (userData.firstName && userData.lastName ? `${userData.firstName} ${userData.lastName}` : userData.email),
-              email: userData.email,
-              monthlyLimit: monthlyLimit,
-              usedThisMonth: usedThisMonth,
-              blocked: blocked,
-              hasCustomSettings: !!Object.keys(projectSettings).length, // Track if user has per-project settings
-              createdAt: userData.createdAt?.toDate?.() || new Date(),
-              updatedAt: projectSettings.updatedAt?.toDate?.() || new Date()
-            });
-          }
-        }
+        // Use per-project settings if they exist, otherwise use global defaults
+        const monthlyLimit = projectSettings.monthlyLimit ?? defaultLimit;
+        const usedThisMonth = projectSettings.usedThisMonth ?? 0;
+        const blocked = projectSettings.blocked ?? false;
+        
+        projectUsers.push({
+          id: user.id,
+          name: user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email),
+          email: user.email,
+          monthlyLimit: monthlyLimit,
+          usedThisMonth: usedThisMonth,
+          blocked: blocked,
+          hasCustomSettings: !!Object.keys(projectSettings).length, // Track if user has per-project settings
+          createdAt: user.createdAt || new Date(),
+          updatedAt: projectSettings.updatedAt?.toDate?.() || new Date()
+        });
       });
       
       console.log(`✅ Fetched ${projectUsers.length} users for project ${projectId} (default limit: ${defaultLimit})`);
@@ -983,39 +974,34 @@ class GuestPassesService {
   }
 
   // Get all units in a project with their guest pass settings
+  // OPTIMIZED: Uses cached data from appDataStore
   async getUnits(projectId) {
     try {
       console.log(`📋 [Service] Getting units for project ${projectId}`);
       
-      // OPTIMIZATION: Get limited users in the project and extract unique units
-      const usersQuery = query(
-        collection(db, this.collections.users),
-        limit(2000) // Limit to 2000 users for better performance
-      );
-      const usersSnapshot = await getDocs(usersQuery);
+      // Get cached users from appDataStore
+      const { getUsersByProject } = useAppDataStore.getState();
+      const cachedUsers = getUsersByProject(projectId);
       const unitsMap = new Map();
       
-      console.log(`📊 GuestPassService: Fetched ${usersSnapshot.size} users (limited)`);
+      console.log(`✅ GuestPassService: Using ${cachedUsers.length} cached users for units extraction`);
       
-      usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        if (userData.projects && Array.isArray(userData.projects)) {
-          const projectInfo = userData.projects.find(project => project.projectId === projectId);
-          if (projectInfo && projectInfo.unit) {
-            const unit = projectInfo.unit;
-            if (!unitsMap.has(unit)) {
-              unitsMap.set(unit, {
-                unit: unit,
-                users: [],
-                passCount: 0
-              });
-            }
-            unitsMap.get(unit).users.push({
-              id: doc.id,
-              name: userData.fullName || `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
-              email: userData.email
+      cachedUsers.forEach(user => {
+        const projectInfo = user.projects?.find(project => project.projectId === projectId);
+        if (projectInfo && projectInfo.unit) {
+          const unit = projectInfo.unit;
+          if (!unitsMap.has(unit)) {
+            unitsMap.set(unit, {
+              unit: unit,
+              users: [],
+              passCount: 0
             });
           }
+          unitsMap.get(unit).users.push({
+            id: user.id,
+            name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            email: user.email
+          });
         }
       });
       

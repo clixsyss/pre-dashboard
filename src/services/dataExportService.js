@@ -8,6 +8,12 @@ import {
   getDoc
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { useAppDataStore } from '../stores/appDataStore';
+
+/**
+ * Data Export Service
+ * OPTIMIZATION: Uses cached user data from appDataStore
+ */
 
 class DataExportService {
   constructor() {
@@ -23,29 +29,16 @@ class DataExportService {
     return user.uid;
   }
 
-  // Get all users in the project
+  // Get all users in the project - OPTIMIZED: Uses cached data
   async fetchProjectUsers(projectId) {
     try {
-      console.log(`Fetching users for project: ${projectId}`);
+      console.log(`📊 DataExportService: Fetching users for project: ${projectId}`);
       
-      // Fetch from main users collection and filter by project
-      const usersSnapshot = await getDocs(collection(db, 'users'));
+      // Get cached users from appDataStore
+      const { getUsersByProject } = useAppDataStore.getState();
+      const projectUsers = getUsersByProject(projectId);
       
-      // Filter users who belong to this project
-      const projectUsers = usersSnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        .filter(user => {
-          // Check if user has projects array and this project is in it
-          if (user.projects && Array.isArray(user.projects)) {
-            return user.projects.some(p => p.projectId === projectId);
-          }
-          return false;
-        });
-      
-      console.log(`Found ${projectUsers.length} users in project ${projectId}`);
+      console.log(`✅ DataExportService: Found ${projectUsers.length} cached users in project ${projectId}`);
       
       const users = projectUsers.map(user => ({
         id: user.id,
@@ -55,11 +48,10 @@ class DataExportService {
         phone: user.phone || user.mobile || '',
         role: user.projects?.find(p => p.projectId === projectId)?.role || 'member',
         unit: user.projects?.find(p => p.projectId === projectId)?.unit || '',
-        createdAt: user.createdAt?.toDate?.()?.toISOString() || user.createdAt,
-        updatedAt: user.updatedAt?.toDate?.()?.toISOString() || user.updatedAt
+        createdAt: user.createdAt?.toISOString?.() || user.createdAt,
+        updatedAt: user.updatedAt?.toISOString?.() || user.updatedAt
       }));
       
-      console.log('Project users:', users);
       return users;
     } catch (error) {
       console.error('Error fetching project users:', error);

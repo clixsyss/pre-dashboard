@@ -72,16 +72,19 @@ import SupportManagement from '../components/SupportManagement';
 import FinesManagement from '../components/FinesManagement';
 import GuardsManagement from '../components/GuardsManagement';
 import AdminManagement from '../components/AdminManagement';
+import EmailNewsletterManagement from '../components/EmailNewsletterManagement';
 import GuestPasses from './GuestPasses';
 import DeviceKeysManagement from '../components/DeviceKeysManagement';
 import ExportButton from '../components/ExportButton';
 import { useBookingStore } from '../stores/bookingStore';
 import { useStoreManagementStore } from '../stores/storeManagementStore';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useAppDataStore } from '../stores/appDataStore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import PermissionGate from '../components/PermissionGate';
 import customUserNotificationService from '../services/customUserNotificationService';
 import { sendStatusNotification } from '../services/statusNotificationService';
+import RefreshDataButton from '../components/RefreshDataButton';
 import '../styles/servicesManagement.css';
 import '../styles/projectSidebar.css';
 
@@ -177,6 +180,16 @@ const ProjectDashboard = () => {
   
   const { currentAdmin, hasPermission, hasProjectAccess, isSuperAdmin } = useAdminAuth();
   const navigate = useNavigate();
+
+  // App data store integration (for cached users and units)
+  const {
+    users: cachedUsers,
+    initializeProjectData,
+    getUsersByProject,
+    getUnitsForProject,
+    usersLoading: appDataUsersLoading,
+    unitsLoading: appDataUnitsLoading
+  } = useAppDataStore();
 
   // Booking store integration
   const {
@@ -338,6 +351,7 @@ const ProjectDashboard = () => {
       category: 'Communication',
       items: [
         { id: 'events', name: 'Notifications', icon: Target, description: 'Push notifications', permission: 'notifications' },
+        { id: 'newsletter', name: 'Email Newsletter', icon: Bell, description: 'Email campaigns & groups', permission: 'email_newsletter' },
         { id: 'news', name: 'News', icon: Newspaper, description: 'News & announcements', permission: 'news' },
         { id: 'complaints', name: 'Complaints', icon: MessageCircle, description: 'User complaints', permission: 'complaints' },
         { id: 'guidelines', name: 'Guidelines', icon: FileText, description: 'Project rules & procedures', permission: 'guidelines' },
@@ -399,39 +413,31 @@ const ProjectDashboard = () => {
     if (projectId) {
       const loadData = async () => {
         try {
-          // Load project data and users in parallel for instant loading
-          console.log('📊 ProjectDashboard: Loading project data with optimization...');
-          const [projectDoc, usersSnapshot] = await Promise.all([
-            getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId))),
-            // OPTIMIZATION: Limit users to 2000 for better performance
-            getDocs(query(collection(db, 'users'), limit(2000)))
-          ]);
+          console.log('📊 ProjectDashboard: Initializing with cached data...');
           
-          console.log(`✅ ProjectDashboard: Loaded ${usersSnapshot.size} users (limited)`);
-
-          // Set project data
+          // Load project data
+          const projectDoc = await getDocs(query(collection(db, 'projects'), where('__name__', '==', projectId)));
           if (!projectDoc.empty) {
             const projectData = { id: projectId, ...projectDoc.docs[0].data() };
             setProject(projectData);
           }
 
-          // Process users data
-          const usersData = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-
-          // Filter users who belong to this specific project
-          const projectUsersData = usersData.filter(user => {
-            if (user.projects && Array.isArray(user.projects)) {
-              return user.projects.some(project => project.projectId === projectId);
-            }
-            return false;
-          });
-
+          // Initialize cached data (loads from localStorage or fetches if needed)
+          await initializeProjectData(projectId);
+          
+          // Get users from cache
+          const projectUsersData = getUsersByProject(projectId);
           setProjectUsers(projectUsersData);
-          setLoading(false); // Set loading to false immediately after data is loaded
-          setDataLoaded(true); // Mark that initial data is loaded
+          
+          console.log(`✅ ProjectDashboard: Loaded ${projectUsersData.length} users from cache`);
+          
+          // Get units from cache
+          const cachedUnits = getUnitsForProject(projectId);
+          setUnits(cachedUnits);
+          console.log(`✅ ProjectDashboard: Loaded ${cachedUnits.length} units from cache`);
+
+          setLoading(false);
+          setDataLoaded(true);
         } catch (err) {
           console.error('Error loading project data:', err);
           setLoading(false);
@@ -440,7 +446,7 @@ const ProjectDashboard = () => {
 
       loadData();
     }
-  }, [projectId]);
+  }, [projectId, initializeProjectData, getUsersByProject, getUnitsForProject]);
 
   // Memoized filtered users for better performance
   const filteredUsers = useMemo(() => {
@@ -3403,6 +3409,9 @@ const ProjectDashboard = () => {
       </div>
 
             <div className="flex items-center space-x-4">
+              {/* Refresh Data Button with Last Updated Indicator */}
+              <RefreshDataButton projectId={projectId} className="hidden lg:flex" />
+              
               {/* Total Pending Items Indicator */}
               {(pendingUsersCount + pendingServiceRequestsCount + pendingOrdersCount + openComplaintsCount + pendingFinesCount + pendingGatePassCount + openSupportTicketsCount + (isSuperAdmin() ? pendingAdminsCount : 0) + (deviceResetRequests?.filter(r => r.status === 'pending').length || 0)) > 0 && (
                 <button 
@@ -7300,6 +7309,12 @@ const ProjectDashboard = () => {
         {activeTab === 'events' && (
               <PermissionGate entity="notifications" action="read" showMessage={true}>
           <NotificationManagement projectId={projectId} />
+              </PermissionGate>
+        )}
+
+        {activeTab === 'newsletter' && (
+              <PermissionGate entity="email_newsletter" action="read" showMessage={true}>
+          <EmailNewsletterManagement projectId={projectId} />
               </PermissionGate>
         )}
 

@@ -1054,6 +1054,33 @@ service cloud.firestore {
     match /projects/{projectId}/deviceKeyResetRequests {
       allow list: if request.auth != null;
     }
+    
+    // EMAIL NEWSLETTER COLLECTIONS
+    // Email Groups - Admin-only access for managing email recipient groups
+    match /projects/{projectId}/emailGroups/{groupId} {
+      // Only admins can read, create, update, and delete email groups
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing email groups (admins only)
+    match /projects/{projectId}/emailGroups {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Email Campaigns - Admin-only access for managing email campaigns
+    match /projects/{projectId}/emailCampaigns/{campaignId} {
+      // Only admins can read, create, update, and delete email campaigns
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Allow listing email campaigns (admins only)
+    match /projects/{projectId}/emailCampaigns {
+      allow list: if request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
   }
 }
 

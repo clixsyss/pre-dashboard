@@ -40,9 +40,16 @@ import {
 } from 'lucide-react';
 import { db } from '../config/firebase';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { useAppDataStore } from '../stores/appDataStore';
+
+/**
+ * NotificationManagement Component
+ * OPTIMIZATION: Uses cached user/unit data from appDataStore
+ */
 
 const NotificationManagement = ({ projectId }) => {
   const { currentAdmin } = useAdminAuth();
+  const { getUsersByProject, getUnitsForProject } = useAppDataStore();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -137,47 +144,24 @@ const NotificationManagement = ({ projectId }) => {
     }
   }, [projectId, projectUsers]);
 
-  // Load project data
+  // Load project data - OPTIMIZED: Uses cached data from appDataStore
   const loadProjectData = useCallback(async () => {
     if (!projectId) return;
 
     try {
-      console.log('📊 NotificationManagement: Fetching users with limit...');
-      // OPTIMIZATION: Fetch limited users for this project
-      const usersQuery = query(
-        collection(db, 'users'),
-        limit(1000) // Limit to 1000 users
-      );
-      const usersSnapshot = await getDocs(usersQuery);
-      const users = usersSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(user => {
-          if (user.projects && Array.isArray(user.projects)) {
-            return user.projects.some(p => p.projectId === projectId);
-          }
-          return false;
-        });
+      console.log('📊 NotificationManagement: Loading users from cache...');
       
-      console.log(`✅ NotificationManagement: Fetched ${users.length} project users (limited)`);
+      // Get users from cache
+      const users = getUsersByProject(projectId);
+      console.log(`✅ NotificationManagement: Got ${users.length} cached project users`);
 
       // Store project users for selection
       setProjectUsers(users);
 
-      // Fetch units for this project (OPTIMIZED with limit)
-      try {
-        console.log('📊 NotificationManagement: Fetching units with limit...');
-        const unitsQuery = query(
-          collection(db, `projects/${projectId}/units`),
-          limit(500) // OPTIMIZATION: Limit to 500 units
-        );
-        const unitsSnapshot = await getDocs(unitsQuery);
-        const units = unitsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setProjectUnits(units);
-        console.log(`✅ NotificationManagement: Fetched ${units.length} units (limited)`);
-      } catch (err) {
-        console.warn('Units not available:', err);
-        setProjectUnits([]);
-      }
+      // Get units from cache
+      const units = getUnitsForProject(projectId);
+      setProjectUnits(units);
+      console.log(`✅ NotificationManagement: Got ${units.length} cached units`);
 
       // Count users with FCM tokens (using flat fcmToken field - no subcollection queries needed!)
       // This is MUCH cheaper than querying subcollections for 5000+ users
@@ -215,7 +199,7 @@ const NotificationManagement = ({ projectId }) => {
     } catch (error) {
       console.error('Error loading project data:', error);
     }
-  }, [projectId, loadRecentNotifications]);
+  }, [projectId, loadRecentNotifications, getUsersByProject, getUnitsForProject]);
 
   useEffect(() => {
     if (projectId) {

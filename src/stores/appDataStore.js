@@ -1,21 +1,29 @@
 /**
- * Centralized App Data Store
+ * Centralized App Data Store with localStorage Persistence
  * 
- * This store fetches users and projects ONCE on app initialization
- * and provides cached data to ALL components.
+ * This store fetches users, projects, and units data ONLY AFTER project selection
+ * and caches them in localStorage for 24 hours to minimize Firebase reads.
  * 
- * Components should NEVER fetch users/projects directly - they should
+ * Components should NEVER fetch users/projects/units directly - they should
  * always use this store.
+ * 
+ * Features:
+ * - localStorage persistence with 24-hour cache duration
+ * - Lazy loading (data fetched only after project selection)
+ * - Manual refresh capability
+ * - Automatic cache expiry
  */
 
 import { create } from 'zustand';
 import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import dataCacheService from '../services/dataCacheService';
 
 // Cache configuration (Extended for cost optimization)
 const CACHE_DURATION = {
   users: 24 * 60 * 60 * 1000, // 24 hours
   projects: 7 * 24 * 60 * 60 * 1000, // 7 days (projects rarely change)
+  units: 24 * 60 * 60 * 1000, // 24 hours
   counts: 24 * 60 * 60 * 1000 // 24 hours
 };
 
@@ -23,24 +31,30 @@ export const useAppDataStore = create((set, get) => ({
   // ============= STATE =============
   users: [],
   projects: [],
+  units: {}, // { [projectId]: units[] }
   userCount: 0,
   projectCount: 0,
   
   // Cache metadata
   usersLastFetched: null,
   projectsLastFetched: null,
+  unitsLastFetched: {}, // { [projectId]: timestamp }
   countsLastFetched: null,
+  lastRefreshTimestamp: null, // For "Last updated X ago" display
   
   // Loading states
   usersLoading: false,
   projectsLoading: false,
+  unitsLoading: {}, // { [projectId]: boolean }
   
   // Errors
   usersError: null,
   projectsError: null,
+  unitsError: null,
   
   // Initialization
   initialized: false,
+  currentProjectId: null,
 
   // ============= CACHE HELPERS =============
   
@@ -82,8 +96,15 @@ export const useAppDataStore = create((set, get) => ({
 
   /**
    * Get users for a specific project
+   * Since users are now cached per-project, just return them directly
    */
   getUsersByProject: (projectId) => {
+    const state = get();
+    // If current project matches, return cached users (already filtered)
+    if (state.currentProjectId === projectId && state.users.length > 0) {
+      return state.users;
+    }
+    // Otherwise filter (fallback)
     const usersWithProjects = get().getUsersWithProjects();
     return usersWithProjects.filter(user => 
       user.projects?.some(p => p.projectId === projectId)
@@ -131,15 +152,32 @@ export const useAppDataStore = create((set, get) => ({
   // ============= FETCH FUNCTIONS =============
 
   /**
-   * Fetch users (with caching)
+   * Fetch users for a specific project (with localStorage caching)
+   * Now caches users PER PROJECT for efficiency
    */
-  fetchUsers: async (forceRefresh = false) => {
+  fetchUsers: async (forceRefresh = false, projectId = null) => {
     const state = get();
     
-    // Check if we need to refresh
-    if (!forceRefresh && !state.needsRefresh(state.usersLastFetched, CACHE_DURATION.users)) {
-      console.log('✅ AppDataStore: Using cached users', state.users.length);
-      return state.users;
+    if (!projectId) {
+      console.warn('⚠️ AppDataStore: No projectId provided for fetchUsers');
+      return [];
+    }
+    
+    // Try to load from localStorage first (unless force refresh)
+    // Cache key is project-specific now
+    if (!forceRefresh) {
+      const cached = dataCacheService.get('users', projectId);
+      if (cached && cached.data) {
+        console.log(`✅ AppDataStore: Using localStorage cached users for project ${projectId}`, cached.data.length);
+        set({ 
+          users: cached.data,
+          usersLastFetched: cached.timestamp,
+          lastRefreshTimestamp: cached.timestamp,
+          usersLoading: false,
+          currentProjectId: projectId
+        });
+        return cached.data;
+      }
     }
 
     // Already loading? Wait for it
@@ -158,18 +196,17 @@ export const useAppDataStore = create((set, get) => ({
 
     try {
       set({ usersLoading: true, usersError: null });
-      console.log('📊 AppDataStore: Fetching users from Firestore...');
+      console.log(`📊 AppDataStore: Fetching users for project ${projectId} from Firebase...`);
 
-      // Fetch users with reasonable limit
-      // For dashboard, 1000 users is usually enough for most operations
+      // Fetch ALL users first (Firebase doesn't support array-contains with limits efficiently)
       const usersQuery = query(
         collection(db, 'users'),
         orderBy('createdAt', 'desc'),
-        limit(1000)
+        limit(5000) // Increased limit to ensure we get all project users
       );
 
       const snapshot = await getDocs(usersQuery);
-      const users = snapshot.docs.map(doc => ({
+      const allUsers = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.() || new Date(),
@@ -177,32 +214,56 @@ export const useAppDataStore = create((set, get) => ({
         updatedAt: doc.data().updatedAt?.toDate?.() || null
       }));
 
-      console.log(`✅ AppDataStore: Fetched ${users.length} users (cached for ${CACHE_DURATION.users / 60000} minutes)`);
-
-      set({ 
-        users, 
-        usersLastFetched: Date.now(),
-        usersLoading: false 
+      // Filter users for this specific project
+      const projectUsers = allUsers.filter(user => {
+        if (user.projects && Array.isArray(user.projects)) {
+          return user.projects.some(p => p.projectId === projectId);
+        }
+        return false;
       });
 
-      return users;
+      console.log(`✅ AppDataStore: Fetched ${projectUsers.length} users for project ${projectId} from Firebase (filtered from ${allUsers.length} total)`);
+
+      const timestamp = Date.now();
+      
+      // Save to localStorage with project-specific key
+      dataCacheService.set('users', projectUsers, projectId);
+
+      set({ 
+        users: projectUsers, 
+        usersLastFetched: timestamp,
+        lastRefreshTimestamp: timestamp,
+        usersLoading: false,
+        currentProjectId: projectId
+      });
+
+      return projectUsers;
     } catch (error) {
-      console.error('❌ AppDataStore: Error fetching users:', error);
+      console.error(`❌ AppDataStore: Error fetching users for project ${projectId}:`, error);
       set({ usersError: error.message, usersLoading: false });
       throw error;
     }
   },
 
   /**
-   * Fetch projects (with caching)
+   * Fetch projects (with localStorage caching)
    */
   fetchProjects: async (forceRefresh = false) => {
     const state = get();
     
-    // Check if we need to refresh
-    if (!forceRefresh && !state.needsRefresh(state.projectsLastFetched, CACHE_DURATION.projects)) {
-      console.log('✅ AppDataStore: Using cached projects', state.projects.length);
-      return state.projects;
+    // Try to load from localStorage first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = dataCacheService.get('projects');
+      if (cached && cached.data) {
+        console.log('✅ AppDataStore: Using localStorage cached projects', cached.data.length);
+        set({ 
+          projects: cached.data,
+          projectsLastFetched: cached.timestamp,
+          projectsLoading: false,
+          projectCount: cached.data.length
+        });
+        return cached.data;
+      }
     }
 
     // Already loading? Wait for it
@@ -235,11 +296,16 @@ export const useAppDataStore = create((set, get) => ({
         ...doc.data()
       }));
 
-      console.log(`✅ AppDataStore: Fetched ${projects.length} projects (cached for ${CACHE_DURATION.projects / 60000} minutes)`);
+      console.log(`✅ AppDataStore: Fetched ${projects.length} projects from Firebase`);
+
+      const timestamp = Date.now();
+      
+      // Save to localStorage
+      dataCacheService.set('projects', projects);
 
       set({ 
         projects, 
-        projectsLastFetched: Date.now(),
+        projectsLastFetched: timestamp,
         projectsLoading: false,
         projectCount: projects.length
       });
@@ -250,6 +316,115 @@ export const useAppDataStore = create((set, get) => ({
       set({ projectsError: error.message, projectsLoading: false });
       throw error;
     }
+  },
+
+  /**
+   * Fetch units for a specific project (with localStorage caching)
+   */
+  fetchUnits: async (projectId, forceRefresh = false) => {
+    if (!projectId) {
+      console.warn('⚠️ AppDataStore: No projectId provided for fetchUnits');
+      return [];
+    }
+
+    const state = get();
+    
+    // Try to load from localStorage first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = dataCacheService.get('units', projectId);
+      if (cached && cached.data) {
+        console.log(`✅ AppDataStore: Using localStorage cached units for project ${projectId}`, cached.data.length);
+        
+        const newUnits = { ...state.units };
+        newUnits[projectId] = cached.data;
+        
+        const newUnitsLastFetched = { ...state.unitsLastFetched };
+        newUnitsLastFetched[projectId] = cached.timestamp;
+        
+        set({ 
+          units: newUnits,
+          unitsLastFetched: newUnitsLastFetched,
+          lastRefreshTimestamp: cached.timestamp
+        });
+        
+        return cached.data;
+      }
+    }
+
+    // Already loading? Wait for it
+    const loadingState = state.unitsLoading[projectId];
+    if (loadingState) {
+      console.log(`⏳ AppDataStore: Units for project ${projectId} already loading, waiting...`);
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          const currentState = get();
+          if (!currentState.unitsLoading[projectId]) {
+            clearInterval(checkInterval);
+            resolve(currentState.units[projectId] || []);
+          }
+        }, 100);
+      });
+    }
+
+    try {
+      const newLoadingState = { ...state.unitsLoading };
+      newLoadingState[projectId] = true;
+      set({ unitsLoading: newLoadingState, unitsError: null });
+      
+      console.log(`📊 AppDataStore: Fetching units for project ${projectId} from Firestore...`);
+
+      const unitsQuery = query(
+        collection(db, `projects/${projectId}/units`),
+        limit(1000) // Reasonable limit for units
+      );
+
+      const snapshot = await getDocs(unitsQuery);
+      const units = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log(`✅ AppDataStore: Fetched ${units.length} units for project ${projectId} from Firebase`);
+
+      const timestamp = Date.now();
+      
+      // Save to localStorage
+      dataCacheService.set('units', units, projectId);
+
+      const newUnits = { ...state.units };
+      newUnits[projectId] = units;
+      
+      const newUnitsLastFetched = { ...state.unitsLastFetched };
+      newUnitsLastFetched[projectId] = timestamp;
+      
+      const newLoadingStateDone = { ...state.unitsLoading };
+      newLoadingStateDone[projectId] = false;
+
+      set({ 
+        units: newUnits,
+        unitsLastFetched: newUnitsLastFetched,
+        unitsLoading: newLoadingStateDone,
+        lastRefreshTimestamp: timestamp
+      });
+
+      return units;
+    } catch (error) {
+      console.error(`❌ AppDataStore: Error fetching units for project ${projectId}:`, error);
+      
+      const newLoadingState = { ...state.unitsLoading };
+      newLoadingState[projectId] = false;
+      
+      set({ unitsError: error.message, unitsLoading: newLoadingState });
+      throw error;
+    }
+  },
+
+  /**
+   * Get units for a specific project from cache
+   */
+  getUnitsForProject: (projectId) => {
+    const state = get();
+    return state.units[projectId] || [];
   },
 
   /**
@@ -285,46 +460,69 @@ export const useAppDataStore = create((set, get) => ({
   },
 
   /**
-   * Initialize app data (call this once on app start)
+   * Initialize app data for a specific project
+   * This should be called AFTER project selection
    */
-  initializeAppData: async () => {
-    if (get().initialized) {
-      console.log('✅ AppDataStore: Already initialized');
+  initializeProjectData: async (projectId) => {
+    if (!projectId) {
+      console.warn('⚠️ AppDataStore: No projectId provided for initialization');
       return;
     }
 
     try {
-      console.log('🚀 AppDataStore: Initializing app data...');
+      console.log(`🚀 AppDataStore: Initializing data for project ${projectId}...`);
       
-      // Fetch both in parallel
+      // Set current project
+      set({ currentProjectId: projectId });
+      
+      // Fetch users and units in parallel
       await Promise.all([
-        get().fetchProjects(),
-        get().fetchUsers()
+        get().fetchUsers(false, projectId),
+        get().fetchUnits(projectId, false)
       ]);
 
       // Calculate counts
       await get().fetchUserCount();
 
       set({ initialized: true });
-      console.log('✅ AppDataStore: Initialization complete');
+      console.log(`✅ AppDataStore: Initialization complete for project ${projectId}`);
     } catch (error) {
-      console.error('❌ AppDataStore: Initialization failed:', error);
+      console.error(`❌ AppDataStore: Initialization failed for project ${projectId}:`, error);
       throw error;
     }
   },
 
   /**
-   * Refresh all data
+   * Refresh all data for current project (force fetch from Firebase)
    */
-  refreshAllData: async () => {
-    console.log('🔄 AppDataStore: Refreshing all data...');
+  refreshAllData: async (projectId = null) => {
+    const state = get();
+    const targetProjectId = projectId || state.currentProjectId;
+    
+    if (!targetProjectId) {
+      console.warn('⚠️ AppDataStore: No projectId available for refresh');
+      return;
+    }
+
+    console.log(`🔄 AppDataStore: Force refreshing all data for project ${targetProjectId}...`);
+    
     try {
+      // Clear project-specific cache before refreshing
+      dataCacheService.clear('users', targetProjectId);
+      dataCacheService.clear('units', targetProjectId);
+      
+      // Fetch users and units in parallel with force refresh
       await Promise.all([
-        get().fetchProjects(true),
-        get().fetchUsers(true)
+        get().fetchUsers(true, targetProjectId),
+        get().fetchUnits(targetProjectId, true)
       ]);
+      
       await get().fetchUserCount(true);
-      console.log('✅ AppDataStore: All data refreshed');
+      
+      console.log('✅ AppDataStore: All data refreshed from Firebase');
+      
+      // Return the refresh timestamp for UI display
+      return Date.now();
     } catch (error) {
       console.error('❌ AppDataStore: Refresh failed:', error);
       throw error;
@@ -332,15 +530,42 @@ export const useAppDataStore = create((set, get) => ({
   },
 
   /**
-   * Clear cache (force reload on next fetch)
+   * Clear all caches (localStorage and memory)
    */
   clearCache: () => {
+    dataCacheService.clearAll();
+    
     set({
+      users: [],
+      projects: [],
+      units: {},
       usersLastFetched: null,
       projectsLastFetched: null,
-      countsLastFetched: null
+      unitsLastFetched: {},
+      countsLastFetched: null,
+      lastRefreshTimestamp: null,
+      initialized: false
     });
-    console.log('🗑️ AppDataStore: Cache cleared');
+    
+    console.log('🗑️ AppDataStore: All caches cleared (localStorage + memory)');
+  },
+  
+  /**
+   * Get cache metadata for display
+   */
+  getCacheMetadata: (projectId = null) => {
+    const state = get();
+    const targetProjectId = projectId || state.currentProjectId;
+    
+    return {
+      lastRefreshTimestamp: state.lastRefreshTimestamp,
+      usersCount: state.users.length,
+      unitsCount: targetProjectId ? (state.units[targetProjectId] || []).length : 0,
+      projectsCount: state.projects.length,
+      usersLastFetched: state.usersLastFetched,
+      unitsLastFetched: targetProjectId ? state.unitsLastFetched[targetProjectId] : null,
+      cacheSize: dataCacheService.getCacheSize()
+    };
   },
 
   /**
@@ -378,21 +603,8 @@ export const useAppDataStore = create((set, get) => ({
   }
 }));
 
-// Auto-refresh cache periodically (every 5 minutes in background)
-if (typeof window !== 'undefined') {
-  setInterval(() => {
-    const store = useAppDataStore.getState();
-    if (store.initialized) {
-      // Only refresh if cache is stale
-      if (store.needsRefresh(store.usersLastFetched, CACHE_DURATION.users)) {
-        console.log('🔄 AppDataStore: Auto-refreshing stale data...');
-        store.fetchUsers(true).catch(err => 
-          console.error('Auto-refresh failed:', err)
-        );
-      }
-    }
-  }, 5 * 60 * 1000); // Every 5 minutes
-}
+// Note: Auto-refresh has been disabled to reduce costs.
+// Use the manual refresh button in the dashboard to fetch fresh data.
 
 export default useAppDataStore;
 

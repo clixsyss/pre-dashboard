@@ -34,9 +34,16 @@ const transporter = nodemailer.createTransport(EMAIL_CONFIG);
 
 // Company branding
 const COMPANY_NAME = 'PRE Group';
-const COMPANY_LOGO_URL = 'https://pre-group.web.app/logo-email.png'; // PRE Group logo for emails
+const COMPANY_LOGO_URL = 'https://firebasestorage.googleapis.com/v0/b/pre-group.appspot.com/o/logo-email.png?alt=media'; // PRE Group logo for emails
 const COMPANY_EMAIL = EMAIL_CONFIG.auth.user;
 const COMPANY_WEBSITE = 'https://pre-group.web.app'; // Update with your actual website
+
+// Brand colors
+const BRAND_COLORS = {
+  PRIMARY_RED: '#AF1E23',
+  DARK_BLACK: '#231F20',
+  WHITE: '#FFFFFF'
+};
 
 /**
  * Process push notification queue
@@ -1840,3 +1847,241 @@ For support, contact us at ${COMPANY_EMAIL}
       return null;
     }
   });
+
+// ============================================================================
+// EMAIL NEWSLETTER FUNCTION
+// ============================================================================
+
+/**
+ * Send Email Newsletter Campaign
+ * Triggered when a campaign status changes to 'sending'
+ */
+exports.sendEmailCampaign = functions.firestore
+  .document('projects/{projectId}/emailCampaigns/{campaignId}')
+  .onUpdate(async (change, context) => {
+    const { projectId, campaignId } = context.params;
+    const before = change.before.data();
+    const after = change.after.data();
+
+    // Only proceed if status changed to 'sending'
+    if (before.status !== 'sending' && after.status === 'sending') {
+      console.log(`Sending email campaign: ${campaignId} for project: ${projectId}`);
+
+      try {
+        const campaign = after;
+        const recipients = campaign.recipients || [];
+        
+        if (recipients.length === 0) {
+          throw new Error('No recipients found');
+        }
+
+        // Get project details for branding
+        const projectDoc = await db.collection('projects').doc(projectId).get();
+        const projectData = projectDoc.exists ? projectDoc.data() : {};
+        const projectName = projectData.name || 'PRE Group';
+
+        let sentCount = 0;
+        let failedCount = 0;
+        const errors = [];
+
+        // Send emails in batches
+        const batchSize = 50;
+        for (let i = 0; i < recipients.length; i += batchSize) {
+          const batch = recipients.slice(i, i + batchSize);
+          
+          const promises = batch.map(async (recipientEmail) => {
+            try {
+              // Build email HTML with app-like design
+              const emailHtml = buildEmailTemplate({
+                subject: campaign.subject,
+                content: campaign.content,
+                brandColor: campaign.brandColor || BRAND_COLORS.PRIMARY_RED,
+                logoUrl: campaign.logoUrl || COMPANY_LOGO_URL,
+                headerImage: campaign.headerImage,
+                projectName,
+                recipientEmail
+              });
+
+              await transporter.sendMail({
+                from: `"${projectName}" <${COMPANY_EMAIL}>`,
+                to: recipientEmail,
+                subject: campaign.subject,
+                html: emailHtml
+              });
+
+              sentCount++;
+              return { success: true, email: recipientEmail };
+            } catch (error) {
+              console.error(`Failed to send to ${recipientEmail}:`, error);
+              failedCount++;
+              errors.push({ email: recipientEmail, error: error.message });
+              return { success: false, email: recipientEmail, error: error.message };
+            }
+          });
+
+          await Promise.all(promises);
+        }
+
+        // Update campaign with results
+        await change.after.ref.update({
+          status: failedCount === recipients.length ? 'failed' : 'sent',
+          sentCount,
+          failedCount,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          errors: errors.length > 0 ? errors : null
+        });
+
+        console.log(`Campaign ${campaignId} completed: ${sentCount} sent, ${failedCount} failed`);
+        return { success: true, sentCount, failedCount };
+
+      } catch (error) {
+        console.error('Error sending campaign:', error);
+        
+        // Update campaign as failed
+        await change.after.ref.update({
+          status: 'failed',
+          sentCount: 0,
+          failedCount: campaign.recipients?.length || 0,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          error: error.message
+        });
+
+        return { success: false, error: error.message };
+      }
+    }
+
+    return null;
+  });
+
+/**
+ * Build email HTML template with app-like design
+ * Uses PRE Group brand colors: #AF1E23 (red), #231F20 (dark black), white
+ */
+function buildEmailTemplate({ subject, content, brandColor, logoUrl, headerImage, projectName, recipientEmail }) {
+  const headerColor = BRAND_COLORS.DARK_BLACK; // Dark black header like the app
+  const accentColor = brandColor || BRAND_COLORS.PRIMARY_RED; // Red accents
+  
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${subject}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+          line-height: 1.6; 
+          color: ${BRAND_COLORS.DARK_BLACK}; 
+          background-color: #f3f4f6; 
+        }
+        .email-container { 
+          max-width: 600px; 
+          margin: 0 auto; 
+          background-color: ${BRAND_COLORS.WHITE}; 
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .email-header { 
+          background-color: ${headerColor}; 
+          padding: 40px 20px; 
+          text-align: center; 
+        }
+        .logo { 
+          max-width: 200px; 
+          height: auto; 
+        }
+        .company-name { 
+          color: ${BRAND_COLORS.WHITE}; 
+          font-size: 32px; 
+          font-weight: bold; 
+          margin: 0; 
+          letter-spacing: 2px;
+        }
+        .header-image { 
+          width: 100%; 
+          height: auto; 
+          display: block; 
+        }
+        .email-body { 
+          padding: 40px 30px; 
+          background-color: ${BRAND_COLORS.WHITE}; 
+        }
+        .email-subject { 
+          font-size: 28px; 
+          font-weight: bold; 
+          color: ${accentColor}; 
+          margin-bottom: 20px; 
+          line-height: 1.3;
+        }
+        .email-content { 
+          font-size: 16px; 
+          color: ${BRAND_COLORS.DARK_BLACK}; 
+          line-height: 1.8; 
+          white-space: pre-wrap; 
+        }
+        .email-footer { 
+          background-color: ${headerColor}; 
+          padding: 30px 20px; 
+          text-align: center; 
+        }
+        .footer-text { 
+          font-size: 14px; 
+          color: #9ca3af; 
+          margin: 5px 0; 
+        }
+        .footer-brand { 
+          color: ${BRAND_COLORS.WHITE}; 
+          font-weight: bold; 
+          font-size: 16px; 
+          margin: 10px 0;
+        }
+        .footer-link { 
+          color: ${accentColor}; 
+          text-decoration: none; 
+        }
+        .divider { 
+          height: 3px; 
+          background: linear-gradient(90deg, ${accentColor} 0%, ${accentColor} 100%); 
+          margin: 20px 0; 
+          border-radius: 2px;
+        }
+        @media only screen and (max-width: 600px) {
+          .email-body { padding: 30px 20px; }
+          .email-subject { font-size: 22px; }
+          .email-content { font-size: 15px; }
+          .logo { max-width: 150px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <!-- Header with Dark Black Background and Logo -->
+        <div class="email-header">
+          <img src="${logoUrl}" alt="PRE Group" class="logo" />
+          ${headerImage ? `<img src="${headerImage}" alt="Banner" class="header-image" style="margin-top: 20px; border-radius: 8px; max-width: 100%;" />` : ''}
+        </div>
+
+        <!-- Body with White Background -->
+        <div class="email-body">
+          <h2 class="email-subject">${subject}</h2>
+          <div class="divider"></div>
+          <div class="email-content">${content.replace(/\n/g, '<br>')}</div>
+        </div>
+
+        <!-- Footer with Dark Black Background -->
+        <div class="email-footer">
+          <p class="footer-brand">P RE GROUP</p>
+          <p class="footer-text">© ${new Date().getFullYear()} ${projectName} - All rights reserved</p>
+          <p class="footer-text" style="margin-top: 15px;">
+            You received this email because you are a member of ${projectName}.
+          </p>
+          <p class="footer-text" style="font-size: 12px; margin-top: 10px;">
+            This email was sent to ${recipientEmail}
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}

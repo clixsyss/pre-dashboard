@@ -17,6 +17,12 @@ import {
   deleteObject 
 } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
+import { useAppDataStore } from '../stores/appDataStore';
+
+/**
+ * Fines Service
+ * OPTIMIZATION: Uses cached user data from appDataStore for user searches
+ */
 
 // Create a new fine/violation
 export const createFine = async (projectId, fineData) => {
@@ -304,26 +310,20 @@ export const deleteFineImage = async (imageUrl) => {
 };
 
 // Search users for fine assignment
+// OPTIMIZED: Uses cached data from appDataStore
 export const searchUsers = async (projectId, searchTerm) => {
   try {
-    // Fetch all users from global collection
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const usersData = usersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    // Filter users who belong to this specific project
-    const projectUsersData = usersData.filter(user => {
-      if (user.projects && Array.isArray(user.projects)) {
-        return user.projects.some(project => project.projectId === projectId);
-      }
-      return false;
-    });
+    console.log('🔍 FinesService: Searching users from cache...');
+    
+    // Get cached users from appDataStore
+    const { getUsersByProject } = useAppDataStore.getState();
+    const projectUsersData = getUsersByProject(projectId);
+    
+    console.log(`✅ FinesService: Using ${projectUsersData.length} cached users for search`);
 
     // Add project-specific info to users
     const enrichedUsers = projectUsersData.map(user => {
-      const projectInfo = user.projects.find(project => project.projectId === projectId);
+      const projectInfo = user.projects?.find(project => project.projectId === projectId);
       const enrichedUser = {
         ...user,
         // Fix: Use the correct field names from the projects array
@@ -334,8 +334,6 @@ export const searchUsers = async (projectId, searchTerm) => {
         phone: user.mobile || user.phone
       };
       
-      console.log('Project info for user:', projectInfo); // Debug project info
-      console.log('Enriched user:', enrichedUser); // Debug log
       return enrichedUser;
     });
 
