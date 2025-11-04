@@ -7,7 +7,8 @@ import {
   User,
   Hash,
   Filter,
-  ChevronDown
+  ChevronDown,
+  AlertCircle
 } from 'lucide-react';
 
 const PassTable = ({ passes, onViewPass }) => {
@@ -16,8 +17,16 @@ const PassTable = ({ passes, onViewPass }) => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
+  const isExpired = (pass) => {
+    if (!pass.validUntil) return false;
+    return new Date() > new Date(pass.validUntil);
+  };
+
   const statusOptions = [
     { value: 'all', label: 'All Passes', count: passes.length },
+    { value: 'active', label: 'Active', count: passes.filter(p => !isExpired(p) && !p.used).length },
+    { value: 'used', label: 'Used', count: passes.filter(p => p.used).length },
+    { value: 'expired', label: 'Expired', count: passes.filter(p => isExpired(p) && !p.used).length },
     { value: 'sent', label: 'Sent', count: passes.filter(p => p.sentStatus).length },
     { value: 'pending', label: 'Pending', count: passes.filter(p => !p.sentStatus).length }
   ];
@@ -34,6 +43,25 @@ const PassTable = ({ passes, onViewPass }) => {
   };
 
   const getStatusBadge = (pass) => {
+    // Priority: Used > Expired > Sent > Pending
+    if (pass.used) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          Used
+        </span>
+      );
+    }
+    
+    if (isExpired(pass)) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <AlertCircle className="w-3 h-3 mr-1" />
+          Expired
+        </span>
+      );
+    }
+    
     if (pass.sentStatus) {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -41,14 +69,14 @@ const PassTable = ({ passes, onViewPass }) => {
           Sent
         </span>
       );
-    } else {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          <Clock className="w-3 h-3 mr-1" />
-          Pending
-        </span>
-      );
     }
+    
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <Clock className="w-3 h-3 mr-1" />
+        Pending
+      </span>
+    );
   };
 
   const handleSort = (field) => {
@@ -66,6 +94,9 @@ const PassTable = ({ passes, onViewPass }) => {
     // Apply status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter(pass => {
+        if (filterStatus === 'active') return !isExpired(pass) && !pass.used;
+        if (filterStatus === 'used') return pass.used;
+        if (filterStatus === 'expired') return isExpired(pass) && !pass.used;
         if (filterStatus === 'sent') return pass.sentStatus;
         if (filterStatus === 'pending') return !pass.sentStatus;
         return true;
@@ -174,8 +205,26 @@ const PassTable = ({ passes, onViewPass }) => {
                   <span>User</span>
                 </div>
               </th>
+              <th 
+                onClick={() => handleSort('guestName')}
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center space-x-1">
+                  <User className="h-3 w-3" />
+                  <span>Guest Name</span>
+                </div>
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
+              </th>
+              <th 
+                onClick={() => handleSort('validUntil')}
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-3 w-3" />
+                  <span>Valid Until</span>
+                </div>
               </th>
               <th 
                 onClick={() => handleSort('createdAt')}
@@ -200,7 +249,7 @@ const PassTable = ({ passes, onViewPass }) => {
           <tbody className="bg-white divide-y divide-gray-200">
             {sortedPasses.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-12 text-center">
+                <td colSpan="8" className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center">
                     <Calendar className="h-12 w-12 text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No passes found</h3>
@@ -223,9 +272,23 @@ const PassTable = ({ passes, onViewPass }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{pass.userName}</div>
+                    <div className="text-xs text-gray-500">{pass.unit || 'N/A'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{pass.guestName || 'N/A'}</div>
+                    <div className="text-xs text-gray-500">{pass.purpose || 'N/A'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(pass)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">{formatDate(pass.validUntil)}</div>
+                    {isExpired(pass) && !pass.used && (
+                      <div className="text-xs text-red-600 font-medium">Expired</div>
+                    )}
+                    {pass.used && pass.usedAt && (
+                      <div className="text-xs text-blue-600 font-medium">Used: {formatDate(pass.usedAt)}</div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(pass.createdAt)}

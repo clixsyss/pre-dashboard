@@ -345,12 +345,10 @@ service cloud.firestore {
     }
     
     // Project Guest Passes - users can read/write their own guest passes within project
-    // Guest passes - allow users to read/write their own passes, admins can access all
+    // Guest passes - allow PUBLIC READ (for guests to view via link), users can write their own
     match /projects/{projectId}/guestPasses/{guestPassId} {
-      // Allow read if user owns the pass or is an admin
-      allow get: if request.auth != null && 
-        (resource == null || resource.data.userId == request.auth.uid || 
-         exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+      // Allow PUBLIC read access so guests can view pass via shared link (no auth required)
+      allow get: if true;
       
       // Allow write if user is authenticated (create) or owns the pass (update)
       allow create: if request.auth != null && 
@@ -360,7 +358,7 @@ service cloud.firestore {
         (resource.data.userId == request.auth.uid || 
          exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
       
-      // Allow list queries - Firestore will filter based on query WHERE clause
+      // Allow list queries - only for authenticated users
       allow list: if request.auth != null;
     }
     
