@@ -185,7 +185,11 @@ const ProjectDashboard = () => {
   const {
     initializeProjectData,
     getUsersByProject,
-    getUnitsForProject
+    getUnitsForProject,
+    refreshAllData: refreshProjectData,
+    users: storeUsers,
+    units: storeUnits,
+    lastRefreshTimestamp
   } = useAppDataStore();
 
   // Booking store integration
@@ -444,6 +448,23 @@ const ProjectDashboard = () => {
       loadData();
     }
   }, [projectId, initializeProjectData, getUsersByProject, getUnitsForProject]);
+
+  // Listen for data refreshes and update local state
+  useEffect(() => {
+    if (projectId && lastRefreshTimestamp) {
+      console.log('📊 ProjectDashboard: Data refreshed, updating local state...');
+      
+      // Update users from cache
+      const updatedUsers = getUsersByProject(projectId);
+      setProjectUsers(updatedUsers);
+      
+      // Update units from cache
+      const updatedUnits = getUnitsForProject(projectId);
+      setUnits(updatedUnits);
+      
+      console.log(`✅ ProjectDashboard: Updated ${updatedUsers.length} users and ${updatedUnits.length} units from cache`);
+    }
+  }, [lastRefreshTimestamp, projectId, getUsersByProject, getUnitsForProject]);
 
   // Memoized filtered users for better performance
   const filteredUsers = useMemo(() => {
@@ -781,24 +802,46 @@ const ProjectDashboard = () => {
     setCurrentPage(1);
   }, [filteredUsers]);
 
-  // Debounced search for units (like the app)
+  // Debounced search for units - now searches in cached data
   useEffect(() => {
     if (!projectId) return;
     
     // Debounce search - wait 500ms after user stops typing
     const searchTimeout = setTimeout(() => {
-      if (unitSearchTerm && unitSearchTerm.length >= 2) {
-        // Search Firestore when user types 2+ characters
-        searchUnitsInFirestore(projectId, unitSearchTerm);
+      // Get units from cache (no Firebase query needed)
+      const cachedUnits = getUnitsForProject(projectId);
+      
+      if (unitSearchTerm && unitSearchTerm.length >= 1) {
+        // Filter cached units by search term
+        const searchLower = unitSearchTerm.toLowerCase();
+        const filteredUnits = cachedUnits.filter(unit => {
+          const unitNum = String(unit.unitNum || '').toLowerCase();
+          const buildingNum = String(unit.buildingNum || '').toLowerCase();
+          const combinedId = `${unit.buildingNum}-${unit.unitNum}`.toLowerCase();
+          
+          return (
+            unitNum.includes(searchLower) ||
+            buildingNum.includes(searchLower) ||
+            combinedId.includes(searchLower)
+          );
+        });
+        
+        setUnits(filteredUnits);
+        setUnitsHasMore(false); // No pagination for search results
+        setUnitsLastDoc(null);
+        
+        console.log(`✅ Search results: ${filteredUnits.length} units found for "${unitSearchTerm}" (searched ${cachedUnits.length} cached units)`);
       } else if (!unitSearchTerm) {
-        // Load first 50 units when search is cleared
-        fetchUnits(projectId);
+        // Show all cached units when search is cleared
+        setUnits(cachedUnits);
+        setUnitsHasMore(false);
+        setUnitsLastDoc(null);
+        console.log(`✅ Loaded all ${cachedUnits.length} cached units`);
       }
     }, 500);
     
     return () => clearTimeout(searchTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unitSearchTerm, projectId]);
+  }, [unitSearchTerm, projectId, getUnitsForProject]);
 
   useEffect(() => {
     // Reset to page 1 when units filters change
@@ -1158,91 +1201,8 @@ const ProjectDashboard = () => {
     }
   }, []);
 
-  // Search units dynamically from Firestore (like the app)
-  const searchUnitsInFirestore = useCallback(async (projectId, searchTerm) => {
-    try {
-      setUnitsLoading(true);
-      
-      // Search by unitNum field using range query
-      const unitsQuery = query(
-        collection(db, `projects/${projectId}/units`),
-        where('unitNum', '>=', searchTerm),
-        where('unitNum', '<=', searchTerm + '\uf8ff'),
-        limit(50)
-      );
-      
-      const unitsSnapshot = await getDocs(unitsQuery);
-      
-      const unitsData = unitsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setUnits(unitsData);
-      setUnitsHasMore(false); // No pagination for search results
-      setUnitsLastDoc(null);
-      
-      console.log(`✅ Search results: ${unitsData.length} units found for "${searchTerm}"`);
-    } catch (error) {
-      console.error('❌ Error searching units:', error);
-      setUnits([]);
-      setUnitsHasMore(false);
-    } finally {
-      setUnitsLoading(false);
-    }
-  }, []);
-
-  // Fetch units with limit - OPTIMIZED
-  const fetchUnits = useCallback(async (projectId, isLoadMore = false) => {
-    try {
-      setUnitsLoading(true);
-      
-      // OPTIMIZATION: Load only 50 units at a time
-      let unitsQuery;
-      
-      if (isLoadMore && unitsLastDoc) {
-        unitsQuery = query(
-          collection(db, `projects/${projectId}/units`),
-          startAfter(unitsLastDoc),
-          limit(50)
-        );
-      } else {
-        unitsQuery = query(
-          collection(db, `projects/${projectId}/units`),
-          limit(50)
-        );
-      }
-      
-      const unitsSnapshot = await getDocs(unitsQuery);
-      
-      const unitsData = unitsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Update state
-      if (isLoadMore) {
-        setUnits(prev => [...prev, ...unitsData]);
-      } else {
-        setUnits(unitsData);
-      }
-      
-      // Track pagination state
-      const lastVisible = unitsSnapshot.docs[unitsSnapshot.docs.length - 1];
-      setUnitsLastDoc(lastVisible);
-      setUnitsHasMore(unitsSnapshot.docs.length === 50); // Has more if we got exactly 50
-      
-      console.log(`✅ Units loaded: ${unitsData.length}`);
-    } catch (error) {
-      console.error('❌ Error fetching units:', error);
-      if (!isLoadMore) {
-        setUnits([]);
-        setUnitsHasMore(false);
-      }
-    } finally {
-      setUnitsLoading(false);
-    }
-  }, [unitsLastDoc]);
+  // Units are now loaded from cache via getUnitsForProject
+  // No need for direct Firebase queries - they're handled by the store
 
   const fetchUnitRequests = useCallback(async (projectId) => {
     try {
@@ -1299,8 +1259,8 @@ const ProjectDashboard = () => {
             fetchProjectAdmins(projectId),
             fetchPendingAdmins(),
             fetchDeviceResetRequests(projectId),
-            fetchUnits(projectId),
             fetchUnitRequests(projectId)
+            // Units are loaded from cache via initializeProjectData above
           ]);
           console.log('✅ All dashboard data loaded successfully - comprehensive analytics ready!');
         } catch (error) {
@@ -4889,17 +4849,22 @@ const ProjectDashboard = () => {
                         Manage user accounts, approvals, and project access
                 </p>
               </div>
-                    <PermissionGate entity="users" action="create">
-              <button 
-                onClick={() => setShowAddUserModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg"
-                title="Create a new user account for this project"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add New User
-              </button>
-                    </PermissionGate>
-                  </div>
+              <div className="flex items-center gap-3">
+                {/* Refresh Data Button */}
+                <RefreshDataButton projectId={projectId} />
+                
+                <PermissionGate entity="users" action="create">
+                  <button 
+                    onClick={() => setShowAddUserModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-md hover:shadow-lg"
+                    title="Create a new user account for this project"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add New User
+                  </button>
+                </PermissionGate>
+              </div>
+            </div>
 
                   {/* Deletion Status Tabs */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 mb-4">
@@ -5591,9 +5556,18 @@ const ProjectDashboard = () => {
                   </button>
                   <ExportButton dataType="units" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-md hover:shadow-lg" />
                   <button
-                    onClick={() => fetchUnits(projectId)}
+                    onClick={async () => {
+                      try {
+                        await refreshProjectData(projectId);
+                        // Units will be updated via the useEffect that listens to lastRefreshTimestamp
+                        const updatedUnits = getUnitsForProject(projectId);
+                        setUnits(updatedUnits);
+                      } catch (error) {
+                        console.error('Error refreshing units:', error);
+                      }
+                    }}
                     className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 border border-red-200 transition-colors flex items-center font-medium"
-                    title="Refresh units data"
+                    title="Refresh units data from Firebase"
                   >
                     <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -6103,42 +6077,9 @@ const ProjectDashboard = () => {
                     </table>
                   </div>
                   
-                  {/* Load More Button for Units */}
-                  {!unitSearchTerm && unitsHasMore && (
-                    <div className="bg-gradient-to-r from-red-50 to-pink-50 px-6 py-4 border-t-2 border-red-200 text-center">
-                      <button
-                        onClick={() => fetchUnits(projectId, true)}
-                        disabled={unitsLoading}
-                        className="inline-flex items-center px-6 py-3 border-2 border-red-600 text-sm font-semibold rounded-lg text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-                      >
-                        {unitsLoading ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Loading more units...
-                          </>
-                        ) : (
-                          <>
-                            <Building className="w-5 h-5 mr-2" />
-                            Load More Units (50)
-                          </>
-                        )}
-                      </button>
-                      <p className="text-xs text-gray-600 mt-2 font-medium">
-                        📦 Showing {units.length} units. Click to load 50 more.
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Pagination Controls (for filtered view only - when using search/filters) */}
+                  {/* Pagination Controls - Always show for units */}
                   {(() => {
-                    // Only show pagination if user is filtering (not for load more)
-                    if (!unitSearchTerm && unitBuildingFilter === 'all' && unitOccupancyFilter === 'all' && unitFloorFilter === 'all' && unitDeveloperFilter === 'all') {
-                      return null; // Let Load More button handle pagination
-                    }
-                    
+                    // ALWAYS show pagination for units (they're loaded from cache)
                     // Calculate filtered units for pagination (use enrichedUnits)
                     let filtered = enrichedUnits;
                     
@@ -6175,6 +6116,7 @@ const ProjectDashboard = () => {
                     const startIndex = (unitsCurrentPage - 1) * unitsPerPage;
                     const endIndex = Math.min(startIndex + unitsPerPage, totalFiltered);
                     
+                    // Only hide pagination if there's 1 page or less
                     if (totalPages <= 1) return null;
                     
                     return (

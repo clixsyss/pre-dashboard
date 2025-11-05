@@ -15,7 +15,7 @@
  */
 
 import { create } from 'zustand';
-import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, limit, orderBy, startAfter } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import dataCacheService from '../services/dataCacheService';
 
@@ -319,9 +319,13 @@ export const useAppDataStore = create((set, get) => ({
   },
 
   /**
-   * Fetch units for a specific project (with localStorage caching)
+   * Fetch ALL units for a specific project (with localStorage caching)
+   * Uses pagination to fetch all units in batches of 1000
+   * ONLY fetches from Firebase if cache doesn't exist (never re-fetches unless manually refreshed)
    */
   fetchUnits: async (projectId, forceRefresh = false) => {
+    console.log(`🔍 AppDataStore.fetchUnits called for project ${projectId}, forceRefresh: ${forceRefresh}`);
+    
     if (!projectId) {
       console.warn('⚠️ AppDataStore: No projectId provided for fetchUnits');
       return [];
@@ -329,27 +333,30 @@ export const useAppDataStore = create((set, get) => ({
 
     const state = get();
     
-    // Try to load from localStorage first (unless force refresh)
-    if (!forceRefresh) {
-      const cached = dataCacheService.get('units', projectId);
-      if (cached && cached.data) {
-        console.log(`✅ AppDataStore: Using localStorage cached units for project ${projectId}`, cached.data.length);
-        
-        const newUnits = { ...state.units };
-        newUnits[projectId] = cached.data;
-        
-        const newUnitsLastFetched = { ...state.unitsLastFetched };
-        newUnitsLastFetched[projectId] = cached.timestamp;
-        
-        set({ 
-          units: newUnits,
-          unitsLastFetched: newUnitsLastFetched,
-          lastRefreshTimestamp: cached.timestamp
-        });
-        
-        return cached.data;
-      }
+    // ALWAYS try to load from localStorage first (ignore expiry unless forceRefresh)
+    const cached = dataCacheService.get('units', projectId);
+    console.log(`💾 Cache check: ${cached ? 'EXISTS' : 'NOT FOUND'}, has data: ${cached?.data ? 'YES (' + cached.data.length + ' units)' : 'NO'}`);
+    
+    if (cached && cached.data && !forceRefresh) {
+      console.log(`✅ AppDataStore: Using localStorage cached units for project ${projectId} (${cached.data.length} units) - No Firebase query`);
+      
+      const newUnits = { ...state.units };
+      newUnits[projectId] = cached.data;
+      
+      const newUnitsLastFetched = { ...state.unitsLastFetched };
+      newUnitsLastFetched[projectId] = cached.timestamp;
+      
+      set({ 
+        units: newUnits,
+        unitsLastFetched: newUnitsLastFetched,
+        lastRefreshTimestamp: cached.timestamp
+      });
+      
+      return cached.data;
     }
+    
+    console.log(`🔥 Cache not found or forceRefresh=true, fetching from Firebase...`);
+  
 
     // Already loading? Wait for it
     const loadingState = state.unitsLoading[projectId];
@@ -371,28 +378,76 @@ export const useAppDataStore = create((set, get) => ({
       newLoadingState[projectId] = true;
       set({ unitsLoading: newLoadingState, unitsError: null });
       
-      console.log(`📊 AppDataStore: Fetching units for project ${projectId} from Firestore...`);
+      console.log(`📊 AppDataStore: Fetching ALL units for project ${projectId} from Firestore (cache doesn't exist or force refresh)...`);
 
-      const unitsQuery = query(
-        collection(db, `projects/${projectId}/units`),
-        limit(1000) // Reasonable limit for units
-      );
+      // Fetch ALL units using pagination (1000 at a time)
+      let allUnits = [];
+      let lastDoc = null;
+      let hasMore = true;
+      let batchCount = 0;
+      const BATCH_SIZE = 1000;
 
-      const snapshot = await getDocs(unitsQuery);
-      const units = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      while (hasMore) {
+        batchCount++;
+        console.log(`📦 AppDataStore: Fetching units batch ${batchCount}... (lastDoc exists: ${!!lastDoc})`);
+        
+        let unitsQuery;
+        if (lastDoc) {
+          // IMPORTANT: orderBy is required for startAfter pagination to work
+          unitsQuery = query(
+            collection(db, `projects/${projectId}/units`),
+            orderBy('__name__'), // Order by document ID
+            startAfter(lastDoc),
+            limit(BATCH_SIZE)
+          );
+          console.log(`   Using startAfter with lastDoc ID: ${lastDoc.id}`);
+        } else {
+          unitsQuery = query(
+            collection(db, `projects/${projectId}/units`),
+            orderBy('__name__'), // Order by document ID
+            limit(BATCH_SIZE)
+          );
+          console.log(`   First query (no startAfter)`);
+        }
 
-      console.log(`✅ AppDataStore: Fetched ${units.length} units for project ${projectId} from Firebase`);
+        const snapshot = await getDocs(unitsQuery);
+        console.log(`   Got ${snapshot.docs.length} documents from Firebase`);
+        
+        if (snapshot.empty || snapshot.docs.length === 0) {
+          console.log(`   Snapshot is empty, stopping pagination`);
+          hasMore = false;
+          break;
+        }
+
+        const batchUnits = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        allUnits = [...allUnits, ...batchUnits];
+        
+        // Check if there are more documents
+        if (snapshot.docs.length < BATCH_SIZE) {
+          console.log(`   Got ${snapshot.docs.length} docs (< ${BATCH_SIZE}), no more pages`);
+          hasMore = false;
+        } else {
+          lastDoc = snapshot.docs[snapshot.docs.length - 1];
+          console.log(`   Got full batch (${BATCH_SIZE}), continuing with lastDoc: ${lastDoc.id}`);
+          hasMore = true;
+        }
+        
+        console.log(`✅ Batch ${batchCount}: Fetched ${batchUnits.length} units (Total: ${allUnits.length})`);
+      }
+
+      console.log(`✅ AppDataStore: Fetched ALL ${allUnits.length} units for project ${projectId} from Firebase in ${batchCount} batches`);
 
       const timestamp = Date.now();
       
-      // Save to localStorage
-      dataCacheService.set('units', units, projectId);
+      // Save ALL units to localStorage with INFINITE duration (never expires unless manually refreshed)
+      dataCacheService.set('units', allUnits, projectId);
 
       const newUnits = { ...state.units };
-      newUnits[projectId] = units;
+      newUnits[projectId] = allUnits;
       
       const newUnitsLastFetched = { ...state.unitsLastFetched };
       newUnitsLastFetched[projectId] = timestamp;
@@ -407,7 +462,7 @@ export const useAppDataStore = create((set, get) => ({
         lastRefreshTimestamp: timestamp
       });
 
-      return units;
+      return allUnits;
     } catch (error) {
       console.error(`❌ AppDataStore: Error fetching units for project ${projectId}:`, error);
       
