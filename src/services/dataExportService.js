@@ -770,12 +770,12 @@ class DataExportService {
   }
 
   // Export user activity report as CSV
-  async exportUserActivityReport(format = 'csv') {
+  async exportUserActivityReport(format = 'csv', projectId = null) {
     try {
-      const projectId = this.getCurrentProjectId();
+      const activeProjectId = projectId || this.getCurrentProjectId();
       const dateStr = new Date().toISOString().split('T')[0];
       
-      const report = await this.generateUserActivityReport(projectId);
+      const report = await this.generateUserActivityReport(activeProjectId);
       
       if (format === 'csv') {
         const csvContent = this.createUserActivityCSV(report);
@@ -821,22 +821,22 @@ class DataExportService {
   }
 
   // Export detailed orders report
-  async exportOrdersReport(format = 'csv') {
+  async exportOrdersReport(format = 'csv', projectId = null) {
     try {
-      const projectId = this.getCurrentProjectId();
-      const project = await this.fetchProjectDetails(projectId);
-      const users = await this.fetchProjectUsers(projectId);
+      const activeProjectId = projectId || this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(activeProjectId);
+      const users = await this.fetchProjectUsers(activeProjectId);
       const dateStr = new Date().toISOString().split('T')[0];
       
       const report = {
         projectName: project.name,
-        projectId: project.id,
+        projectId: activeProjectId,
         exportDate: new Date().toISOString(),
         userOrders: []
       };
       
       for (const user of users) {
-        const orders = await this.fetchUserOrders(projectId, user.id);
+        const orders = await this.fetchUserOrders(activeProjectId, user.id);
         
         if (orders.length > 0) {
           const totalSpent = orders.reduce((sum, order) => sum + (order.total || 0), 0);
@@ -921,22 +921,22 @@ class DataExportService {
   }
 
   // Export detailed bookings report
-  async exportBookingsReport(format = 'csv') {
+  async exportBookingsReport(format = 'csv', projectId = null) {
     try {
-      const projectId = this.getCurrentProjectId();
-      const project = await this.fetchProjectDetails(projectId);
-      const users = await this.fetchProjectUsers(projectId);
+      const activeProjectId = projectId || this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(activeProjectId);
+      const users = await this.fetchProjectUsers(activeProjectId);
       const dateStr = new Date().toISOString().split('T')[0];
       
       const report = {
         projectName: project.name,
-        projectId: project.id,
+        projectId: activeProjectId,
         exportDate: new Date().toISOString(),
         userBookings: []
       };
       
       for (const user of users) {
-        const bookings = await this.fetchUserBookings(projectId, user.id);
+        const bookings = await this.fetchUserBookings(activeProjectId, user.id);
         
         if (bookings.length > 0) {
           const totalSpent = bookings.reduce((sum, booking) => sum + (booking.totalPrice || booking.totalCost || 0), 0);
@@ -1021,22 +1021,22 @@ class DataExportService {
   }
 
   // Export detailed gate passes report
-  async exportGatePassesReport(format = 'csv') {
+  async exportGatePassesReport(format = 'csv', projectId = null) {
     try {
-      const projectId = this.getCurrentProjectId();
-      const project = await this.fetchProjectDetails(projectId);
-      const users = await this.fetchProjectUsers(projectId);
+      const activeProjectId = projectId || this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(activeProjectId);
+      const users = await this.fetchProjectUsers(activeProjectId);
       const dateStr = new Date().toISOString().split('T')[0];
       
       const report = {
         projectName: project.name,
-        projectId: project.id,
+        projectId: activeProjectId,
         exportDate: new Date().toISOString(),
         userGatePasses: []
       };
       
       for (const user of users) {
-        const gatePasses = await this.fetchUserGatePasses(projectId, user.id);
+        const gatePasses = await this.fetchUserGatePasses(activeProjectId, user.id);
         
         if (gatePasses.length > 0) {
           report.userGatePasses.push({
@@ -1117,22 +1117,22 @@ class DataExportService {
   }
 
   // Export detailed guest passes report
-  async exportGuestPassesReport(format = 'csv') {
+  async exportGuestPassesReport(format = 'csv', projectId = null) {
     try {
-      const projectId = this.getCurrentProjectId();
-      const project = await this.fetchProjectDetails(projectId);
-      const users = await this.fetchProjectUsers(projectId);
+      const activeProjectId = projectId || this.getCurrentProjectId();
+      const project = await this.fetchProjectDetails(activeProjectId);
+      const users = await this.fetchProjectUsers(activeProjectId);
       const dateStr = new Date().toISOString().split('T')[0];
       
       const report = {
         projectName: project.name,
-        projectId: project.id,
+        projectId: activeProjectId,
         exportDate: new Date().toISOString(),
         userGuestPasses: []
       };
       
       for (const user of users) {
-        const guestPasses = await this.fetchUserGuestPasses(projectId, user.id);
+        const guestPasses = await this.fetchUserGuestPasses(activeProjectId, user.id);
         
         if (guestPasses.length > 0) {
           report.userGuestPasses.push({

@@ -12,7 +12,9 @@ import {
   RefreshCw,
   MapPin,
   ShieldOff,
-  Bell
+  Bell,
+  Download,
+  X
 } from 'lucide-react';
 import { sendStatusNotification } from '../services/statusNotificationService';
 import { useAppDataStore } from '../stores/appDataStore';
@@ -20,8 +22,8 @@ import { useGuestPassStore } from '../stores/guestPassStore';
 import PassTable from '../components/PassTable';
 import AdminControls from '../components/AdminControls';
 import UnitControls from '../components/UnitControls';
-import ExportButton from '../components/ExportButton';
 import AdminGuestPassSettings from '../components/AdminGuestPassSettings';
+import * as XLSX from 'xlsx';
 
 const GuestPasses = () => {
   const { projectId } = useParams();
@@ -29,6 +31,9 @@ const GuestPasses = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
   const [sendingGlobalNotification, setSendingGlobalNotification] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
   const { getUsersByProject } = useAppDataStore();
   
   const {
@@ -176,6 +181,121 @@ const GuestPasses = () => {
     }
   };
 
+  // Export guest passes to Excel
+  const exportToExcel = () => {
+    try {
+      // Filter by date range if specified
+      let dataToExport = filteredPasses;
+      
+      if (exportStartDate || exportEndDate) {
+        dataToExport = filteredPasses.filter(pass => {
+          const passDate = pass.createdAt?.toDate ? pass.createdAt.toDate() : new Date(pass.createdAt);
+          
+          if (exportStartDate && exportEndDate) {
+            const start = new Date(exportStartDate);
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return passDate >= start && passDate <= end;
+          } else if (exportStartDate) {
+            const start = new Date(exportStartDate);
+            return passDate >= start;
+          } else if (exportEndDate) {
+            const end = new Date(exportEndDate);
+            end.setHours(23, 59, 59, 999);
+            return passDate <= end;
+          }
+          return true;
+        });
+      }
+
+      // Helper function to format dates consistently
+      const formatExportDate = (dateValue) => {
+        if (!dateValue) return 'N/A';
+        try {
+          // Handle Firestore Timestamp
+          if (dateValue?.toDate && typeof dateValue.toDate === 'function') {
+            return dateValue.toDate().toLocaleString();
+          }
+          // Handle Date object or string
+          const date = new Date(dateValue);
+          if (isNaN(date.getTime())) return 'N/A';
+          return date.toLocaleString();
+        } catch (error) {
+          console.error('Error formatting date:', error, dateValue);
+          return 'N/A';
+        }
+      };
+
+      // Prepare data for export
+      const exportData = dataToExport.map(pass => ({
+        'Pass ID': pass.id || 'N/A',
+        'User Name': pass.userName || 'N/A',
+        'User ID': pass.userId || 'N/A',
+        'Unit': pass.unit || 'N/A',
+        'Guest Name': pass.guestName || 'N/A',
+        'Purpose': pass.purpose || 'N/A',
+        'Status': pass.sentStatus ? 'Sent' : 'Pending',
+        'Created Date': formatExportDate(pass.createdAt),
+        'Valid From': formatExportDate(pass.validFrom),
+        'Valid Until': formatExportDate(pass.validUntil),
+        'Sent At': formatExportDate(pass.sentAt)
+      }));
+
+      if (exportData.length === 0) {
+        alert('No data to export for the selected date range.');
+        return;
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 15 }, // Pass ID
+        { wch: 20 }, // User Name
+        { wch: 20 }, // User ID
+        { wch: 12 }, // Unit
+        { wch: 20 }, // Guest Name
+        { wch: 25 }, // Purpose
+        { wch: 10 }, // Status
+        { wch: 20 }, // Created Date
+        { wch: 20 }, // Valid From
+        { wch: 20 }, // Valid Until
+        { wch: 20 }  // Sent At
+      ];
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Guest Passes');
+
+      // Generate filename with date range
+      let filename = 'guest-passes';
+      if (exportStartDate && exportEndDate) {
+        filename += `_${exportStartDate}_to_${exportEndDate}`;
+      } else if (exportStartDate) {
+        filename += `_from_${exportStartDate}`;
+      } else if (exportEndDate) {
+        filename += `_until_${exportEndDate}`;
+      } else {
+        filename += `_all`;
+      }
+      filename += `.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      // Close modal and reset dates
+      setShowExportModal(false);
+      setExportStartDate('');
+      setExportEndDate('');
+
+      alert(`✅ Successfully exported ${exportData.length} guest pass${exportData.length !== 1 ? 'es' : ''} to ${filename}`);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export data. Please try again.');
+    }
+  };
+
   if (!selectedProject) {
     return (
       <div className="flex items-center justify-center min-h-96">
@@ -257,7 +377,13 @@ const GuestPasses = () => {
               </>
             )}
           </button>
-          <ExportButton dataType="guestPasses" />
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 flex items-center space-x-2 shadow-sm hover:shadow-md font-medium"
+          >
+            <Download className="h-5 w-5" />
+            <span>Export</span>
+          </button>
           <button 
             onClick={() => {
               const activeProjectId = selectedProject?.id || projectId;
@@ -517,6 +643,67 @@ const GuestPasses = () => {
           )}
         </div>
       </div>
+
+      {/* Export Date Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Export to Excel</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date range to export or leave empty to export all data
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setExportStartDate('');
+                    setExportEndDate('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <X className="w-4 h-4 inline mr-2" />
+                  Cancel
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="w-4 h-4 inline mr-2" />
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

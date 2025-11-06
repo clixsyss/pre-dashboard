@@ -153,29 +153,32 @@ const UnitControls = ({
 
   // Generate user-friendly message about guest pass consumption
   const generateUsageMessage = (unit, user = null) => {
-    const used = unit.usedThisMonth || 0;
+    // Use individual user's usage if provided, otherwise use unit total
+    const used = user ? (user.usedThisMonth || 0) : (unit.usedThisMonth || 0);
     const limit = unit.monthlyLimit || globalSettings.monthlyLimit || 30;
     const remaining = limit - used;
     const percentage = Math.round((used / limit) * 100);
     
     const unitName = unit.unit;
     const userName = user ? user.name : 'Residents';
+    const usageContext = user ? 'you have' : 'your unit has';
+    const usageContextAr = user ? 'لقد استخدمت' : 'لقد استخدمت وحدتك';
     
     let message = '';
     let messageAr = '';
     
     if (remaining <= 0) {
-      message = `Dear ${userName}, your unit ${unitName} has reached the monthly guest pass limit of ${limit} passes. No more guest passes can be issued this month.`;
-      messageAr = `عزيزي ${userName}، لقد وصلت وحدة ${unitName} إلى الحد الأقصى الشهري لتصاريح الضيوف البالغ ${limit} تصريح. لا يمكن إصدار المزيد من تصاريح الضيوف هذا الشهر.`;
+      message = `Dear ${userName}, ${usageContext} reached the monthly guest pass limit of ${limit} passes. No more guest passes can be issued this month.`;
+      messageAr = `عزيزي ${userName}، ${usageContextAr} الحد الأقصى الشهري لتصاريح الضيوف البالغ ${limit} تصريح. لا يمكن إصدار المزيد من تصاريح الضيوف هذا الشهر.`;
     } else if (remaining <= 3) {
-      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month. Only ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining. Please use them wisely.`;
-      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''} فقط. يرجى استخدامها بحكمة.`;
+      message = `Dear ${userName}, ${usageContext} used ${used} out of ${limit} guest passes this month. Only ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining. Please use them wisely.`;
+      messageAr = `عزيزي ${userName}، ${usageContextAr} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''} فقط. يرجى استخدامها بحكمة.`;
     } else if (percentage >= 75) {
-      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month (${percentage}% used). ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
-      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر (${percentage}% مستخدم). بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+      message = `Dear ${userName}, ${usageContext} used ${used} out of ${limit} guest passes this month (${percentage}% used). ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+      messageAr = `عزيزي ${userName}، ${usageContextAr} ${used} من أصل ${limit} تصريح ضيف هذا الشهر (${percentage}% مستخدم). بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
     } else {
-      message = `Dear ${userName}, your unit ${unitName} has used ${used} out of ${limit} guest passes this month. ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
-      messageAr = `عزيزي ${userName}، لقد استخدمت وحدة ${unitName} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
+      message = `Dear ${userName}, ${usageContext} used ${used} out of ${limit} guest passes this month. ${remaining} pass${remaining !== 1 ? 'es' : ''} remaining.`;
+      messageAr = `عزيزي ${userName}، ${usageContextAr} ${used} من أصل ${limit} تصريح ضيف هذا الشهر. بقي ${remaining} تصريح${remaining !== 1 ? 'ات' : ''}.`;
     }
     
     return { message, messageAr };
@@ -338,10 +341,10 @@ const UnitControls = ({
                   Unit
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Residents
+                  Residents (Individual Usage)
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Monthly Limit
+                  Monthly Limit (Per User)
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Usage This Month
@@ -370,13 +373,18 @@ const UnitControls = ({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600">
-                        {unit.users?.slice(0, 2).map((user, idx) => (
-                          <div key={idx} className="truncate">{user.name}</div>
+                      <div className="text-sm space-y-1">
+                        {unit.users?.map((user, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1 px-2 bg-gray-50 rounded">
+                            <span className="text-gray-700 truncate flex-1">{user.name}</span>
+                            <span className="text-xs font-semibold ml-2">
+                              <span className={user.usedThisMonth >= user.monthlyLimit ? 'text-red-600' : 'text-blue-600'}>
+                                {user.usedThisMonth || 0}
+                              </span>
+                              <span className="text-gray-400">/{user.monthlyLimit}</span>
+                            </span>
+                          </div>
                         ))}
-                        {unit.users?.length > 2 && (
-                          <div className="text-xs text-gray-400">+{unit.users.length - 2} more</div>
-                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -625,10 +633,11 @@ const UnitControls = ({
           <div>
             <h4 className="text-sm font-semibold text-blue-900 mb-2">How Unit Limits Work</h4>
             <ul className="text-sm text-blue-800 space-y-1.5">
-              <li>• <strong>Per-Unit Limits:</strong> All family members in the same unit share one monthly limit</li>
-              <li>• <strong>Custom Limits:</strong> Set specific limits for individual units (e.g., VIP residents)</li>
-              <li>• <strong>Unit Blocking:</strong> Block entire units from generating passes (all family members affected)</li>
-              <li>• <strong>Default Behavior:</strong> Units without custom settings use the global project limit</li>
+              <li>• <strong>Per-User Limits:</strong> Each user in a unit gets their own independent monthly limit</li>
+              <li>• <strong>Custom Unit Limits:</strong> Set specific limits for all users in a unit (e.g., VIP units - each user gets that limit)</li>
+              <li>• <strong>Unit Blocking:</strong> Block entire units from generating passes (all users in unit affected)</li>
+              <li>• <strong>Default Behavior:</strong> Units without custom settings give each user the global project limit</li>
+              <li>• <strong>Usage Tracking:</strong> Each user's usage is tracked independently within their unit</li>
             </ul>
           </div>
         </div>

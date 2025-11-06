@@ -1021,15 +1021,59 @@ class GuestPassesService {
       const globalSettings = await this.getGlobalSettings(projectId);
       const defaultLimit = globalSettings.monthlyLimit || 30;
       
-      // Combine unit data with settings
+      // Calculate start of current month for pass counting
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // Query all guest passes for this month (we'll count per user)
+      const passesQuery = query(
+        collection(db, `projects/${projectId}/guestPasses`),
+        where('createdAt', '>=', startOfMonth)
+      );
+      
+      console.log(`📊 [Service] Counting actual guest passes per user for this month...`);
+      let passesSnapshot;
+      const userPassCounts = {}; // Changed from unitPassCounts to userPassCounts
+      
+      try {
+        passesSnapshot = await getDocs(passesQuery);
+        
+        // Count passes per user (not per unit)
+        passesSnapshot.docs.forEach(doc => {
+          const passData = doc.data();
+          const userId = passData.userId;
+          if (userId) {
+            userPassCounts[userId] = (userPassCounts[userId] || 0) + 1;
+          }
+        });
+        
+        console.log(`📊 [Service] Found ${passesSnapshot.size} total passes this month for ${Object.keys(userPassCounts).length} users`);
+      } catch (error) {
+        console.warn('⚠️ [Service] Could not count passes, using stored counts:', error);
+        // Fall back to stored counts if query fails
+      }
+      
+      // Combine unit data with settings and actual per-user pass counts
       const units = Array.from(unitsMap.values()).map(unitData => {
         const settings = unitSettings[unitData.unit] || {};
+        const unitLimit = settings.monthlyLimit ?? defaultLimit;
+        
+        // Add usage count for each user in the unit
+        const usersWithUsage = unitData.users.map(user => ({
+          ...user,
+          usedThisMonth: userPassCounts[user.id] || 0,
+          monthlyLimit: unitLimit // Each user gets the unit's limit
+        }));
+        
+        // Calculate total unit usage (sum of all users)
+        const totalUnitUsage = usersWithUsage.reduce((sum, user) => sum + user.usedThisMonth, 0);
+        
         return {
           unit: unitData.unit,
-          users: unitData.users,
+          users: usersWithUsage, // ✅ Now includes per-user usage
           userCount: unitData.users.length,
-          monthlyLimit: settings.monthlyLimit ?? defaultLimit,
-          usedThisMonth: settings.usedThisMonth || 0,
+          monthlyLimit: unitLimit,
+          usedThisMonth: totalUnitUsage, // Total usage across all users in unit
           blocked: settings.blocked || false,
           hasCustomLimit: settings.monthlyLimit !== undefined && settings.monthlyLimit !== null,
           lastPassCreated: settings.lastPassCreated?.toDate?.() || null,
@@ -1038,7 +1082,7 @@ class GuestPassesService {
         };
       });
       
-      console.log(`✅ [Service] Found ${units.length} units in project ${projectId}`);
+      console.log(`✅ [Service] Found ${units.length} units in project ${projectId} with actual pass counts`);
       return units;
     } catch (error) {
       console.error('❌ [Service] Error getting units:', error);

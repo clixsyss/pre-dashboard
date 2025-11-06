@@ -19,7 +19,20 @@ const PassTable = ({ passes, onViewPass }) => {
 
   const isExpired = (pass) => {
     if (!pass.validUntil) return false;
-    return new Date() > new Date(pass.validUntil);
+    try {
+      const now = new Date();
+      // Handle Firestore Timestamp
+      if (pass.validUntil?.toDate && typeof pass.validUntil.toDate === 'function') {
+        return now > pass.validUntil.toDate();
+      }
+      // Handle Date object or ISO string
+      const expiryDate = new Date(pass.validUntil);
+      if (isNaN(expiryDate.getTime())) return false;
+      return now > expiryDate;
+    } catch (error) {
+      console.error('Error checking expiration:', error, pass.validUntil);
+      return false;
+    }
   };
 
   const statusOptions = [
@@ -33,13 +46,31 @@ const PassTable = ({ passes, onViewPass }) => {
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      // Handle Firestore Timestamp
+      if (date?.toDate && typeof date.toDate === 'function') {
+        return date.toDate().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      // Handle Date object or ISO string
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) return 'N/A';
+      return dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, date);
+      return 'N/A';
+    }
   };
 
   const getStatusBadge = (pass) => {
